@@ -1,1 +1,41 @@
-"use strict";const{contextBridge:s,ipcRenderer:o}=require("electron");s.exposeInMainWorld("electronAPI",{setIgnoreMouseEvents:(e,t)=>o.invoke("set-ignore-mouse-events",e,t),getSystemMedia:()=>o.invoke("get-system-media"),getBluetoothStatus:()=>o.invoke("get-bluetooth-status"),getCameraStatus:()=>o.invoke("get-camera-status"),getMicrophoneStatus:()=>o.invoke("get-microphone-status"),getSystemMetrics:()=>o.invoke("get-system-metrics"),controlSystemMedia:e=>o.invoke("control-system-media",e),openExternal:e=>o.invoke("open-external",e),launchApp:e=>o.invoke("launch-app",e),buildAppCache:()=>o.invoke("build-app-cache"),searchApps:e=>o.invoke("search-apps",e),getDisplays:()=>o.invoke("get-displays"),setDisplay:e=>o.invoke("set-display",e),updateWindowPosition:(e,t)=>o.invoke("update-window-position",e,t),setAutoLaunch:e=>process.platform!=="darwin"?o.invoke("set-auto-launch",e):Promise.resolve(),getClipboardText:()=>o.invoke("get-clipboard-text"),writeClipboardText:e=>o.invoke("write-clipboard-text",e),clearClipboard:()=>o.invoke("clear-clipboard"),controlSystemVolume:e=>o.invoke("control-system-volume",e),focusWindow:()=>o.invoke("focus-window"),logMessage:(e,t,i)=>o.invoke("log-message",e,t,i),getNotifications:()=>o.invoke("get-notifications"),dismissNotification:e=>o.invoke("dismiss-notification",e),focusNotificationApp:e=>o.invoke("focus-notification-app",e),onKeyLockChange:e=>{const t=(i,n)=>e(n);return o.on("key-lock-change",t),()=>o.removeListener("key-lock-change",t)},onUSBChange:e=>{const t=(i,n)=>e(n);return o.on("usb-change",t),()=>o.removeListener("usb-change",t)},platform:process.platform});
+"use strict";
+const { contextBridge, ipcRenderer } = require("electron");
+contextBridge.exposeInMainWorld("electronAPI", {
+  setIgnoreMouseEvents: (ignore, forward) => {
+    return ipcRenderer.invoke("set-ignore-mouse-events", ignore, forward);
+  },
+  getSystemMedia: () => ipcRenderer.invoke("get-system-media"),
+  getBluetoothStatus: () => ipcRenderer.invoke("get-bluetooth-status"),
+  getCameraStatus: () => ipcRenderer.invoke("get-camera-status"),
+  getMicrophoneStatus: () => ipcRenderer.invoke("get-microphone-status"),
+  getSystemMetrics: () => ipcRenderer.invoke("get-system-metrics"),
+  controlSystemMedia: (command) => ipcRenderer.invoke("control-system-media", command),
+  openExternal: (url) => ipcRenderer.invoke("open-external", url),
+  launchApp: (appName) => ipcRenderer.invoke("launch-app", appName),
+  buildAppCache: () => ipcRenderer.invoke("build-app-cache"),
+  searchApps: (query) => ipcRenderer.invoke("search-apps", query),
+  getDisplays: () => ipcRenderer.invoke("get-displays"),
+  setDisplay: (displayId) => ipcRenderer.invoke("set-display", displayId),
+  updateWindowPosition: (xPerc, yPx) => ipcRenderer.invoke("update-window-position", xPerc, yPx),
+  setAutoLaunch: (enable) => process.platform !== "darwin" ? ipcRenderer.invoke("set-auto-launch", enable) : Promise.resolve(),
+  getClipboardText: () => ipcRenderer.invoke("get-clipboard-text"),
+  writeClipboardText: (text) => ipcRenderer.invoke("write-clipboard-text", text),
+  clearClipboard: () => ipcRenderer.invoke("clear-clipboard"),
+  controlSystemVolume: (action) => ipcRenderer.invoke("control-system-volume", action),
+  focusWindow: () => ipcRenderer.invoke("focus-window"),
+  logMessage: (level, msg, details) => ipcRenderer.invoke("log-message", level, msg, details),
+  getNotifications: () => ipcRenderer.invoke("get-notifications"),
+  dismissNotification: (id) => ipcRenderer.invoke("dismiss-notification", id),
+  focusNotificationApp: (appId) => ipcRenderer.invoke("focus-notification-app", appId),
+  onKeyLockChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on("key-lock-change", handler);
+    return () => ipcRenderer.removeListener("key-lock-change", handler);
+  },
+  onUSBChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on("usb-change", handler);
+    return () => ipcRenderer.removeListener("usb-change", handler);
+  },
+  platform: process.platform
+});

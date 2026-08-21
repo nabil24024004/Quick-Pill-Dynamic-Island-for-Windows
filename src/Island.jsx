@@ -1082,16 +1082,16 @@ export default function Island() {
   const handleWheelSwipe = (e) => {
     if (wheelLockout.current || isDragging) return;
 
-    // Check if wheeling on settings container (Tab 9)
-    const settingsElem = e.target.closest("#settings-container");
-    if (settingsElem && currentTabId === 9) {
-      const isScrollable = settingsElem.scrollHeight > settingsElem.clientHeight;
+    // Allow natural wheel scrolling inside scrollable containers (Clipboard, Notifications, Tasks, Settings, Calendar)
+    const scrollableElem = e.target.closest("#clipboard, .notifications-container, #task-list, #settings-container, .calendar-container");
+    if (scrollableElem) {
+      const isScrollable = scrollableElem.scrollHeight > scrollableElem.clientHeight;
       if (isScrollable) {
-        const atTop = settingsElem.scrollTop <= 1;
-        const atBottom = settingsElem.scrollTop + settingsElem.clientHeight >= settingsElem.scrollHeight - 1;
+        const atTop = scrollableElem.scrollTop <= 2;
+        const atBottom = scrollableElem.scrollTop + scrollableElem.clientHeight >= scrollableElem.scrollHeight - 2;
         const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
 
-        // If scrolling inside settings content (down when not at bottom, or up when not at top), allow content to scroll
+        // If scrolling inside content (down when not at bottom, or up when not at top), allow content to scroll without switching tab
         if ((delta > 0 && !atBottom) || (delta < 0 && !atTop)) {
           return;
         }
@@ -1133,7 +1133,8 @@ export default function Island() {
       target?.closest?.("button") ||
       target?.closest?.(".radio-label") ||
       target?.closest?.(".task-row") ||
-      target?.closest?.(".clipboard-row")
+      target?.closest?.(".clipboard-row") ||
+      target?.closest?.(".notification-card")
     );
   };
 
@@ -1199,7 +1200,7 @@ export default function Island() {
   const height = notificationAlert
     ? 46
     : mode === "large"
-      ? (currentTab === 9 ? (positionMode === "free" ? 435 : 355) : currentTab === 8 ? 180 : currentTab === 1 ? 272 : currentTab === 4 ? 210 : currentTab === 5 ? 240 : currentTab === 6 ? 180 : currentTab === 10 ? 192 : currentTab === 3 ? 185 : currentTab === 0 ? 120 : 190)
+      ? (currentTab === 9 ? (positionMode === "free" ? 435 : 355) : currentTab === 8 ? 180 : currentTab === 1 ? 272 : currentTab === 4 ? 210 : currentTab === 5 ? 240 : currentTab === 7 ? 230 : currentTab === 6 ? 180 : currentTab === 10 ? 192 : currentTab === 3 ? 185 : currentTab === 0 ? 120 : 190)
       : 40;
 
   useEffect(() => {

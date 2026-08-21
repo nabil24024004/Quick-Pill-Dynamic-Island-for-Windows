@@ -6,6 +6,10 @@
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
+    "dev": "electron-forge start",
+    "electron:dev": "electron-forge start",
+    "build": "electron-builder --win",
+    "electron:build": "electron-builder --win",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "build-win": "electron-builder --win",
