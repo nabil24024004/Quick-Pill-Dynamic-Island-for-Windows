@@ -1,6 +1,6 @@
 # 💊 About Quick Pill — Complete Product Overview & Guide
 
-> **Quick Pill** is a cross-platform, non-intrusive desktop assistant and Dynamic Island companion for **Windows**, **macOS**, and **Linux**. Floating unobtrusively at the top of your screen, Quick Pill brings real-time system metrics, music controls, notifications, privacy alerts, and productivity widgets right to your fingertips without interrupting your active workspace.
+> **Quick Pill** is a cross-platform, non-intrusive desktop assistant and Dynamic Island companion for **Windows**. Floating unobtrusively at the top of your screen, Quick Pill brings real-time system metrics, music controls, notifications, privacy alerts, and productivity widgets right to your fingertips without interrupting your active workspace.
 
 ---
 
@@ -112,8 +112,7 @@ The primary objective of Quick Pill is **zero-distraction productivity & unified
 | **Iconography** | **Lucide React** | Scalable vector SVG icon set |
 | **Styling** | **Vanilla CSS** | HSL color tokens, dark glassmorphism, responsive container math |
 | **OS Scripting** | **PowerShell / Win32 API** | Native Windows UWP notifications, app icon extraction, media keys |
-| **macOS Integration** | **AppleScript** | macOS Spotify and Apple Music playback synchronization |
-| **Linux Integration** | **`playerctl` & `.desktop`** | Linux media control and desktop autostart entry |
+
 
 ---
 

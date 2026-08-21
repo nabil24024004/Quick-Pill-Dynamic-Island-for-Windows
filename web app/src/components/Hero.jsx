@@ -211,7 +211,7 @@ export default function Hero({ onDownloadClick }) {
           </a>
         </div>
 
-        <div className="hero-platforms">Windows 10 / 11 · macOS · Linux</div>
+        <div className="hero-platforms">Windows 10 / 11</div>
       </div>
 
       {/* Live Demo Video Showcase */}
