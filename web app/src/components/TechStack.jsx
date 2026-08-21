@@ -19,7 +19,7 @@ const DOUBLE = [...BADGES, ...BADGES];
 
 export default function TechStack() {
   return (
-    <section className="tech-strip" id="tech-stack">
+    <section className="tech-strip" id="tech-stack" aria-label="Technology Stack">
       <div className="tech-label-center">Technology Stack</div>
       <div className="ticker-wrap">
         <div className="ticker-track ticker-animate">

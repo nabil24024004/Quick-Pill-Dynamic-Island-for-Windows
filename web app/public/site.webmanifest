@@ -1,0 +1,24 @@
+{
+  "name": "Quick Pill | Dynamic Island for Windows",
+  "short_name": "Quick Pill",
+  "description": "A Dynamic Island desktop assistant for Windows 10 & 11. Media controls, live notifications, tasks, timers, and more.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait-primary",
+  "categories": ["utilities", "productivity"],
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

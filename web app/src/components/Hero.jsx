@@ -181,8 +181,13 @@ export default function Hero() {
         </p>
 
         <div className="hero-cta" ref={ctaRef}>
-          <a href="#download" className="btn btn--primary">
-            <Download size={14} strokeWidth={2} />
+          <a
+            href="#download"
+            className="btn btn--primary"
+            title="Download Quick Pill for Windows 10 & 11"
+            aria-label="Download Quick Pill for Windows 10 & 11"
+          >
+            <Download size={14} strokeWidth={2} aria-hidden="true" />
             Download
           </a>
           <a
@@ -190,26 +195,33 @@ export default function Hero() {
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn--ghost-white"
+            title="View Quick Pill open-source repository on GitHub"
+            aria-label="View Quick Pill open-source repository on GitHub"
           >
-            <Github size={14} strokeWidth={1.5} />
+            <Github size={14} strokeWidth={1.5} aria-hidden="true" />
             View on GitHub
           </a>
         </div>
 
-        <div className="hero-platforms">Windows 10 / 11</div>
+        <div className="hero-platforms">Windows 10 / 11 · macOS · Linux</div>
       </div>
 
       {/* Live Demo Video Showcase */}
-      <div className="hero-video-container">
+      <figure className="hero-video-container" aria-label="Quick Pill Demonstration Video">
         <div className="hero-video-bezel">
-          <div className="hero-video-dots">
+          <div className="hero-video-dots" aria-hidden="true">
             <span className="dot red" />
             <span className="dot yellow" />
             <span className="dot green" />
           </div>
-          <div className="hero-video-title">Quick Pill — In Action</div>
-          <button className="hero-video-toggle" onClick={togglePlay} aria-label={isPlaying ? 'Pause' : 'Play'}>
-            {isPlaying ? <Pause size={12} /> : <Play size={12} />}
+          <figcaption className="hero-video-title">Quick Pill — Dynamic Island in Action</figcaption>
+          <button
+            className="hero-video-toggle"
+            onClick={togglePlay}
+            aria-label={isPlaying ? 'Pause demonstration video' : 'Play demonstration video'}
+            title={isPlaying ? 'Pause demo' : 'Play demo'}
+          >
+            {isPlaying ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
           </button>
         </div>
         <video
@@ -219,11 +231,12 @@ export default function Hero() {
           loop
           muted
           playsInline
+          title="Quick Pill Dynamic Island for Windows Demo"
           className="hero-video"
         />
-      </div>
+      </figure>
 
-      <div className="hero-rule" />
+      <div className="hero-rule" aria-hidden="true" />
     </section>
   );
 }

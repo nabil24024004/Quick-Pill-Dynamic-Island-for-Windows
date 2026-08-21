@@ -1,0 +1,6 @@
+# robots.txt for Quick Pill (https://quickpill.neosparkx.com)
+User-agent: *
+Allow: /
+
+# Sitemap Location
+Sitemap: https://quickpill.neosparkx.com/sitemap.xml

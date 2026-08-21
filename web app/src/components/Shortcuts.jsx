@@ -40,7 +40,7 @@ export default function Shortcuts() {
   }, []);
 
   return (
-    <section className="shortcuts section" id="shortcuts" ref={sectionRef}>
+    <section className="shortcuts section" id="shortcuts" ref={sectionRef} aria-label="Keyboard shortcuts and gestures">
       <div className="container">
         <div className="shortcuts-inner">
           <div>
@@ -48,10 +48,10 @@ export default function Shortcuts() {
               Speed at Your<br /><em>Fingertips.</em>
             </h2>
           </div>
-          <div className="shortcut-table">
+          <div className="shortcut-table" role="table" aria-label="Quick Pill keyboard shortcuts table">
             {SHORTCUTS.map(({ key, action }) => (
-              <div className="shortcut-row" key={key}>
-                <span className="shortcut-key">{key}</span>
+              <div className="shortcut-row" key={key} role="row">
+                <kbd className="shortcut-key">{key}</kbd>
                 <span className="shortcut-action">{action}</span>
               </div>
             ))}

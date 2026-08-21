@@ -64,7 +64,7 @@ export default function Download() {
   }, []);
 
   return (
-    <section className="download" id="download" ref={sectionRef}>
+    <section className="download" id="download" ref={sectionRef} aria-label="Download Quick Pill">
       <div className="container">
         <div className="download-eyebrow">Open Source · MIT License · v5.0.0</div>
 
@@ -83,20 +83,38 @@ export default function Download() {
 
         {/* Windows Download button */}
         <div className="download-platforms">
-          <a href={WINDOWS_URL} className="btn btn--primary" id="dl-windows">
-            <DownloadIcon size={14} strokeWidth={2} />
+          <a
+            href={WINDOWS_URL}
+            className="btn btn--primary"
+            id="dl-windows"
+            title="Download Quick Pill v5.0.0 Setup for Windows 10/11 (.exe)"
+            aria-label="Download Quick Pill v5.0.0 Setup for Windows 10/11 64-bit installer"
+          >
+            <DownloadIcon size={14} strokeWidth={2} aria-hidden="true" />
             Download for Windows (.exe)
           </a>
         </div>
 
         {/* Footer meta row */}
         <div className="download-meta">
-          <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">
-            <Github size={13} strokeWidth={1.5} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+          <a
+            href={GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="View Quick Pill repository on GitHub"
+            aria-label="View Quick Pill repository on GitHub"
+          >
+            <Github size={13} strokeWidth={1.5} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} aria-hidden="true" />
             Source on GitHub
           </a>
-          <a href={`${GITHUB_URL}/releases`} target="_blank" rel="noopener noreferrer">
-            <ExternalLink size={13} strokeWidth={1.5} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} />
+          <a
+            href={`${GITHUB_URL}/releases`}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="View all Quick Pill releases on GitHub"
+            aria-label="View all Quick Pill releases on GitHub"
+          >
+            <ExternalLink size={13} strokeWidth={1.5} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} aria-hidden="true" />
             All Releases
           </a>
           <span className="download-version-badge">MIT License</span>

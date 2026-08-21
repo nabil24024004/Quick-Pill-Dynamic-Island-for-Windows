@@ -51,7 +51,7 @@ export default function Audiences() {
   useScrollReveal(sectionRef, '.audiences-header', { y: 30, opacity: 0 }, { y: 0, opacity: 1, duration: 0.6 });
 
   return (
-    <section className="audiences section" id="audiences" ref={sectionRef}>
+    <section className="audiences section" id="audiences" ref={sectionRef} aria-label="Who Quick Pill is built for">
       <div className="container">
         <div className="audiences-header">
           <h2 className="audiences-headline">Built for You.</h2>

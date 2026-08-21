@@ -10,21 +10,24 @@ const MODES = [
     name:    'Still Mode',
     tagline: 'The quiet sentinel.',
     desc:    'A minimal semicircular capsule resting at the top of your screen. Zero screen footprint. Zero distraction. Always within reach.',
-    imgSrc:  'still-mode.png',
+    imgSrc:  'still-mode.jpg',
+    alt:     'Quick Pill Still Mode - Minimalist idle capsule at the top of desktop screen',
   },
   {
     numeral: 'II',
     name:    'Quick Mode',
     tagline: 'Hover to reveal.',
     desc:    'Brush your cursor over the island and it expands with a spring to show the time, weather, battery, and now-playing track — in under 200ms.',
-    imgSrc:  'quick-mode.png',
+    imgSrc:  'quick-mode.jpg',
+    alt:     'Quick Pill Quick Mode - Dynamic spring expansion with clock, weather, battery and media info',
   },
   {
     numeral: 'III',
     name:    'Large Mode',
     tagline: 'Click to command.',
     desc:    'A full interactive dashboard unfolds with 11 feature tabs. Control everything without leaving your current window.',
-    imgSrc:  'large-mode.png',
+    imgSrc:  'large-mode.jpg',
+    alt:     'Quick Pill Large Mode - Full interactive 11-tab desktop productivity dashboard',
   },
 ];
 
@@ -52,27 +55,30 @@ export default function HowItWorks() {
   }, []);
 
   return (
-    <section className="how-it-works section" id="how-it-works" ref={sectionRef}>
+    <section className="how-it-works section" id="how-it-works" ref={sectionRef} aria-label="How Quick Pill Works">
       <div className="container">
         <div className="how-header">
           <h2 className="how-headline">Three Modes.</h2>
         </div>
         <div className="modes-grid">
-          {MODES.map(({ numeral, name, tagline, desc, imgSrc }) => (
-            <div className="mode-col" key={name}>
-              <div className="mode-numeral">{numeral}</div>
+          {MODES.map(({ numeral, name, tagline, desc, imgSrc, alt }) => (
+            <article className="mode-col" key={name}>
+              <div className="mode-numeral" aria-hidden="true">{numeral}</div>
               <h3 className="mode-name">{name}</h3>
               <div className="mode-tagline">{tagline}</div>
               <p className="mode-desc">{desc}</p>
               <div className="mode-img-wrapper">
                 <img
                   src={imgSrc}
-                  alt={name}
+                  alt={alt}
+                  title={name}
                   className="mode-img"
                   loading="lazy"
+                  width="400"
+                  height="220"
                 />
               </div>
-            </div>
+            </article>
           ))}
         </div>
       </div>
