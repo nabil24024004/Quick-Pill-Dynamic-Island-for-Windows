@@ -22,7 +22,7 @@ const GITHUB_URL  = 'https://github.com/nabil24024004/Quick-Pill';
 
 const HEADLINE = 'Download.';
 
-export default function Download() {
+export default function Download({ onDownloadClick }) {
   const sectionRef  = useRef(null);
   const headlineRef = useRef(null);
 
@@ -63,6 +63,13 @@ export default function Download() {
     return () => ctx.revert();
   }, []);
 
+  const handleDownload = (e) => {
+    if (onDownloadClick) {
+      e.preventDefault();
+      onDownloadClick();
+    }
+  };
+
   return (
     <section className="download" id="download" ref={sectionRef} aria-label="Download Quick Pill">
       <div className="container">
@@ -84,7 +91,8 @@ export default function Download() {
         {/* Windows Download button */}
         <div className="download-platforms">
           <a
-            href={WINDOWS_URL}
+            href="#/thank-you"
+            onClick={handleDownload}
             className="btn btn--primary"
             id="dl-windows"
             title="Download Quick Pill v5.0.0 Setup for Windows 10/11 (.exe)"

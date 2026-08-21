@@ -7,64 +7,80 @@
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/large-mode.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/large-mode.jpg</image:loc>
       <image:title>Quick Pill Dynamic Island Large Mode Dashboard on Windows 10 and 11</image:title>
       <image:caption>Interactive Dynamic Island dashboard with multi-tab widgets for Windows 10 &amp; 11.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/quick-mode.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/quick-mode.jpg</image:loc>
       <image:title>Quick Pill Quick Mode Hover Preview</image:title>
       <image:caption>Hover preview displaying clock, live weather, battery status, and media playback info.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/still-mode.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/still-mode.jpg</image:loc>
       <image:title>Quick Pill Still Mode Minimal Screen Capsule</image:title>
       <image:caption>Minimalist semicircular capsule resting seamlessly at the top of the desktop screen.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/media-tab.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/media-tab.jpg</image:loc>
       <image:title>Quick Pill Media Controller and Scrubber Tab</image:title>
       <image:caption>Desktop media controller with album artwork, marquee titles, and audio scrubber for Spotify and Apple Music.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/notifications-tab.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/notifications-tab.jpg</image:loc>
       <image:title>Quick Pill Live Notification Center Tab</image:title>
       <image:caption>Native Windows notification manager with app icons and one-click app focus.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/timer-tab.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/timer-tab.jpg</image:loc>
       <image:title>Quick Pill Preset Countdown Timer with Glow Depletion</image:title>
       <image:caption>Productivity timer with 15m, 30m, 60m presets and edge-tracing glow countdown.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/tasks-tab.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/tasks-tab.jpg</image:loc>
       <image:title>Quick Pill Minimalist Task Manager</image:title>
       <image:caption>Minimalist to-do task list with circular check controls and local persistence.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/clipboard-tab.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/clipboard-tab.jpg</image:loc>
       <image:title>Quick Pill Clipboard History Manager</image:title>
       <image:caption>Clipboard history viewer preserving up to 50 copied snippets with instant restore.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/weather-tab.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/weather-tab.jpg</image:loc>
       <image:title>Quick Pill Real-Time Weather and 3-Day Forecast</image:title>
       <image:caption>Live desktop weather conditions, humidity, precipitation, and multi-day forecast.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/flipclock-tab.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/flipclock-tab.jpg</image:loc>
       <image:title>Quick Pill Split-Flap Flip Clock Tab</image:title>
       <image:caption>Retro mechanical split-flap 3D clock widget with glowing time and date indicators.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/system.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/system.jpg</image:loc>
       <image:title>Quick Pill Real-Time Hardware and System Metrics</image:title>
       <image:caption>Live CPU load, RAM utilization, and battery status monitor.</image:caption>
     </image:image>
     <image:image>
-      <image:loc>https://quickpill.neosparkx.com/privacydot-tab.png</image:loc>
+      <image:loc>https://quickpill.neosparkx.com/privacydot-tab.jpg</image:loc>
       <image:title>Quick Pill Privacy Dot Hardware Indicator</image:title>
       <image:caption>Always-on camera and microphone active-use indicator dots for privacy protection.</image:caption>
+    </image:image>
+  </url>
+  <url>
+    <loc>https://quickpill.neosparkx.com/#/thank-you</loc>
+    <lastmod>2026-08-22</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <image:image>
+      <image:loc>https://quickpill.neosparkx.com/smartscreen-step1.png</image:loc>
+      <image:title>Windows SmartScreen More Info Step 1</image:title>
+      <image:caption>Click More info on Windows Defender SmartScreen protected your PC prompt</image:caption>
+    </image:image>
+    <image:image>
+      <image:loc>https://quickpill.neosparkx.com/smartscreen-step2.jpg</image:loc>
+      <image:title>Windows SmartScreen Run Anyway Step 2</image:title>
+      <image:caption>Click Run anyway to launch Quick Pill installer</image:caption>
     </image:image>
   </url>
 </urlset>

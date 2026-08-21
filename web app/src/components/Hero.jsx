@@ -84,7 +84,7 @@ function PillContent({ mode }) {
   );
 }
 
-export default function Hero() {
+export default function Hero({ onDownloadClick }) {
   const headlineRef = useRef(null);
   const subtitleRef = useRef(null);
   const ctaRef      = useRef(null);
@@ -144,6 +144,13 @@ export default function Hero() {
     setIsPlaying(!isPlaying);
   };
 
+  const handleDownload = (e) => {
+    if (onDownloadClick) {
+      e.preventDefault();
+      onDownloadClick();
+    }
+  };
+
   return (
     <section className="hero" id="hero">
       {/* Atmospheric beam background */}
@@ -182,7 +189,8 @@ export default function Hero() {
 
         <div className="hero-cta" ref={ctaRef}>
           <a
-            href="#download"
+            href="#/thank-you"
+            onClick={handleDownload}
             className="btn btn--primary"
             title="Download Quick Pill for Windows 10 & 11"
             aria-label="Download Quick Pill for Windows 10 & 11"
