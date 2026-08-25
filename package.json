@@ -1,7 +1,7 @@
 {
   "name": "quick-pill",
   "productName": "Quick Pill",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "A Dynamic Island for All",
   "main": ".vite/build/main.js",
   "scripts": {

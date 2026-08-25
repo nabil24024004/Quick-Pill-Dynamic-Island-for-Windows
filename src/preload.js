@@ -9,7 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getCameraStatus: () => ipcRenderer.invoke('get-camera-status'),
   getMicrophoneStatus: () => ipcRenderer.invoke('get-microphone-status'),
   getSystemMetrics: () => ipcRenderer.invoke('get-system-metrics'),
-  controlSystemMedia: (command) => ipcRenderer.invoke('control-system-media', command),
+  controlSystemMedia: (command, ...args) => ipcRenderer.invoke('control-system-media', command, ...args),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   launchApp: (appName) => ipcRenderer.invoke('launch-app', appName),
   buildAppCache: () => ipcRenderer.invoke('build-app-cache'),

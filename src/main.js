@@ -459,7 +459,7 @@ class AppUpdater extends EventEmitter {
   constructor() {
     super();
     this.manifestUrls = [...DEFAULT_MANIFEST_URLS];
-    this.currentVersion = app ? app.getVersion() : "5.1.0";
+    this.currentVersion = app ? app.getVersion() : "5.2.0";
     this.status = "idle";
     this.updateInfo = null;
     this.downloadedFilePath = null;
@@ -1095,14 +1095,17 @@ Add-Type -AssemblyName System.Runtime.WindowsRuntime
 Add-Type -AssemblyName System.Drawing
 
 $asTaskGeneric = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { 
-    $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetGenericArguments().Count -eq 1 -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name.StartsWith('IAsyncOperation') 
+    $_.Name -eq 'AsTask' -and 
+    $_.IsGenericMethodDefinition -and 
+    $_.ReturnType.Name -eq 'Task\`1' -and 
+    $_.GetParameters().Count -eq 1
 }[0]
 
 function Await-Operation($asyncOp, $type) {
     if (-not $asyncOp) { return $null }
     try {
         $task = $asTaskGeneric.MakeGenericMethod($type).Invoke($null, @($asyncOp))
-        $task.Wait()
+        [void]$task.Wait(2000)
         return $task.Result
     } catch {
         return $null
@@ -1225,10 +1228,103 @@ if ($manager) {
 Write-Output "null"
 `;
 
+const psControlScriptPath = path.join(app.getPath("userData"), "control-media.ps1");
+const psControlScriptContent = `param([string]$command = "playpause", [double]$seekSeconds = 0)
+
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+
+$asTaskGeneric = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { 
+    $_.Name -eq 'AsTask' -and 
+    $_.IsGenericMethodDefinition -and 
+    $_.ReturnType.Name -eq 'Task\`1' -and 
+    $_.GetParameters().Count -eq 1
+}[0]
+
+function Await-Operation($asyncOp, $type) {
+    if (-not $asyncOp) { return $null }
+    try {
+        $task = $asTaskGeneric.MakeGenericMethod($type).Invoke($null, @($asyncOp))
+        [void]$task.Wait(2000)
+        return $task.Result
+    } catch {
+        return $null
+    }
+}
+
+$mgrType = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]
+$asyncOp = [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager, Windows.Media.Control, ContentType = WindowsRuntime]::RequestAsync()
+$manager = Await-Operation $asyncOp $mgrType
+
+if ($manager) {
+    $session = $manager.GetCurrentSession()
+    if (-not $session) {
+        $sessions = $manager.GetSessions()
+        if ($sessions -and $sessions.Count -gt 0) {
+            $session = $sessions | Where-Object { $_.GetPlaybackInfo().PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing } | Select-Object -First 1
+            if (-not $session) { $session = $sessions[0] }
+        }
+    }
+    if ($session) {
+        $boolType = [bool]
+        switch ($command.ToLower()) {
+            "playpause" {
+                $success = Await-Operation ($session.TryTogglePlayPauseAsync()) $boolType
+                if (-not $success) {
+                    $pb = $session.GetPlaybackInfo()
+                    if ($pb.PlaybackStatus -eq [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionPlaybackStatus]::Playing) {
+                        Await-Operation ($session.TryPauseAsync()) $boolType
+                    } else {
+                        Await-Operation ($session.TryPlayAsync()) $boolType
+                    }
+                }
+            }
+            "play" {
+                Await-Operation ($session.TryPlayAsync()) $boolType
+            }
+            "pause" {
+                Await-Operation ($session.TryPauseAsync()) $boolType
+            }
+            "next" {
+                Await-Operation ($session.TrySkipNextAsync()) $boolType
+            }
+            "previous" {
+                Await-Operation ($session.TrySkipPreviousAsync()) $boolType
+            }
+            "stop" {
+                Await-Operation ($session.TryStopAsync()) $boolType
+            }
+            "seek" {
+                $ticks = [long]($seekSeconds * 10000000)
+                Await-Operation ($session.TryChangePlaybackPositionAsync($ticks)) $boolType
+            }
+        }
+        exit 0
+    }
+}
+
+# Fallback to keybd_event if GSMTC is unavailable or had no session
+if ($command -in @("playpause", "next", "previous")) {
+    $vk = 0xCD
+    if ($command -eq "next") { $vk = 0xB0 }
+    elseif ($command -eq "previous") { $vk = 0xB1 }
+    $type = '[DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);'
+    $MediaKey = Add-Type -MemberDefinition $type -Name "WinMediaKeyFallback" -Namespace "WinAPI" -PassThru
+    $MediaKey::keybd_event($vk, 0, 0, [UIntPtr]::Zero)
+    $MediaKey::keybd_event($vk, 0, 2, [UIntPtr]::Zero)
+}
+`;
+
 try {
   fs.writeFileSync(psMediaScriptPath, psMediaScriptContent, "utf8");
 } catch (e) {
   console.error("Failed to write get-media.ps1 script:", e);
+}
+
+try {
+  fs.writeFileSync(psControlScriptPath, psControlScriptContent, "utf8");
+} catch (e) {
+  console.error("Failed to write control-media.ps1 script:", e);
 }
 
 let mediaFetchInFlight = false;
@@ -1472,7 +1568,7 @@ app.on("window-all-closed", () => {
 });
 
 // System Media Controls Handler
-ipcMain.handle("control-system-media", async (event, command) => {
+ipcMain.handle("control-system-media", async (event, command, ...args) => {
   const platform = process.platform;
   if (platform === "darwin") {
     const script = `
@@ -1487,30 +1583,25 @@ ipcMain.handle("control-system-media", async (event, command) => {
         end if
         `;
     execFile("osascript", ["-e", script]);
-  } else  if (platform === "win32") {
-    // 'seek' is client-side only — there is no OS key for it. Return early to avoid
-    // accidentally firing a VK keypress for unrecognised commands.
-    if (!['playpause', 'next', 'previous'].includes(command)) return;
-    let vkCode = "0xCD"; // VK_MEDIA_PLAY_PAUSE
-    if (command === "next") vkCode = "0xB0"; // VK_MEDIA_NEXT_TRACK
-    if (command === "previous") vkCode = "0xB1"; // VK_MEDIA_PREV_TRACK
-
-    logToFile(`Executing media control: ${command} (${vkCode})`);
-
-    const psScript = `
-$type = '[DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, UIntPtr dwExtraInfo);'
-$MediaKey = Add-Type -MemberDefinition $type -Name "WinMediaKey" -Namespace "WinAPI" -PassThru
-$MediaKey::keybd_event(${vkCode}, 0, 0, [UIntPtr]::Zero)
-$MediaKey::keybd_event(${vkCode}, 0, 2, [UIntPtr]::Zero)
-`;
-    const encCmd = getPowershellEncodedCommand(psScript);
-    exec(`powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand ${encCmd}`, (err) => {
-      if (err) logToFile("Media control error:", err);
-    });
+  } else if (platform === "win32") {
+    const seekSec = typeof args[0] === 'number' ? args[0] : 0;
+    logToFile(`Executing media control: ${command} ${seekSec > 0 ? `(seek: ${seekSec}s)` : ''}`);
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", psControlScriptPath, "-command", command, "-seekSeconds", seekSec.toString()],
+      { timeout: 4000 },
+      (err) => {
+        if (err) logToFile("Media control error:", err);
+      }
+    );
   } else if (platform === "linux") {
     let cmd = command;
     if (command === "playpause") cmd = "play-pause";
-    exec(`playerctl ${cmd}`);
+    if (command === "seek" && typeof args[0] === 'number') {
+      exec(`playerctl position ${args[0]}`);
+    } else {
+      exec(`playerctl ${cmd}`);
+    }
   }
 });
 

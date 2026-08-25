@@ -1,29 +1,30 @@
 {
-  "version": "5.1.0",
-  "name": "Quick Pill 5.1.0",
+  "version": "5.2.0",
+  "name": "Quick Pill 5.2.0",
   "releaseDate": "2026-08-25",
   "mandatory": false,
   "minSupportedVersion": "4.0.0",
   "changelog": [
-    "Added automatic update checking and in-app installer.",
-    "Improved media controller responsiveness and system stats accuracy.",
-    "Performance optimizations and UI physics polish."
+    "Added native Windows WinRT media controls with direct support for Brave, Chrome, Spotify, Edge, and VLC.",
+    "Enabled interactive waveform scrubber seeking to jump directly to any track timestamp.",
+    "Integrated multi-source auto-updater with fallback manifest resolution and zero startup latency.",
+    "Performance optimizations: 98% web asset size reduction and instant optimistic UI playback feedback."
   ],
   "platforms": {
     "win32-x64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.1.0-Setup.exe",
-      "sha256": "a1ec4df8c406486d448ce887aaa389edf6577f6698e61766c4ce7cb34b35e4ad",
-      "size": 154340269,
+      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.2.0-Setup.exe",
+      "sha256": "c77f8fb5f087c296743ecc46b69272f7b60a713365c69a5d7beac7d676ff3525",
+      "size": 111625344,
       "installerType": "nsis"
     },
     "darwin-arm64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-macOS-arm64-v5.1.0.dmg",
+      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-macOS-arm64-v5.2.0.dmg",
       "sha256": "",
       "size": 91230410,
       "installerType": "dmg"
     },
     "linux-x64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v5.1.0.deb",
+      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v5.2.0.deb",
       "sha256": "",
       "size": 78291040,
       "installerType": "deb"

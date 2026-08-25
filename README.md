@@ -8,7 +8,7 @@ Quick Pill is a cross-platform desktop application that recreates Apple's Dynami
 
 [![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2)](https://discord.gg/a2xzVkxFVg)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-5.1.0-blue)](package.json)
+[![Version](https://img.shields.io/badge/Version-5.2.0-blue)](package.json)
 
 https://github.com/user-attachments/assets/7408347c-52d8-474c-82e7-0946082be474
 

@@ -2679,7 +2679,10 @@ export default function Island() {
                       transition={{ duration: 0.25, ease: "easeInOut" }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        window.electronAPI.controlSystemMedia('playpause');
+                        setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
+                        if (window.electronAPI?.controlSystemMedia) {
+                          window.electronAPI.controlSystemMedia('playpause');
+                        }
                       }}
                       onMouseEnter={() => {
                         if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false, false);
@@ -3114,8 +3117,9 @@ export default function Island() {
                           isPlaying={spotifyTrack.state === 'playing'}
                           onSeek={(sec) => {
                             setMediaPosition(sec);
-                            // Note: 'seek' is not implemented in the OS media IPC layer;
-                            // position is updated client-side only for visual feedback.
+                            if (window.electronAPI?.controlSystemMedia) {
+                              window.electronAPI.controlSystemMedia('seek', sec);
+                            }
                           }}
                         />
 
@@ -3124,8 +3128,14 @@ export default function Island() {
                           {/* 1. Previous button */}
                           <button
                             className="media-btn"
-                            onClick={() => window.electronAPI.controlSystemMedia('previous')}
+                            onClick={() => {
+                              if (window.electronAPI?.controlSystemMedia) {
+                                window.electronAPI.controlSystemMedia('previous');
+                              }
+                            }}
                             style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Previous Track"
+                            aria-label="Previous Track"
                           >
                             <SkipBackIcon size={22} color="#ffffff" fill="#ffffff" />
                           </button>
@@ -3133,7 +3143,12 @@ export default function Island() {
                           {/* 2. Center Play/Pause button */}
                           <button
                             className="media-btn"
-                            onClick={() => window.electronAPI.controlSystemMedia('playpause')}
+                            onClick={() => {
+                              setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
+                              if (window.electronAPI?.controlSystemMedia) {
+                                window.electronAPI.controlSystemMedia('playpause');
+                              }
+                            }}
                             style={{
                               background: 'rgba(255,255,255,0.16)',
                               backdropFilter: 'blur(8px)',
@@ -3148,6 +3163,8 @@ export default function Island() {
                               justifyContent: 'center',
                               boxShadow: '0 2px 10px rgba(0,0,0,0.35)'
                             }}
+                            title={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
+                            aria-label={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
                           >
                             {spotifyTrack.state === 'playing' ? <Pause size={20} color="#ffffff" fill="#ffffff" /> : <Play size={20} color="#ffffff" fill="#ffffff" />}
                           </button>
@@ -3155,8 +3172,14 @@ export default function Island() {
                           {/* 3. Next button */}
                           <button
                             className="media-btn"
-                            onClick={() => window.electronAPI.controlSystemMedia('next')}
+                            onClick={() => {
+                              if (window.electronAPI?.controlSystemMedia) {
+                                window.electronAPI.controlSystemMedia('next');
+                              }
+                            }}
                             style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                            title="Next Track"
+                            aria-label="Next Track"
                           >
                             <SkipForwardIcon size={22} color="#ffffff" fill="#ffffff" />
                           </button>

@@ -54,7 +54,8 @@ function generateManifest() {
   const searchDirs = [DIST_DIR, OUT_MAKE_DIR];
 
   // Look for Windows installer
-  const winArtifact = findArtifact(searchDirs, /QuickPill-Windows.*\.exe$/i) ||
+  const winArtifact = findArtifact(searchDirs, /Quick.*Pill.*Setup.*\.exe$/i) ||
+                      findArtifact(searchDirs, /QuickPill-Windows.*\.exe$/i) ||
                       findArtifact(searchDirs, /quick-pill-.*-setup\.exe$/i);
 
   // Look for macOS installer
