@@ -467,10 +467,6 @@ class AppUpdater extends EventEmitter {
     this.lastProgressEmit = 0;
   }
 
-  setManifestUrl(url) {
-    if (url) this.manifestUrls = [url, ...DEFAULT_MANIFEST_URLS];
-  }
-
   compareVersions(v1, v2) {
     const cleanV1 = (v1 || "0.0.0").replace(/^v/i, "").trim();
     const cleanV2 = (v2 || "0.0.0").replace(/^v/i, "").trim();
@@ -660,9 +656,8 @@ class AppUpdater extends EventEmitter {
       const fileStream = fs.createWriteStream(targetFilePath);
       let transferredBytes = 0;
       let totalBytes = this.updateInfo.size || 0;
-      let startTime = Date.now();
       let lastBytes = 0;
-      let lastTime = startTime;
+      let lastTime = Date.now();
       let currentSpeed = 0;
 
       const downloadWithRedirects = (currentUrl, maxRedirects = 5) => {

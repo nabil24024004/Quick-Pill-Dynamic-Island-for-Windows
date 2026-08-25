@@ -1,89 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
 import { gsap } from 'gsap';
 import { Download, Github, Play, Pause } from 'lucide-react';
 import Beams from './Beams';
 import { useReleaseInfo } from '../hooks/useReleaseInfo';
-
-const MODES = ['still', 'quick', 'large'];
-const DURATIONS = { still: 2200, quick: 2500, large: 3000 };
-
-/* Pill sizes per mode */
-const PILL_SIZE = {
-  still: { width: 160, height: 38,  borderRadius: 100 },
-  quick: { width: 310, height: 62,  borderRadius: 100 },
-  large: { width: 440, height: 220, borderRadius: 30  },
-};
-
-/* Content inside pill */
-function PillContent({ mode }) {
-  const now = new Date();
-  const time = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-  return (
-    <AnimatePresence mode="wait">
-      {mode === 'still' && (
-        <motion.div
-          key="still"
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', height: '100%', gap: '6px' }}
-        >
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(255,255,255,0.45)' }} />
-          <span style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(255,255,255,0.2)' }} />
-        </motion.div>
-      )}
-      {mode === 'quick' && (
-        <motion.div
-          key="quick"
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          transition={{ duration: 0.3 }}
-          style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 1.25rem' }}
-        >
-          <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.9rem', fontWeight: 500, color: 'rgba(255,255,255,0.85)' }}>
-            {time}
-          </span>
-          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-            <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>22°C</span>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
-          </div>
-        </motion.div>
-      )}
-      {mode === 'large' && (
-        <motion.div
-          key="large"
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-          transition={{ duration: 0.3, delay: 0.15 }}
-          style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', padding: '0.875rem 1.125rem', gap: '0.75rem' }}
-        >
-          {/* Tab strip */}
-          <div style={{ display: 'flex', gap: '5px', justifyContent: 'center' }}>
-            {[1,2,3,4,5].map(i => (
-              <div key={i} style={{
-                height: 3, borderRadius: 2, background: i === 2 ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.12)',
-                width: i === 2 ? 28 : 20,
-              }} />
-            ))}
-          </div>
-          {/* Content blocks */}
-          <div style={{ flex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-            {[...Array(4)].map((_, i) => (
-              <div key={i} style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.07)',
-                borderRadius: 6,
-              }} />
-            ))}
-          </div>
-          {/* Bottom row */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ width: 60, height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2 }} />
-            <div style={{ width: 30, height: 4, background: 'rgba(255,255,255,0.07)', borderRadius: 2 }} />
-          </div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
 
 export default function Hero({ onDownloadClick }) {
   const headlineRef = useRef(null);
@@ -92,23 +11,7 @@ export default function Hero({ onDownloadClick }) {
   const eyebrowRef  = useRef(null);
   const videoRef    = useRef(null);
   const [isPlaying, setIsPlaying] = useState(true);
-  const [modeIdx, setModeIdx]     = useState(0);
-  const [modeLabel, setModeLabel] = useState('Still Mode');
   const { version } = useReleaseInfo();
-
-  const MODE_LABELS = { still: 'Still Mode', quick: 'Quick Mode', large: 'Large Mode' };
-  const currentMode = MODES[modeIdx];
-
-  /* Cycle pill modes */
-  useEffect(() => {
-    const dur = DURATIONS[currentMode];
-    const timer = setTimeout(() => {
-      const next = (modeIdx + 1) % MODES.length;
-      setModeIdx(next);
-      setModeLabel(MODE_LABELS[MODES[next]]);
-    }, dur);
-    return () => clearTimeout(timer);
-  }, [modeIdx]);
 
   /* GSAP entrance animation */
   useEffect(() => {
