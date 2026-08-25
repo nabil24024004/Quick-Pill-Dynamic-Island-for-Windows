@@ -26,7 +26,7 @@ class AppUpdater extends EventEmitter {
   constructor() {
     super();
     this.manifestUrl = DEFAULT_MANIFEST_URL;
-    this.currentVersion = app ? app.getVersion() : '5.0.0';
+    this.currentVersion = app ? app.getVersion() : '5.1.0';
     this.status = 'idle'; // 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
     this.updateInfo = null;
     this.downloadedFilePath = null;
@@ -39,7 +39,7 @@ class AppUpdater extends EventEmitter {
   }
 
   /**
-   * Compare two semantic version strings (e.g., "5.1.0" > "5.0.0")
+   * Compare two semantic version strings (e.g., "5.1.0" > "5.1.0")
    * Returns:
    *   1 if v1 > v2
    *  -1 if v1 < v2
@@ -162,8 +162,8 @@ class AppUpdater extends EventEmitter {
       if (hasUpdate) {
         const platformKey = this.getPlatformKey();
         const platformData = manifest.platforms?.[platformKey] ||
-                             manifest.platforms?.[`${process.platform}-x64`] ||
-                             manifest.platforms?.['win32-x64'];
+          manifest.platforms?.[`${process.platform}-x64`] ||
+          manifest.platforms?.['win32-x64'];
 
         const downloadUrl = platformData?.url || '';
 
@@ -222,7 +222,7 @@ class AppUpdater extends EventEmitter {
     return new Promise((resolve, reject) => {
       // Remove any leftover partial file
       if (fs.existsSync(targetFilePath)) {
-        try { fs.unlinkSync(targetFilePath); } catch (_) {}
+        try { fs.unlinkSync(targetFilePath); } catch (_) { }
       }
 
       const fileStream = fs.createWriteStream(targetFilePath);
@@ -256,7 +256,7 @@ class AppUpdater extends EventEmitter {
 
           if (res.statusCode !== 200) {
             fileStream.close();
-            try { fs.unlinkSync(targetFilePath); } catch (_) {}
+            try { fs.unlinkSync(targetFilePath); } catch (_) { }
             const err = new Error(`Download failed with status HTTP ${res.statusCode}: ${res.statusMessage}`);
             this.status = 'error';
             this.emit('error', err.message);
@@ -302,7 +302,7 @@ class AppUpdater extends EventEmitter {
 
           res.on('error', (err) => {
             fileStream.close();
-            try { fs.unlinkSync(targetFilePath); } catch (_) {}
+            try { fs.unlinkSync(targetFilePath); } catch (_) { }
             this.status = 'error';
             this.emit('error', err.message);
             reject(err);
@@ -313,7 +313,7 @@ class AppUpdater extends EventEmitter {
 
         req.on('error', (err) => {
           fileStream.close();
-          try { fs.unlinkSync(targetFilePath); } catch (_) {}
+          try { fs.unlinkSync(targetFilePath); } catch (_) { }
           this.status = 'error';
           this.emit('error', err.message);
           reject(err);
@@ -332,7 +332,7 @@ class AppUpdater extends EventEmitter {
             const calculatedSha = hash.digest('hex');
 
             if (calculatedSha.toLowerCase() !== this.updateInfo.sha256.trim().toLowerCase()) {
-              try { fs.unlinkSync(targetFilePath); } catch (_) {}
+              try { fs.unlinkSync(targetFilePath); } catch (_) { }
               const err = new Error('Integrity check failed (SHA-256 mismatch). The downloaded file might be corrupted.');
               this.status = 'error';
               this.emit('error', err.message);
@@ -354,7 +354,7 @@ class AppUpdater extends EventEmitter {
       });
 
       fileStream.on('error', (err) => {
-        try { fs.unlinkSync(targetFilePath); } catch (_) {}
+        try { fs.unlinkSync(targetFilePath); } catch (_) { }
         this.status = 'error';
         this.emit('error', err.message);
         reject(err);
@@ -371,7 +371,7 @@ class AppUpdater extends EventEmitter {
     if (this.currentDownloadRequest) {
       try {
         this.currentDownloadRequest.destroy();
-      } catch (_) {}
+      } catch (_) { }
       this.currentDownloadRequest = null;
     }
     this.status = 'idle';

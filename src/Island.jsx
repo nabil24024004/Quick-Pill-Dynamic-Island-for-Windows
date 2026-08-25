@@ -913,7 +913,7 @@ export default function Island() {
   const seenNotificationIds = useRef(new Set());
 
   // Auto-Updater State & Handlers
-  const [appVersion, setAppVersion] = useState("5.0.0");
+  const [appVersion, setAppVersion] = useState("5.1.0");
   const [updateStatus, setUpdateStatus] = useState("idle"); // 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
   const [updateInfo, setUpdateInfo] = useState(null);
   const [downloadProgress, setDownloadProgress] = useState({ percent: 0, transferredBytes: 0, totalBytes: 0, speedBytesPerSec: 0 });
@@ -924,7 +924,7 @@ export default function Island() {
     if (window.electronAPI?.getAppVersion) {
       window.electronAPI.getAppVersion().then(v => {
         if (v) setAppVersion(v);
-      }).catch(() => {});
+      }).catch(() => { });
     }
 
     if (!window.electronAPI?.onUpdateEvent) return;
@@ -3987,7 +3987,7 @@ export default function Island() {
 
                 <div className="settings-section">
                   <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em' }}>Software Updates</h3>
-                  
+
                   <div className="settings-update-card">
                     <div className="settings-update-header">
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

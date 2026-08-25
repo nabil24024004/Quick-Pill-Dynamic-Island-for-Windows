@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 
 const DEFAULT_RELEASE = {
-  version: '5.0.0',
-  name: 'Quick Pill 5.0.0',
+  version: '5.1.0',
+  name: 'Quick Pill 5.1.0',
   releaseDate: '2026-08-25',
   changelog: [
     'Added automatic update checking and in-app installer.',
@@ -11,7 +11,7 @@ const DEFAULT_RELEASE = {
   ],
   platforms: {
     'win32-x64': {
-      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.0.0-Setup.exe',
+      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.1.0-Setup.exe',
       installerType: 'nsis'
     }
   }
@@ -49,7 +49,7 @@ export function useReleaseInfo() {
 
   return {
     releaseInfo,
-    version: releaseInfo.version || '5.0.0',
+    version: releaseInfo.version || '5.1.0',
     windowsUrl,
     changelog: releaseInfo.changelog || [],
     isLoading

@@ -1,6 +1,6 @@
 {
-  "version": "5.0.0",
-  "name": "Quick Pill 5.0.0",
+  "version": "5.1.0",
+  "name": "Quick Pill 5.1.0",
   "releaseDate": "2026-08-25",
   "mandatory": false,
   "minSupportedVersion": "4.0.0",
@@ -11,19 +11,19 @@
   ],
   "platforms": {
     "win32-x64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.0.0-Setup.exe",
+      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.1.0-Setup.exe",
       "sha256": "ca0719f88ce66133434e08b4e79c43e36096889bea9c0871bc19e45ee0edddf2",
       "size": 129745186,
       "installerType": "nsis"
     },
     "darwin-arm64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-macOS-arm64-v5.0.0.dmg",
+      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-macOS-arm64-v5.1.0.dmg",
       "sha256": "",
       "size": 91230410,
       "installerType": "dmg"
     },
     "linux-x64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v5.0.0.deb",
+      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v5.1.0.deb",
       "sha256": "",
       "size": 78291040,
       "installerType": "deb"
