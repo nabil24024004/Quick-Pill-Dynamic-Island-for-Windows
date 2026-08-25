@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { gsap } from 'gsap';
 import { Download, Github, Play, Pause } from 'lucide-react';
 import Beams from './Beams';
+import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
 const MODES = ['still', 'quick', 'large'];
 const DURATIONS = { still: 2200, quick: 2500, large: 3000 };
@@ -93,6 +94,7 @@ export default function Hero({ onDownloadClick }) {
   const [isPlaying, setIsPlaying] = useState(true);
   const [modeIdx, setModeIdx]     = useState(0);
   const [modeLabel, setModeLabel] = useState('Still Mode');
+  const { version } = useReleaseInfo();
 
   const MODE_LABELS = { still: 'Still Mode', quick: 'Quick Mode', large: 'Large Mode' };
   const currentMode = MODES[modeIdx];
@@ -167,7 +169,7 @@ export default function Hero({ onDownloadClick }) {
 
       {/* Main content */}
       <div className="hero-content">
-        <div ref={eyebrowRef} className="hero-eyebrow">QUICK PILL v5.0.0</div>
+        <div ref={eyebrowRef} className="hero-eyebrow">QUICK PILL v{version}</div>
 
         <h1 className="hero-headline" ref={headlineRef}>
           <span className="hero-line">

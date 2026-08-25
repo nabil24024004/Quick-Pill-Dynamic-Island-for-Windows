@@ -10,19 +10,19 @@ import {
   Keyboard,
   Settings
 } from 'lucide-react';
+import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
-const WINDOWS_URL = 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.0.0-Setup.exe';
 const GITHUB_URL  = 'https://github.com/nabil24024004/Quick-Pill';
 const DISCORD_URL = 'https://discord.gg/a2xzVkxFVg';
 
 export default function ThankYou({ onBackToHome }) {
   const downloadInitiatedRef = useRef(false);
+  const { version, windowsUrl, isLoading } = useReleaseInfo();
 
   const startDownload = () => {
-    // Create an invisible anchor to initiate the download without leaving the page
     const link = document.createElement('a');
-    link.href = WINDOWS_URL;
-    link.setAttribute('download', 'QuickPill-Windows-v5.0.0-Setup.exe');
+    link.href = windowsUrl;
+    link.setAttribute('download', `QuickPill-Windows-v${version}-Setup.exe`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -31,6 +31,8 @@ export default function ThankYou({ onBackToHome }) {
   useEffect(() => {
     // Scroll to top on mount
     window.scrollTo({ top: 0, behavior: 'instant' });
+
+    if (isLoading) return;
 
     // Trigger auto-download shortly after arrival
     const timer = setTimeout(() => {
@@ -41,7 +43,7 @@ export default function ThankYou({ onBackToHome }) {
     }, 800);
 
     return () => clearTimeout(timer);
-  }, []);
+  }, [isLoading, windowsUrl]);
 
   return (
     <div className="thankyou-page">
@@ -82,7 +84,7 @@ export default function ThankYou({ onBackToHome }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: 'easeOut' }}
         >
-          <div className="hero-eyebrow">QUICK PILL v5.0.0 · OPEN SOURCE</div>
+          <div className="hero-eyebrow">QUICK PILL v{version} · OPEN SOURCE</div>
 
           <h1 className="thankyou-title">
             Thank You for Downloading<br /><em>Quick Pill.</em>
@@ -91,7 +93,7 @@ export default function ThankYou({ onBackToHome }) {
           <p className="thankyou-subtitle">
             Your download will begin automatically in a few seconds.<br />
             If it didn&apos;t start,{' '}
-            <a href={WINDOWS_URL} onClick={startDownload} className="thankyou-link">
+            <a href={windowsUrl} onClick={startDownload} className="thankyou-link">
               click here to download manually
             </a>
             .

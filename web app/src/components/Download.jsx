@@ -3,28 +3,17 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Download as DownloadIcon, Github, ExternalLink } from 'lucide-react';
 
+import { useReleaseInfo } from '../hooks/useReleaseInfo';
+
 gsap.registerPlugin(ScrollTrigger);
 
-/*
- * ─── Cloudflare R2 Download URLs ───────────────────────────────────────────
- * Replace the placeholder bucket ID with your actual R2 public URL.
- *
- * Quick setup:
- *  1. dash.cloudflare.com → R2 → Create Bucket (name: "quick-pill-releases")
- *  2. Upload your QuickPill-Windows-v5.0.0-Setup.exe file
- *  3. Settings → Public Access → Enable
- *  4. Copy the public URL: https://pub-XXXX.r2.dev/filename
- *  5. Paste it below and replace the placeholder
- * ───────────────────────────────────────────────────────────────────────────
- */
-const WINDOWS_URL = 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.0.0-Setup.exe';
 const GITHUB_URL  = 'https://github.com/nabil24024004/Quick-Pill';
-
 const HEADLINE = 'Download.';
 
 export default function Download({ onDownloadClick }) {
   const sectionRef  = useRef(null);
   const headlineRef = useRef(null);
+  const { version, windowsUrl } = useReleaseInfo();
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -73,7 +62,7 @@ export default function Download({ onDownloadClick }) {
   return (
     <section className="download" id="download" ref={sectionRef} aria-label="Download Quick Pill">
       <div className="container">
-        <div className="download-eyebrow">Open Source · MIT License · v5.0.0</div>
+        <div className="download-eyebrow">Open Source · MIT License · v{version}</div>
 
         {/* Character-split animated headline */}
         <h2 className="download-headline" ref={headlineRef} aria-label={HEADLINE}>
@@ -95,8 +84,8 @@ export default function Download({ onDownloadClick }) {
             onClick={handleDownload}
             className="btn btn--primary"
             id="dl-windows"
-            title="Download Quick Pill v5.0.0 Setup for Windows 10/11 (.exe)"
-            aria-label="Download Quick Pill v5.0.0 Setup for Windows 10/11 64-bit installer"
+            title={`Download Quick Pill v${version} Setup for Windows 10/11 (.exe)`}
+            aria-label={`Download Quick Pill v${version} Setup for Windows 10/11 64-bit installer`}
           >
             <DownloadIcon size={14} strokeWidth={2} aria-hidden="true" />
             Download for Windows (.exe)
@@ -127,18 +116,6 @@ export default function Download({ onDownloadClick }) {
           </a>
           <span className="download-version-badge">MIT License</span>
         </div>
-
-        {/* Cloudflare R2 setup guide */}
-        {WINDOWS_URL.includes('REPLACE_BUCKET_ID') && (
-          <div className="r2-note">
-            <strong>⚠ Developer note — Cloudflare R2 setup required:</strong><br />
-            1. Go to <strong>dash.cloudflare.com → R2</strong> → Create Bucket named <strong>quick-pill-releases</strong><br />
-            2. Upload your <strong>QuickPill-Windows-v5.0.0-Setup.exe</strong><br />
-            3. Bucket Settings → <strong>Public Access → Enable</strong><br />
-            4. Copy the public URL format: <strong>https://pub-YOUR_ID.r2.dev/QuickPill-Windows-v5.0.0-Setup.exe</strong><br />
-            5. Replace <strong>REPLACE_BUCKET_ID</strong> in <code>Download.jsx</code> with your actual bucket public ID
-          </div>
-        )}
       </div>
     </section>
   );

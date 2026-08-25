@@ -163,8 +163,24 @@ All interactions with native operating system APIs execute asynchronously via El
 - `electronAPI.searchApps(query)` / `launchApp(name)`: Discovers installed Start Menu / UWP apps on Windows and launches applications.
 - `electronAPI.getDisplays()` / `setDisplay(id)`: Controls multi-monitor placement and bounds alignment.
 - `electronAPI.setAutoLaunch(enable)`: Configures OS startup registry entries (Windows) or `.config/autostart` desktop files (Linux).
+- `electronAPI.checkForUpdates()`: Checks remote `version.json` for new releases.
+- `electronAPI.startUpdateDownload()` / `cancelUpdateDownload()`: Streams release binary download with progress tracking.
+- `electronAPI.installUpdate()`: Executes NSIS setup (`/S` silent upgrade) and restarts app cleanly.
+- `electronAPI.onUpdateEvent(callback)`: Real-time listener for update lifecycle (`checking`, `available`, `download-progress`, `downloaded`, `error`).
 
 ---
+
+## 🔄 Auto-Update & Distribution Architecture
+
+1. **Manifest File (`version.json`)**:
+   - Hosted at `https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/version.json` and in `web app/public/version.json`.
+   - Contains release version, changelog, download URLs, and SHA-256 hashes for Windows (`nsis`), macOS (`dmg`), and Linux (`deb`).
+2. **Update Engine (`src/updater.js`)**:
+   - Runs in Electron Main process (`main.js`).
+   - Automatically checks for updates 4s after startup (if auto-check enabled).
+   - Performs semver comparisons, streams downloads to temp directory, verifies checksums, and launches silent NSIS upgrade.
+3. **Manifest Generator (`scripts/generate-manifest.js`)**:
+   - `npm run update:manifest`: Inspects compiled release binaries in `dist/` or `out/make/`, computes SHA-256 checksums, and outputs updated `version.json`.
 
 ## 📐 Coding Conventions & Guidelines
 

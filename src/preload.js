@@ -37,5 +37,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('usb-change', handler);
     return () => ipcRenderer.removeListener('usb-change', handler);
   },
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
+  startUpdateDownload: () => ipcRenderer.invoke('start-update-download'),
+  cancelUpdateDownload: () => ipcRenderer.invoke('cancel-update-download'),
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  onUpdateEvent: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('update-event', handler);
+    return () => ipcRenderer.removeListener('update-event', handler);
+  },
   platform: process.platform
 });

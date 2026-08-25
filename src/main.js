@@ -13,6 +13,7 @@ const {
 const path = require("node:path");
 const fs = require("fs");
 const os = require("os");
+const { autoUpdater } = require("./updater.js");
 
 if (process.platform === "linux") {
   app.commandLine.appendSwitch("enable-transparent-visuals");
@@ -444,6 +445,43 @@ Terminal=false
   }
 });
 
+// --- Auto-Updater IPC Handlers & Event Forwarding ---
+function sendUpdaterEvent(eventName, data) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("update-event", { event: eventName, data });
+  }
+}
+
+autoUpdater.on("checking", () => sendUpdaterEvent("checking"));
+autoUpdater.on("update-available", (info) => sendUpdaterEvent("available", info));
+autoUpdater.on("update-not-available", (info) => sendUpdaterEvent("not-available", info));
+autoUpdater.on("download-started", (info) => sendUpdaterEvent("download-started", info));
+autoUpdater.on("download-progress", (prog) => sendUpdaterEvent("download-progress", prog));
+autoUpdater.on("update-downloaded", (res) => sendUpdaterEvent("downloaded", res));
+autoUpdater.on("download-cancelled", () => sendUpdaterEvent("cancelled"));
+autoUpdater.on("error", (err) => sendUpdaterEvent("error", err));
+
+ipcMain.handle("check-for-updates", async () => {
+  return await autoUpdater.checkForUpdates();
+});
+
+ipcMain.handle("start-update-download", async () => {
+  return await autoUpdater.startDownload();
+});
+
+ipcMain.handle("cancel-update-download", () => {
+  autoUpdater.cancelDownload();
+  return true;
+});
+
+ipcMain.handle("install-update", () => {
+  return autoUpdater.installAndRelaunch();
+});
+
+ipcMain.handle("get-app-version", () => {
+  return app.getVersion();
+});
+
 const getIconPath = (forceExt = null) => {
   const ext = forceExt || (process.platform === "win32" ? "ico" : process.platform === "darwin" ? "icns" : "png");
 
@@ -623,6 +661,13 @@ app.whenReady().then(() => {
   } catch (e) {
     console.error("Failed to create tray:", e);
   }
+
+  // Check for updates 4 seconds after app boot so startup remains smooth
+  setTimeout(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      logToFile("Auto-update check on startup error:", err);
+    });
+  }, 4000);
 });
 const psMediaScriptPath = path.join(app.getPath("userData"), "get-media.ps1");
 const psMediaScriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8

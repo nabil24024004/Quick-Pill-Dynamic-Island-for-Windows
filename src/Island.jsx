@@ -1,9 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb } from "lucide-react";
+import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
 import "./App.css";
 
-
+// Helper format file sizes (Bytes -> KB -> MB)
+function formatBytes(bytes, decimals = 1) {
+  if (!bytes || bytes === 0) return '0 B';
+  const k = 1024;
+  const dm = decimals < 0 ? 0 : decimals;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
 
 // Helper format timer MM:SS
 function formatTimerMMSS(totalSec) {
@@ -903,6 +911,104 @@ export default function Island() {
   const [notificationAlert, setNotificationAlert] = useState(null);
   const notificationAlertTimeout = useRef(null);
   const seenNotificationIds = useRef(new Set());
+
+  // Auto-Updater State & Handlers
+  const [appVersion, setAppVersion] = useState("5.0.0");
+  const [updateStatus, setUpdateStatus] = useState("idle"); // 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error'
+  const [updateInfo, setUpdateInfo] = useState(null);
+  const [downloadProgress, setDownloadProgress] = useState({ percent: 0, transferredBytes: 0, totalBytes: 0, speedBytesPerSec: 0 });
+  const [updateErrorMessage, setUpdateErrorMessage] = useState("");
+  const [autoUpdateCheckEnabled, setAutoUpdateCheckEnabled] = useState(localStorage.getItem("auto-update-check") !== "false");
+
+  useEffect(() => {
+    if (window.electronAPI?.getAppVersion) {
+      window.electronAPI.getAppVersion().then(v => {
+        if (v) setAppVersion(v);
+      }).catch(() => {});
+    }
+
+    if (!window.electronAPI?.onUpdateEvent) return;
+
+    const unsubscribe = window.electronAPI.onUpdateEvent(({ event, data }) => {
+      if (event === "checking") {
+        setUpdateStatus("checking");
+      } else if (event === "available") {
+        setUpdateStatus("available");
+        setUpdateInfo(data);
+      } else if (event === "not-available") {
+        setUpdateStatus("not-available");
+      } else if (event === "download-started") {
+        setUpdateStatus("downloading");
+      } else if (event === "download-progress") {
+        setUpdateStatus("downloading");
+        setDownloadProgress(data);
+      } else if (event === "downloaded") {
+        setUpdateStatus("downloaded");
+      } else if (event === "cancelled") {
+        setUpdateStatus("available");
+      } else if (event === "error") {
+        setUpdateStatus("error");
+        setUpdateErrorMessage(typeof data === "string" ? data : "Update error");
+      }
+    });
+
+    return () => {
+      if (typeof unsubscribe === "function") unsubscribe();
+    };
+  }, []);
+
+  const handleManualCheckForUpdates = async () => {
+    setUpdateStatus("checking");
+    setUpdateErrorMessage("");
+    try {
+      if (window.electronAPI?.checkForUpdates) {
+        const res = await window.electronAPI.checkForUpdates();
+        if (res?.status === "available") {
+          setUpdateStatus("available");
+          setUpdateInfo(res.updateInfo);
+        } else if (res?.status === "not-available") {
+          setUpdateStatus("not-available");
+        } else if (res?.status === "error") {
+          setUpdateStatus("error");
+          setUpdateErrorMessage(res.error || "Could not check for updates.");
+        }
+      }
+    } catch (err) {
+      setUpdateStatus("error");
+      setUpdateErrorMessage(err.message || "Failed to check for updates.");
+    }
+  };
+
+  const handleStartUpdateDownload = async () => {
+    try {
+      setUpdateStatus("downloading");
+      if (window.electronAPI?.startUpdateDownload) {
+        await window.electronAPI.startUpdateDownload();
+      }
+    } catch (err) {
+      setUpdateStatus("error");
+      setUpdateErrorMessage(err.message || "Failed to start download.");
+    }
+  };
+
+  const handleCancelUpdateDownload = () => {
+    if (window.electronAPI?.cancelUpdateDownload) {
+      window.electronAPI.cancelUpdateDownload();
+      setUpdateStatus("available");
+    }
+  };
+
+  const handleInstallUpdate = () => {
+    if (window.electronAPI?.installUpdate) {
+      window.electronAPI.installUpdate();
+    }
+  };
+
+  const handleAutoUpdateCheckToggle = (e) => {
+    const val = e.target.value === "true";
+    setAutoUpdateCheckEnabled(val);
+    localStorage.setItem("auto-update-check", val ? "true" : "false");
+  };
 
   const triggerVolumeAlert = (level) => {
     setVolumeLevel(level);
@@ -3878,6 +3984,130 @@ export default function Island() {
                     </div>
                   )}
                 </div>
+
+                <div className="settings-section">
+                  <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em' }}>Software Updates</h3>
+                  
+                  <div className="settings-update-card">
+                    <div className="settings-update-header">
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 600, color: textColor }}>Quick Pill v{appVersion}</span>
+                        {updateStatus === 'checking' && (
+                          <span className="settings-update-badge checking">Checking...</span>
+                        )}
+                        {updateStatus === 'not-available' && (
+                          <span className="settings-update-badge up-to-date"><Check size={11} /> Up to date</span>
+                        )}
+                        {updateStatus === 'available' && (
+                          <span className="settings-update-badge available"><Sparkles size={11} /> v{updateInfo?.version} available</span>
+                        )}
+                        {updateStatus === 'downloading' && (
+                          <span className="settings-update-badge available"><Download size={11} /> Downloading</span>
+                        )}
+                        {updateStatus === 'downloaded' && (
+                          <span className="settings-update-badge downloaded"><CheckCircle2 size={11} /> Ready to Install</span>
+                        )}
+                        {updateStatus === 'error' && (
+                          <span className="settings-update-badge error"><AlertCircle size={11} /> Error</span>
+                        )}
+                      </div>
+
+                      <button
+                        className="settings-update-btn"
+                        onClick={handleManualCheckForUpdates}
+                        disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+                        title="Check for updates"
+                      >
+                        <RefreshCw size={12} className={updateStatus === 'checking' ? 'spin-anim' : ''} />
+                        <span>{updateStatus === 'checking' ? 'Checking...' : 'Check Now'}</span>
+                      </button>
+                    </div>
+
+                    {updateStatus === 'available' && updateInfo && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+                        <div style={{ fontSize: 12, opacity: 0.9, color: textColor }}>
+                          A new version <strong>v{updateInfo.version}</strong> is available {updateInfo.size > 0 ? `(${formatBytes(updateInfo.size)})` : ''}.
+                        </div>
+                        {updateInfo.changelog && updateInfo.changelog.length > 0 && (
+                          <div className="settings-update-changelog" style={{ color: textColor }}>
+                            <span style={{ fontWeight: 600, opacity: 0.7, marginBottom: 2 }}>What's New:</span>
+                            {updateInfo.changelog.map((item, idx) => (
+                              <div key={idx} className="settings-update-changelog-item">
+                                <span>•</span>
+                                <span>{item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                          <button
+                            className="settings-update-btn primary"
+                            onClick={handleStartUpdateDownload}
+                            style={{ flex: 1 }}
+                          >
+                            <Download size={13} />
+                            Download & Update
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {updateStatus === 'downloading' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4, color: textColor }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.85 }}>
+                          <span>Downloading v{updateInfo?.version}...</span>
+                          <span>{downloadProgress.percent}% ({formatBytes(downloadProgress.transferredBytes)} / {formatBytes(downloadProgress.totalBytes)})</span>
+                        </div>
+                        <div className="settings-update-progress-track">
+                          <div
+                            className="settings-update-progress-fill"
+                            style={{ width: `${downloadProgress.percent}%` }}
+                          />
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, opacity: 0.65 }}>
+                          <span>Speed: {formatBytes(downloadProgress.speedBytesPerSec)}/s</span>
+                          <button
+                            onClick={handleCancelUpdateDownload}
+                            style={{ background: 'none', border: 'none', color: textColor, opacity: 0.7, cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
+                    {updateStatus === 'downloaded' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, color: textColor }}>
+                        <div style={{ fontSize: 12, opacity: 0.9 }}>
+                          Update <strong>v{updateInfo?.version}</strong> has been downloaded and is ready to install!
+                        </div>
+                        <button
+                          className="settings-update-btn install"
+                          onClick={handleInstallUpdate}
+                          style={{ width: '100%', padding: '8px 14px' }}
+                        >
+                          <Sparkles size={14} />
+                          Restart & Install Now
+                        </button>
+                      </div>
+                    )}
+
+                    {updateStatus === 'error' && (
+                      <div style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>
+                        {updateErrorMessage || 'Failed to check or download update. Please try again.'}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="settings-row">
+                    <span className="settings-label">Auto-Check on Launch</span>
+                    <select value={autoUpdateCheckEnabled ? "true" : "false"} onChange={handleAutoUpdateCheckToggle}>
+                      <option value="true">Enabled</option>
+                      <option value="false">Disabled</option>
+                    </select>
+                  </div>
+                </div>
+
                 <div className="settings-section">
                   <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em', marginBottom: '4px' }}>Tab Management</h3>
                   <p style={{ fontSize: 11, opacity: 0.4, marginTop: -8, marginBottom: 8 }}>Drag to reorder, click eye to hide.</p>
