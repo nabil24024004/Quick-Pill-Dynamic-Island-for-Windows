@@ -449,12 +449,16 @@ Terminal=false
 });
 
 // --- Native Auto-Updater Engine ---
-const DEFAULT_MANIFEST_URL = "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/version.json";
+const DEFAULT_MANIFEST_URLS = [
+  "https://raw.githubusercontent.com/nabil24024004/Quick-Pill/main/web%20app/public/version.json",
+  "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/version.json",
+  "https://raw.githubusercontent.com/nabil24024004/Ripple/main/web%20app/public/version.json"
+];
 
 class AppUpdater extends EventEmitter {
   constructor() {
     super();
-    this.manifestUrl = DEFAULT_MANIFEST_URL;
+    this.manifestUrls = [...DEFAULT_MANIFEST_URLS];
     this.currentVersion = app ? app.getVersion() : "5.1.0";
     this.status = "idle";
     this.updateInfo = null;
@@ -464,7 +468,7 @@ class AppUpdater extends EventEmitter {
   }
 
   setManifestUrl(url) {
-    if (url) this.manifestUrl = url;
+    if (url) this.manifestUrls = [url, ...DEFAULT_MANIFEST_URLS];
   }
 
   compareVersions(v1, v2) {
@@ -565,11 +569,24 @@ class AppUpdater extends EventEmitter {
     this.emit("checking");
 
     try {
-      const cacheBustUrl = `${this.manifestUrl}${this.manifestUrl.includes("?") ? "&" : "?"}_t=${Date.now()}`;
-      const manifest = await this.fetchJson(cacheBustUrl);
+      let manifest = null;
+      let lastError = null;
+
+      for (const url of this.manifestUrls) {
+        try {
+          const cacheBustUrl = `${url}${url.includes("?") ? "&" : "?"}_t=${Date.now()}`;
+          const res = await this.fetchJson(cacheBustUrl);
+          if (res && res.version) {
+            manifest = res;
+            break;
+          }
+        } catch (err) {
+          lastError = err;
+        }
+      }
 
       if (!manifest || !manifest.version) {
-        throw new Error('Update manifest is missing required "version" field.');
+        throw lastError || new Error('Update manifest is missing required "version" field.');
       }
 
       const remoteVersion = manifest.version;
