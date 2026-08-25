@@ -2074,6 +2074,7 @@ export default function Island() {
   }, []);
 
   const [mediaPosition, setMediaPosition] = useState(0);
+  const lastMediaActionRef = useRef(0);
 
   // Sync position from spotifyTrack when track info updates from backend
   useEffect(() => {
@@ -2107,7 +2108,16 @@ export default function Island() {
             // Cap oversized base64 artwork to prevent large state allocations
             track.artwork_url = null;
           }
-          setSpotifyTrack(track);
+          if (track) {
+            // If user recently clicked play/pause (within 2.5s), preserve optimistic play/pause state
+            if (Date.now() - lastMediaActionRef.current < 2500) {
+              setSpotifyTrack(prev => prev ? { ...track, state: prev.state } : track);
+            } else {
+              setSpotifyTrack(track);
+            }
+          } else {
+            setSpotifyTrack(null);
+          }
         } catch (e) {
           console.error(e);
         } finally {
@@ -2117,7 +2127,7 @@ export default function Island() {
     };
 
     fetchMedia();
-    const interval = setInterval(fetchMedia, 3000); // 3s is enough; was 2s with no inflight guard
+    const interval = setInterval(fetchMedia, 3000);
     return () => clearInterval(interval);
   }, []);
 
@@ -2679,6 +2689,7 @@ export default function Island() {
                       transition={{ duration: 0.25, ease: "easeInOut" }}
                       onClick={(e) => {
                         e.stopPropagation();
+                        lastMediaActionRef.current = Date.now();
                         setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
                         if (window.electronAPI?.controlSystemMedia) {
                           window.electronAPI.controlSystemMedia('playpause');
@@ -3129,6 +3140,7 @@ export default function Island() {
                           <button
                             className="media-btn"
                             onClick={() => {
+                              lastMediaActionRef.current = Date.now();
                               if (window.electronAPI?.controlSystemMedia) {
                                 window.electronAPI.controlSystemMedia('previous');
                               }
@@ -3144,6 +3156,7 @@ export default function Island() {
                           <button
                             className="media-btn"
                             onClick={() => {
+                              lastMediaActionRef.current = Date.now();
                               setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
                               if (window.electronAPI?.controlSystemMedia) {
                                 window.electronAPI.controlSystemMedia('playpause');
@@ -3173,6 +3186,7 @@ export default function Island() {
                           <button
                             className="media-btn"
                             onClick={() => {
+                              lastMediaActionRef.current = Date.now();
                               if (window.electronAPI?.controlSystemMedia) {
                                 window.electronAPI.controlSystemMedia('next');
                               }

@@ -1097,9 +1097,9 @@ Add-Type -AssemblyName System.Drawing
 $asTaskGeneric = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { 
     $_.Name -eq 'AsTask' -and 
     $_.IsGenericMethodDefinition -and 
-    $_.ReturnType.Name -eq 'Task\`1' -and 
+    $_.GetGenericArguments().Count -eq 1 -and 
     $_.GetParameters().Count -eq 1
-}[0]
+} | Select-Object -First 1
 
 function Await-Operation($asyncOp, $type) {
     if (-not $asyncOp) { return $null }
@@ -1237,9 +1237,9 @@ Add-Type -AssemblyName System.Runtime.WindowsRuntime
 $asTaskGeneric = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { 
     $_.Name -eq 'AsTask' -and 
     $_.IsGenericMethodDefinition -and 
-    $_.ReturnType.Name -eq 'Task\`1' -and 
+    $_.GetGenericArguments().Count -eq 1 -and 
     $_.GetParameters().Count -eq 1
-}[0]
+} | Select-Object -First 1
 
 function Await-Operation($asyncOp, $type) {
     if (-not $asyncOp) { return $null }
