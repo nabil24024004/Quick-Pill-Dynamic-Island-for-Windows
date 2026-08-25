@@ -141,6 +141,7 @@ export default function Features() {
                     title={name}
                     className="feature-card-img"
                     loading="lazy"
+                    decoding="async"
                     width="400"
                     height="200"
                   />

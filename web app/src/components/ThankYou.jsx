@@ -134,7 +134,8 @@ export default function ThankYou({ onBackToHome }) {
                   alt="Windows protected your PC dialog with More info link circled in red"
                   title="Click 'More info' on the Windows SmartScreen alert"
                   className="smartscreen-img"
-                  loading="eager"
+                  loading="lazy"
+                  decoding="async"
                   width="500"
                   height="450"
                 />
@@ -154,7 +155,8 @@ export default function ThankYou({ onBackToHome }) {
                   alt="Windows protected your PC dialog showing Run anyway button circled in red"
                   title="Click 'Run anyway' to launch Quick Pill setup"
                   className="smartscreen-img"
-                  loading="eager"
+                  loading="lazy"
+                  decoding="async"
                   width="500"
                   height="450"
                 />

@@ -74,6 +74,7 @@ export default function HowItWorks() {
                   title={name}
                   className="mode-img"
                   loading="lazy"
+                  decoding="async"
                   width="400"
                   height="220"
                 />

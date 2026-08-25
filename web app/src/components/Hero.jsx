@@ -136,6 +136,27 @@ export default function Hero({ onDownloadClick }) {
     );
   }, []);
 
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            video.play().catch(() => {});
+          } else {
+            video.pause();
+          }
+        });
+      },
+      { threshold: 0.2 }
+    );
+
+    observer.observe(video);
+    return () => observer.disconnect();
+  }, []);
+
   const togglePlay = () => {
     if (!videoRef.current) return;
     if (isPlaying) {
@@ -237,6 +258,8 @@ export default function Hero({ onDownloadClick }) {
         <video
           ref={videoRef}
           src="demo.mp4"
+          poster="/large-mode.jpg"
+          preload="metadata"
           autoPlay
           loop
           muted
