@@ -48,10 +48,8 @@ https://github.com/user-attachments/assets/7408347c-52d8-474c-82e7-0946082be474
 
 Download the latest release for your platform:
 - **Windows**: `.exe` installer
-- **macOS**: `.dmg` package (Intel & Apple Silicon supported)
-- **Linux**: `.deb` or `.rpm` packages
 
-[Download Latest Release](https://github.com/Abrar Nabil/Quick-Pill/releases)
+**[Download Latest Release](https://quickpill.neosparkx.com/)**
 
 ### First Run
 1. Install and launch Quick Pill
@@ -96,8 +94,6 @@ Download the latest release for your platform:
 - **Node.js** 16+ and npm
 - Platform-specific build tools:
   - **Windows**: Visual Studio Build Tools
-  - **macOS**: Xcode Command Line Tools
-  - **Linux**: Build essentials (`build-essential` on Ubuntu/Debian)
 
 ### Development Setup
 
@@ -126,28 +122,6 @@ npm run make
 ```bash
 npm run make -- --platform=win32 --arch=x64
 ```
-
-**Linux (x64)**
-```bash
-npm run make -- --platform=linux --arch=x64
-```
-
-**macOS (Apple Silicon)**
-```bash
-npm run make -- --platform=darwin --arch=arm64
-```
-
-**macOS (Intel)**
-```bash
-npm run make -- --platform=darwin --arch=x64
-```
-
-> **Linux Note**: Building Linux packages requires `dpkg`, `fakeroot`, and `rpm`:
-> ```bash
-> sudo apt-get install dpkg fakeroot rpm
-> ```
-
-**Output**: Compiled binaries are found in `out/make/`
 
 ---
 
