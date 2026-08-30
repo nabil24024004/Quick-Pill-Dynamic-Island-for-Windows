@@ -2,11 +2,10 @@
 
 **Dynamic Island, but for everyone**
 
-Quick Pill is a cross-platform desktop application that recreates Apple's Dynamic Island experience on Windows, Linux, and macOS. It's a notification hub, widget system, and smart assistant that stays out of your way until you need it.
+Quick Pill is a desktop application that recreates Apple's Dynamic Island experience on Windows. It's a notification hub, widget system, and smart assistant that stays out of your way until you need it.
 
 <div align="center">
 
-[![Discord](https://img.shields.io/badge/Discord-Join%20Us-5865F2)](https://discord.gg/a2xzVkxFVg)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 [![Version](https://img.shields.io/badge/Version-5.2.0-blue)](package.json)
 
