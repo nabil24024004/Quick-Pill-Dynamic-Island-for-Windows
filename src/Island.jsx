@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
 import "./App.css";
@@ -877,6 +877,7 @@ export default function Island() {
   const [tasks, setTasks] = useState(JSON.parse(localStorage.getItem("tasks") || "[]"));
   const [taskText, setTaskText] = useState("");
   const [isHovered, setIsHovered] = useState(false);
+  const isHoveredRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [albumHovered, setAlbumHovered] = useState(false);
@@ -896,6 +897,27 @@ export default function Island() {
   // Ctrl+Hover Click-Through State
   const [ctrlHeld, setCtrlHeld] = useState(false);
   const ctrlHeldRef = useRef(false);
+  const lastIgnoreRef = useRef({ ignore: true, forward: true });
+
+  const updateMouseIgnore = useCallback((ignore, forward = true) => {
+    if (lastIgnoreRef.current?.ignore === ignore && lastIgnoreRef.current?.forward === forward) {
+      return;
+    }
+    lastIgnoreRef.current = { ignore, forward };
+    if (window.electronAPI?.setIgnoreMouseEvents) {
+      window.electronAPI.setIgnoreMouseEvents(ignore, forward);
+    }
+  }, []);
+
+  const setHoverState = useCallback((val) => {
+    isHoveredRef.current = val;
+    setIsHovered(val);
+  }, []);
+
+  const setCtrlState = useCallback((val) => {
+    ctrlHeldRef.current = val;
+    setCtrlHeld(val);
+  }, []);
 
   // Key Lock Alert State
   const [keyLockAlert, setKeyLockAlert] = useState(null);
@@ -1257,6 +1279,15 @@ export default function Island() {
   };
 
   const handlePointerMove = (e) => {
+    const isCtrl = !!(e?.ctrlKey || e?.metaKey);
+    if (isCtrl && !ctrlHeldRef.current) {
+      setCtrlState(true);
+      updateMouseIgnore(true, true);
+    } else if (!isCtrl && ctrlHeldRef.current) {
+      setCtrlState(false);
+      updateMouseIgnore(false, true);
+    }
+
     if (swipeStartX.current === null || mode !== "large") return;
     const dx = Math.abs(e.clientX - swipeStartX.current);
     const dy = Math.abs(e.clientY - swipeStartY.current);
@@ -2031,18 +2062,17 @@ export default function Island() {
       }
     };
 
-    // Safety mouse position tracker: if mouse leaves island rect, release mouse lock once
-    // Throttled to max once per 100ms to avoid hammering getBoundingClientRect + IPC
-    let isIgnoringMouse = false;
+    // Safety mouse position & modifier tracker:
+    // Tracks whether mouse is inside island rect and whether Ctrl/Cmd is held
     let lastMoveTime = 0;
     const handleMouseMove = (e) => {
       const now = Date.now();
-      if (now - lastMoveTime < 100) return;
+      if (now - lastMoveTime < 30) return;
       lastMoveTime = now;
       const islandElem = document.getElementById("Island");
       if (!islandElem) return;
       const rect = islandElem.getBoundingClientRect();
-      const padding = 25;
+      const padding = 15;
       const isInside = (
         e.clientX >= rect.left - padding &&
         e.clientX <= rect.right + padding &&
@@ -2050,15 +2080,29 @@ export default function Island() {
         e.clientY <= rect.bottom + padding
       );
 
-      if (!isInside && !isDraggingRef.current) {
-        if (!isIgnoringMouse) {
-          isIgnoringMouse = true;
-          if (window.electronAPI?.setIgnoreMouseEvents) {
-            window.electronAPI.setIgnoreMouseEvents(true, true);
+      const isCtrl = !!(e.ctrlKey || e.metaKey);
+
+      if (isInside) {
+        if (isCtrl) {
+          if (!ctrlHeldRef.current) {
+            setCtrlState(true);
+          }
+          updateMouseIgnore(true, true);
+        } else {
+          if (ctrlHeldRef.current) {
+            setCtrlState(false);
+          }
+          if (isHoveredRef.current) {
+            updateMouseIgnore(false, true);
           }
         }
-      } else if (isInside) {
-        isIgnoringMouse = false;
+      } else {
+        if (ctrlHeldRef.current) {
+          setCtrlState(false);
+        }
+        if (!isDraggingRef.current) {
+          updateMouseIgnore(true, true);
+        }
       }
     };
 
@@ -2175,32 +2219,31 @@ export default function Island() {
     };
   }, [moveTab, visibleTabs, currentTabId]);
 
-  // Ctrl+Hover Click-Through
+  // Ctrl+Hover Click-Through keyboard listeners
   useEffect(() => {
     const handleCtrlDown = (e) => {
-      if (e.key === 'Control' && isHovered) {
-        ctrlHeldRef.current = true;
-        setCtrlHeld(true);
-        window.electronAPI?.setIgnoreMouseEvents(true, true);
+      if ((e.key === 'Control' || e.key === 'Meta') && isHoveredRef.current) {
+        setCtrlState(true);
+        updateMouseIgnore(true, true);
       }
     };
     const handleCtrlUp = (e) => {
-      if (e.key === 'Control') {
-        ctrlHeldRef.current = false;
-        setCtrlHeld(false);
-        // Always restore mouse events unconditionally — Ctrl release must
-        // always exit click-through regardless of hover state to avoid
-        // the window getting permanently stuck in click-through mode.
-        window.electronAPI?.setIgnoreMouseEvents(false, true);
+      if (e.key === 'Control' || e.key === 'Meta') {
+        setCtrlState(false);
+        if (isHoveredRef.current) {
+          updateMouseIgnore(false, true);
+        } else {
+          updateMouseIgnore(true, true);
+        }
       }
     };
     const handleBlur = () => {
-      // Window lost focus while Ctrl+Hover was active — restore mouse events
-      // so the island doesn't remain permanently click-through.
+      // Window lost focus while Ctrl+Hover was active — restore state
       if (ctrlHeldRef.current) {
-        ctrlHeldRef.current = false;
-        setCtrlHeld(false);
-        window.electronAPI?.setIgnoreMouseEvents(false, true);
+        setCtrlState(false);
+        if (!isHoveredRef.current) {
+          updateMouseIgnore(true, true);
+        }
       }
     };
     document.addEventListener('keydown', handleCtrlDown);
@@ -2211,20 +2254,21 @@ export default function Island() {
       document.removeEventListener('keyup', handleCtrlUp);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [isHovered]);
+  }, [updateMouseIgnore, setCtrlState]);
 
   // Ctrl+Hover safety timeout
   useEffect(() => {
     if (!ctrlHeld) return;
     const maxHold = setTimeout(() => {
-      ctrlHeldRef.current = false;
-      setCtrlHeld(false);
-      if (isHovered) {
-        window.electronAPI?.setIgnoreMouseEvents(false, true);
+      setCtrlState(false);
+      if (isHoveredRef.current) {
+        updateMouseIgnore(false, true);
+      } else {
+        updateMouseIgnore(true, true);
       }
     }, 5000);
     return () => clearTimeout(maxHold);
-  }, [ctrlHeld, isHovered]);
+  }, [ctrlHeld, updateMouseIgnore, setCtrlState]);
 
   useEffect(() => {
     const handleFocusOut = () => {
@@ -2288,37 +2332,43 @@ export default function Island() {
   return (
     <motion.div
       id="Island"
-      onMouseEnter={() => {
+      onMouseEnter={(e) => {
         if (mouseLeaveTimer.current) {
           clearTimeout(mouseLeaveTimer.current);
           mouseLeaveTimer.current = null;
         }
-        setIsHovered(true);
-        if (ctrlHeldRef.current) {
-          // Ctrl is already held on mouse enter — activate click-through immediately
-          setCtrlHeld(true);
-          window.electronAPI?.setIgnoreMouseEvents(true, true);
+        setHoverState(true);
+        const isCtrl = !!(e?.ctrlKey || e?.metaKey || ctrlHeldRef.current);
+        if (isCtrl) {
+          setCtrlState(true);
+          updateMouseIgnore(true, true);
         } else {
+          setCtrlState(false);
           setMode("large");
-          if (window.electronAPI) {
-            window.electronAPI.setIgnoreMouseEvents(false, true);
-          }
+          updateMouseIgnore(false, true);
+        }
+      }}
+      onMouseMove={(e) => {
+        const isCtrl = !!(e?.ctrlKey || e?.metaKey);
+        if (isCtrl && !ctrlHeldRef.current) {
+          setCtrlState(true);
+          updateMouseIgnore(true, true);
+        } else if (!isCtrl && ctrlHeldRef.current) {
+          setCtrlState(false);
+          updateMouseIgnore(false, true);
         }
       }}
       onMouseLeave={() => {
         suppressClick.current = false;
         if (ctrlHeldRef.current) {
-          ctrlHeldRef.current = false;
-          setCtrlHeld(false);
+          setCtrlState(false);
         }
         if (isDraggingRef.current) return;
         if (mouseLeaveTimer.current) clearTimeout(mouseLeaveTimer.current);
         mouseLeaveTimer.current = setTimeout(() => {
           mouseLeaveTimer.current = null;
-          setIsHovered(false);
-          if (window.electronAPI) {
-            window.electronAPI.setIgnoreMouseEvents(true, true);
-          }
+          setHoverState(false);
+          updateMouseIgnore(true, true);
 
           const activeTag = document.activeElement?.tagName;
           if (activeTag === "INPUT" || activeTag === "TEXTAREA") return;
@@ -2333,6 +2383,9 @@ export default function Island() {
         }, 150);
       }}
       onClick={(e) => {
+        if (ctrlHeldRef.current || e?.ctrlKey || e?.metaKey) {
+          return;
+        }
         if (suppressClick.current) {
           suppressClick.current = false;
           return;
@@ -2345,9 +2398,7 @@ export default function Island() {
         }
 
         setMode(prev => prev === "large" ? "quick" : "large");
-        if (window.electronAPI) {
-          window.electronAPI.setIgnoreMouseEvents(false, true);
-        }
+        updateMouseIgnore(false, true);
       }}
       onWheel={handleWheelSwipe}
       onPointerDown={handlePointerDown}
@@ -2418,7 +2469,7 @@ export default function Island() {
         '--island-bg-color': bgColor,
         position: 'fixed',
         margin: 0,
-        pointerEvents: isTransitioning ? 'auto' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled || window.electronAPI?.platform === 'linux')) ? 'none' : 'auto'
+        pointerEvents: isTransitioning ? 'auto' : (ctrlHeld && isHovered) ? 'none' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled || window.electronAPI?.platform === 'linux')) ? 'none' : 'auto'
       }}
     >
       {/* Depleting Orange Border Stroke & Synchronized Glow for Active Timer */}
@@ -2695,8 +2746,10 @@ export default function Island() {
                           window.electronAPI.controlSystemMedia('playpause');
                         }
                       }}
-                      onMouseEnter={() => {
-                        if (window.electronAPI) window.electronAPI.setIgnoreMouseEvents(false, false);
+                      onMouseEnter={(e) => {
+                        if (!ctrlHeldRef.current && !e.ctrlKey && !e.metaKey) {
+                          updateMouseIgnore(false, true);
+                        }
                       }}
                       style={{
                         height: 24,

@@ -306,9 +306,13 @@ ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
       if (process.platform !== "linux") {
-        const useForward = forward !== undefined ? forward : ignore;
-        mainWindow.setIgnoreMouseEvents(ignore, { forward: useForward });
-        logToFile(`setIgnoreMouseEvents(${ignore}, forward=${useForward}) executed`);
+        if (ignore) {
+          const useForward = forward !== undefined ? forward : true;
+          mainWindow.setIgnoreMouseEvents(true, { forward: useForward });
+        } else {
+          mainWindow.setIgnoreMouseEvents(false);
+        }
+        logToFile(`setIgnoreMouseEvents(${ignore}, forward=${forward}) executed`);
       } else {
         mainWindow.setIgnoreMouseEvents(ignore);
         logToFile(`setIgnoreMouseEvents(${ignore}) executed (linux)`);
@@ -442,11 +446,26 @@ Terminal=false
         openAtLogin: enable,
         path: app.getPath("exe"),
       });
+      if (!enable) {
+        cleanLegacyStartupEntries();
+      }
     } catch (e) {
       console.error("Failed to set login item settings on Windows:", e);
     }
   }
 });
+
+function cleanLegacyStartupEntries() {
+  if (process.platform !== "win32") return;
+  try {
+    const legacyKeys = ["electron.app.Ripple", "electron.app.Electron", "electron.app.Quick Pill", "Ripple"];
+    for (const key of legacyKeys) {
+      exec(`reg delete "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run" /v "${key}" /f`, () => {});
+    }
+  } catch (e) {
+    // Ignore non-critical cleanup errors
+  }
+}
 
 // --- Native Auto-Updater Engine ---
 const DEFAULT_MANIFEST_URLS = [
@@ -1033,6 +1052,7 @@ const createWindow = () => {
 app.whenReady().then(() => {
   if (process.platform === "win32") {
     app.setAppUserModelId("com.neosparkx.quickpill");
+    cleanLegacyStartupEntries();
   }
   if (process.platform === "darwin") {
     app.dock.hide();
