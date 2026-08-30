@@ -1,4 +1,4 @@
-name: Multi-Platform Build
+name: Windows Build & Release
 
 on:
   push:
@@ -9,30 +9,8 @@ on:
 
 jobs:
   build:
-    name: Build for ${{ matrix.name }}
-    runs-on: ${{ matrix.os }}
-
-    strategy:
-      matrix:
-        include:
-          - name: macOS (x64)
-            os: macos-latest
-            platform: macos
-            arch: x64
-            os-label: macOS-x64
-          - name: macOS (arm64)
-            os: macos-latest
-            platform: macos
-            arch: arm64
-            os-label: macOS-arm64
-          - name: Windows
-            os: windows-latest
-            platform: windows
-            os-label: Windows
-          - name: Linux
-            os: ubuntu-latest
-            platform: linux
-            os-label: Linux
+    name: Build for Windows
+    runs-on: windows-latest
 
     steps:
       - name: Checkout Code
@@ -49,49 +27,20 @@ jobs:
         run: node -p "\"version=\" + require('./package.json').version" >> $GITHUB_OUTPUT
         shell: bash
 
-      - name: Install system dependencies (Linux)
-        if: matrix.platform == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y rpm fakeroot dpkg
-
       - name: Install Dependencies
         run: npm install
 
-      - name: Build Application (macOS)
-        if: matrix.platform == 'macos'
-        run: npm run make -- --arch=${{ matrix.arch }}
-
-      - name: Package Application (Windows & Linux)
-        if: matrix.platform != 'macos'
+      - name: Package Application
         run: npm run package
 
-      - name: Make Distributables (Windows & Linux)
-        if: matrix.platform != 'macos'
+      - name: Make Distributables (Windows)
         run: npm run make -- --skip-package
 
-      - name: Upload macOS Artifacts
-        if: matrix.platform == 'macos'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Ripple-${{ matrix.os-label }}-v${{ steps.pkg.outputs.version }}
-          path: out/make/**/*.dmg
-          if-no-files-found: error
-
       - name: Upload Windows Artifacts
-        if: matrix.platform == 'windows'
         uses: actions/upload-artifact@v4
         with:
-          name: Ripple-${{ matrix.os-label }}-v${{ steps.pkg.outputs.version }}
-          path: out/make/wix/x64/*.msi
-          if-no-files-found: error
-
-      - name: Upload Linux Artifacts
-        if: matrix.platform == 'linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: Ripple-${{ matrix.os-label }}-v${{ steps.pkg.outputs.version }}
+          name: QuickPill-Windows-v${{ steps.pkg.outputs.version }}
           path: |
-            out/make/deb/**/*.deb
-            out/make/rpm/**/*.rpm
+            out/make/**/*.exe
+            out/make/**/*.zip
           if-no-files-found: error

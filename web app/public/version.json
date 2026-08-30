@@ -16,18 +16,6 @@
       "sha256": "03177b8f9533da95e4dffd34e51239c1d370c39d6364fa3537aa461a1c6f0010",
       "size": 111625785,
       "installerType": "nsis"
-    },
-    "darwin-arm64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-macOS-arm64-v5.2.0.dmg",
-      "sha256": "",
-      "size": 91230410,
-      "installerType": "dmg"
-    },
-    "linux-x64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v5.2.0.deb",
-      "sha256": "",
-      "size": 78291040,
-      "installerType": "deb"
     }
   }
 }

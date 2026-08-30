@@ -2,7 +2,7 @@
   "name": "quick-pill",
   "productName": "Quick Pill",
   "version": "5.2.0",
-  "description": "A Dynamic Island for All",
+  "description": "A Dynamic Island for Windows",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
@@ -39,12 +39,6 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "Quick Pill"
-    },
-    "mac": {
-      "icon": "src/assets/icons/icon.icns"
-    },
-    "linux": {
-      "icon": "src/assets/icons/icon.png"
     }
   },
   "keywords": [],
@@ -55,9 +49,6 @@
   "license": "MIT",
   "devDependencies": {
     "@electron-forge/cli": "^7.8.1",
-    "@electron-forge/maker-deb": "^7.8.1",
-    "@electron-forge/maker-dmg": "^7.10.2",
-    "@electron-forge/maker-rpm": "^7.8.1",
     "@electron-forge/maker-squirrel": "^7.11.2",
     "@electron-forge/maker-wix": "^7.8.1",
     "@electron-forge/maker-zip": "^7.11.1",
@@ -65,7 +56,6 @@
     "@electron-forge/plugin-fuses": "^7.8.1",
     "@electron-forge/plugin-vite": "^7.8.1",
     "@electron/fuses": "^1.8.0",
-    "@electron/notarize": "^2.5.0",
     "electron": "^38.7.2",
     "electron-builder": "^26.15.3",
     "vite": "^5.4.19"
@@ -78,8 +68,7 @@
     "node-powershell": "^5.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "react-markdown": "^10.1.0",
-    "spotify-node-applescript": "^1.1.1"
+    "react-markdown": "^10.1.0"
   },
   "allowScripts": {
     "electron@38.7.2": true,

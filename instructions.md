@@ -64,7 +64,7 @@ https://github.com/user-attachments/assets/048ef089-c975-4a08-81e6-1f62f1795d12
 
 ### Settings
 
-##### *It's the tab that allows you to adjust everything from colors and positioning to features like **Auto Launch on Boot** (available for Windows and Linux).*
+##### *It's the tab that allows you to adjust everything from colors and positioning to features like **Auto Launch on Boot**.*
 
 https://github.com/user-attachments/assets/303dbcd0-37c8-457c-9372-73f756dbd472
 

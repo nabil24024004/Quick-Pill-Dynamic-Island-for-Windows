@@ -2469,7 +2469,7 @@ export default function Island() {
         '--island-bg-color': bgColor,
         position: 'fixed',
         margin: 0,
-        pointerEvents: isTransitioning ? 'auto' : (ctrlHeld && isHovered) ? 'none' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled || window.electronAPI?.platform === 'linux')) ? 'none' : 'auto'
+        pointerEvents: isTransitioning ? 'auto' : (ctrlHeld && isHovered) ? 'none' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled)) ? 'none' : 'auto'
       }}
     >
       {/* Depleting Orange Border Stroke & Synchronized Glow for Active Timer */}
@@ -4054,15 +4054,13 @@ export default function Island() {
                       <option value="24-hr">24-hour</option>
                     </select>
                   </div>
-                  {window.electronAPI?.platform !== 'darwin' && (
-                    <div className="settings-row">
-                      <span className="settings-label">Auto Launch on Boot</span>
-                      <select value={autoLaunchEnabled ? "true" : "false"} onChange={handleAutoLaunchChange}>
-                        <option value="true">Enabled</option>
-                        <option value="false">Disabled</option>
-                      </select>
-                    </div>
-                  )}
+                  <div className="settings-row">
+                    <span className="settings-label">Auto Launch on Boot</span>
+                    <select value={autoLaunchEnabled ? "true" : "false"} onChange={handleAutoLaunchChange}>
+                      <option value="true">Enabled</option>
+                      <option value="false">Disabled</option>
+                    </select>
+                  </div>
                   {displays.length > 0 && (
                     <div className="settings-row">
                       <span className="settings-label">Target Display</span>

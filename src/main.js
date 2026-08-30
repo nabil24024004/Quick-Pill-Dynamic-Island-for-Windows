@@ -18,11 +18,7 @@ const http = require("http");
 const crypto = require("crypto");
 const { EventEmitter } = require("events");
 
-if (process.platform === "linux") {
-  app.commandLine.appendSwitch("enable-transparent-visuals");
-  app.commandLine.appendSwitch("disable-gpu-compositing");
-  app.disableHardwareAcceleration();
-}
+
 let tray = null;
 let mainWindow = null;
 
@@ -305,18 +301,13 @@ ipcMain.handle("log-message", (event, level, msg, details) => {
 ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
-      if (process.platform !== "linux") {
-        if (ignore) {
-          const useForward = forward !== undefined ? forward : true;
-          mainWindow.setIgnoreMouseEvents(true, { forward: useForward });
-        } else {
-          mainWindow.setIgnoreMouseEvents(false);
-        }
-        logToFile(`setIgnoreMouseEvents(${ignore}, forward=${forward}) executed`);
+      if (ignore) {
+        const useForward = forward !== undefined ? forward : true;
+        mainWindow.setIgnoreMouseEvents(true, { forward: useForward });
       } else {
-        mainWindow.setIgnoreMouseEvents(ignore);
-        logToFile(`setIgnoreMouseEvents(${ignore}) executed (linux)`);
+        mainWindow.setIgnoreMouseEvents(false);
       }
+      logToFile(`setIgnoreMouseEvents(${ignore}, forward=${forward}) executed`);
     } catch (e) {
       logToFile("Error in setIgnoreMouseEvents, falling back to forward=true", e);
       try {
@@ -337,18 +328,10 @@ ipcMain.handle("open-external", async (event, url) => {
 });
 
 ipcMain.handle("launch-app", async (event, appName) => {
-  const platform = process.platform;
-  if (platform === "darwin") {
-    exec(`open -a "${appName}"`);
-  } else if (platform === "win32") {
-    launchWindows(appName);
-  } else {
-    exec(appName);
-  }
+  launchWindows(appName);
 });
 
 ipcMain.handle("build-app-cache", async () => {
-  if (process.platform !== "win32") return;
   const cacheFile = path.join(app.getPath("userData"), "app-cache.json");
   try {
     const entries = await buildCache();
@@ -359,7 +342,7 @@ ipcMain.handle("build-app-cache", async () => {
 });
 
 ipcMain.handle("search-apps", async (event, query) => {
-  if (process.platform !== "win32" || !query) return [];
+  if (!query) return [];
   const cacheFile = path.join(app.getPath("userData"), "app-cache.json");
   try {
     if (!fs.existsSync(cacheFile)) return [];
@@ -390,14 +373,7 @@ ipcMain.handle("set-display", (event, displayId) => {
       screen.getPrimaryDisplay();
 
     const { x, y, width, height } = targetDisplay.bounds;
-    const isLinux = process.platform === "linux";
-
     mainWindow.setBounds({ x, y, width, height });
-    if (!isLinux) {
-      // Avoid setFullScreen to prevent covering taskbars and causing focus issues
-      // mainWindow.setFullScreen(true);
-    }
-
     mainWindow.show();
   }
 });
@@ -409,49 +385,16 @@ ipcMain.handle("set-display", (event, displayId) => {
 ipcMain.handle("update-window-position", (event, xPerc, yPx) => {});
 
 ipcMain.handle("set-auto-launch", (event, enable) => {
-  if (process.platform === "linux") {
-    const autostartPath = path.join(
-      app.getPath("home"),
-      ".config",
-      "autostart",
-    );
-    const desktopFilePath = path.join(autostartPath, "quick-pill.desktop");
-
-    try {
-      if (enable) {
-        if (!fs.existsSync(autostartPath)) {
-          fs.mkdirSync(autostartPath, { recursive: true });
-        }
-        const desktopFileContent = `[Desktop Entry]
-Type=Application
-Version=1.0
-Name=Quick Pill
-Comment=Quick Pill Desktop Assistant
-Exec="${app.getPath("exe")}"
-Icon=${getIconPath()}
-Terminal=false
-`;
-        fs.writeFileSync(desktopFilePath, desktopFileContent);
-      } else {
-        if (fs.existsSync(desktopFilePath)) {
-          fs.unlinkSync(desktopFilePath);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to set auto-launch on Linux:", e);
+  try {
+    app.setLoginItemSettings({
+      openAtLogin: enable,
+      path: app.getPath("exe"),
+    });
+    if (!enable) {
+      cleanLegacyStartupEntries();
     }
-  } else if (process.platform === "win32") {
-    try {
-      app.setLoginItemSettings({
-        openAtLogin: enable,
-        path: app.getPath("exe"),
-      });
-      if (!enable) {
-        cleanLegacyStartupEntries();
-      }
-    } catch (e) {
-      console.error("Failed to set login item settings on Windows:", e);
-    }
+  } catch (e) {
+    console.error("Failed to set login item settings on Windows:", e);
   }
 });
 
@@ -514,9 +457,7 @@ class AppUpdater extends EventEmitter {
   }
 
   getPlatformKey() {
-    const platform = process.platform;
-    const arch = process.arch;
-    return `${platform}-${arch}`;
+    return `win32-${process.arch}`;
   }
 
   fetchJson(url, timeoutMs = 12000, maxRedirects = 5) {
@@ -661,7 +602,7 @@ class AppUpdater extends EventEmitter {
     this.emit("download-started", this.updateInfo);
 
     const tempDir = app.getPath("temp");
-    const ext = process.platform === "win32" ? ".exe" : process.platform === "darwin" ? ".dmg" : ".deb";
+    const ext = ".exe";
     const tempFileName = `quick-pill-update-v${this.updateInfo.version}${ext}`;
     const targetFilePath = path.join(tempDir, tempFileName);
 
@@ -843,38 +784,23 @@ class AppUpdater extends EventEmitter {
     }
 
     const filePath = this.downloadedFilePath;
-    const platform = process.platform;
 
     try {
-      if (platform === "win32") {
-        const child = spawn(filePath, ["/S"], {
-          detached: true,
-          stdio: "ignore",
-        });
-        child.unref();
+      const child = spawn(filePath, ["/S"], {
+        detached: true,
+        stdio: "ignore",
+      });
+      child.unref();
 
-        setTimeout(() => {
-          if (app) {
-            app.isQuitting = true;
-            app.quit();
-          } else {
-            process.exit(0);
-          }
-        }, 300);
-        return true;
-      } else if (platform === "darwin") {
-        shell.openPath(filePath);
-        setTimeout(() => {
-          if (app) app.quit();
-        }, 500);
-        return true;
-      } else {
-        shell.openPath(filePath);
-        setTimeout(() => {
-          if (app) app.quit();
-        }, 500);
-        return true;
-      }
+      setTimeout(() => {
+        if (app) {
+          app.isQuitting = true;
+          app.quit();
+        } else {
+          process.exit(0);
+        }
+      }, 300);
+      return true;
     } catch (err) {
       this.emit("error", `Failed to launch installer: ${err.message}`);
       return false;
@@ -922,7 +848,7 @@ ipcMain.handle("get-app-version", () => {
 });
 
 const getIconPath = (forceExt = null) => {
-  const ext = forceExt || (process.platform === "win32" ? "ico" : process.platform === "darwin" ? "icns" : "png");
+  const ext = forceExt || "ico";
 
   // 1. Try app bundle directory (works in both dev & app.asar)
   try {
@@ -945,16 +871,11 @@ const getIconPath = (forceExt = null) => {
 const createWindow = () => {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { x, y, width, height } = primaryDisplay.bounds;
-  const isLinux = process.platform === "linux";
-  const isWindows = process.platform === "win32";
-  const isMac = process.platform === "darwin";
 
   const winWidth = width;
   const winHeight = height;
   const winX = x;
   const winY = y;
-
-  const windowType = isWindows ? "toolbar" : "panel";
 
   mainWindow = new BrowserWindow({
     width: winWidth,
@@ -966,12 +887,11 @@ const createWindow = () => {
     alwaysOnTop: true,
     resizable: false,
     frame: false,
-    ...(isWindows ? { thickFrame: false } : {}),
+    thickFrame: false,
     hasShadow: false,
     skipTaskbar: true,
     icon: getIconPath(),
-    ...(isMac ? { hiddenInMissionControl: true } : {}),
-    ...(windowType ? { type: windowType } : {}),
+    type: "toolbar",
     fullscreen: false,
     visibleOnFullScreen: true,
     acceptFirstMouse: true,
@@ -982,28 +902,14 @@ const createWindow = () => {
     show: true,
   });
 
-  if (!isLinux) {
-    mainWindow.setIgnoreMouseEvents(true, { forward: true });
-  } else {
-    mainWindow.setIgnoreMouseEvents(true);
-  }
-
-  const showDelay = isLinux ? 500 : 0;
+  mainWindow.setIgnoreMouseEvents(true, { forward: true });
 
   mainWindow.once("ready-to-show", () => {
-    setTimeout(() => {
-      if (mainWindow) {
-        mainWindow.show();
-        if (isLinux) {
-          mainWindow.setAlwaysOnTop(true, "screen-saver");
-        } else if (isMac) {
-          mainWindow.setAlwaysOnTop(true, "pop-up-menu");
-        } else {
-          mainWindow.setAlwaysOnTop(true, "pop-up-menu");
-        }
-        mainWindow.focus();
-      }
-    }, showDelay);
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.setAlwaysOnTop(true, "pop-up-menu");
+      mainWindow.focus();
+    }
   });
 
   setTimeout(() => {
@@ -1050,13 +956,8 @@ const createWindow = () => {
 };
 
 app.whenReady().then(() => {
-  if (process.platform === "win32") {
-    app.setAppUserModelId("com.neosparkx.quickpill");
-    cleanLegacyStartupEntries();
-  }
-  if (process.platform === "darwin") {
-    app.dock.hide();
-  }
+  app.setAppUserModelId("com.neosparkx.quickpill");
+  cleanLegacyStartupEntries();
   createWindow();
   startKeyLockPolling();
   startUSBPolling();
@@ -1353,235 +1254,115 @@ ipcMain.handle("get-system-media", async () => {
   mediaFetchInFlight = true;
   return new Promise((resolve) => {
     const done = (val) => { mediaFetchInFlight = false; resolve(val); };
-    const platform = process.platform;
-    if (platform === "darwin") {
-      const script = `
-        tell application "System Events"
-            set spotifyRunning to (name of every process) contains "Spotify"
-            set musicRunning to (name of every process) contains "Music"
-        end tell
-        if spotifyRunning then
-            tell application "Spotify"
-                if player state is playing then
-                    set trackName to name of current track
-                    set artistName to artist of current track
-                    set albumName to album of current track
-                    set artworkUrl to artwork url of current track
-                    set playerState to player state as string
-                    return trackName & "||" & artistName & "||" & albumName & "||" & artworkUrl & "||" & playerState & "||Spotify"
-                end if
-            end tell
-        else if musicRunning then
-            tell application "Music"
-                if player state is playing then
-                    set trackName to name of current track
-                    set artistName to artist of current track
-                    set albumName to album of current track
-                    set playerState to player state as string
-                    return trackName & "||" & artistName & "||" & albumName & "||||" & playerState & "||Music"
-                end if
-            end tell
-        end if
-        return "null"
-      `;
-      execFile("osascript", ["-e", script], (error, stdout) => {
-        if (error || !stdout || stdout.trim() === "null") {
-          return done(null);
+    execFile(
+      "powershell",
+      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", psMediaScriptPath],
+      { maxBuffer: 10 * 1024 * 1024, encoding: "utf8" },
+      (error, stdout) => {
+        if (
+          error ||
+          !stdout ||
+          stdout.trim() === "null" ||
+          stdout.trim() === "'null'"
+        ) {
+          exec(
+            `powershell -NoProfile -Command "Get-Process | Where-Object {$_.ProcessName -eq 'Spotify'} | Select-Object MainWindowTitle"`,
+            { encoding: "utf8" },
+            (err, out) => {
+              if (err || !out) return done(null);
+              const title = out
+                .split("\n")
+                .find((l) => l.includes("-"))
+                ?.trim();
+              if (title) {
+                const songParts = title.split(" - ");
+                let artist = "Unknown";
+                let song = title;
+                if (songParts.length > 1) {
+                  artist = songParts[0].trim();
+                  song = songParts.slice(1).join(" - ").trim();
+                }
+                done({
+                  name: song || title,
+                  artist: artist || "Unknown",
+                  state: "playing",
+                  source: "Spotify",
+                  position: 0,
+                  duration: 0
+                });
+              } else {
+                done(null);
+              }
+            },
+          );
+          return;
         }
-        const parts = stdout.trim().split("||");
-        if (parts.length >= 6) {
+
+        try {
+          const data = JSON.parse(stdout.trim());
+          if (!data || (!data.Title && !data.Artist)) {
+            return done(null);
+          }
           done({
-            name: parts[0],
-            artist: parts[1],
-            album: parts[2],
-            artwork_url: parts[3] || null,
-            state: parts[4] === "playing" ? "playing" : "paused",
-            source: parts[5],
+            name: data.Title || "Unknown Title",
+            artist: data.Artist || "Unknown Artist",
+            album: data.Album || "",
+            artwork_url: data.Artwork || null,
+            state: data.Status === "playing" ? "playing" : "paused",
+            source: data.Source || "System",
+            position: Number(data.Position) || 0,
+            duration: Number(data.Duration) || 0
           });
-        } else {
+        } catch (e) {
           done(null);
         }
-      });
-    } else if (platform === "win32") {
-      execFile(
-        "powershell",
-        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", psMediaScriptPath],
-        { maxBuffer: 10 * 1024 * 1024, encoding: "utf8" },
-        (error, stdout) => {
-          if (
-            error ||
-            !stdout ||
-            stdout.trim() === "null" ||
-            stdout.trim() === "'null'"
-          ) {
-            exec(
-              `powershell -NoProfile -Command "Get-Process | Where-Object {$_.ProcessName -eq 'Spotify'} | Select-Object MainWindowTitle"`,
-              { encoding: "utf8" },
-              (err, out) => {
-                if (err || !out) return done(null);
-                const title = out
-                  .split("\n")
-                  .find((l) => l.includes("-"))
-                  ?.trim();
-                if (title) {
-                  const songParts = title.split(" - ");
-                  let artist = "Unknown";
-                  let song = title;
-                  if (songParts.length > 1) {
-                    artist = songParts[0].trim();
-                    song = songParts.slice(1).join(" - ").trim();
-                  }
-                  done({
-                    name: song || title,
-                    artist: artist || "Unknown",
-                    state: "playing",
-                    source: "Spotify",
-                    position: 0,
-                    duration: 0
-                  });
-                } else {
-                  done(null);
-                }
-              },
-            );
-            return;
-          }
-
-          try {
-            const data = JSON.parse(stdout.trim());
-            if (!data || (!data.Title && !data.Artist)) {
-              return done(null);
-            }
-            done({
-              name: data.Title || "Unknown Title",
-              artist: data.Artist || "Unknown Artist",
-              album: data.Album || "",
-              artwork_url: data.Artwork || null,
-              state: data.Status === "playing" ? "playing" : "paused",
-              source: data.Source || "System",
-              position: Number(data.Position) || 0,
-              duration: Number(data.Duration) || 0
-            });
-          } catch (e) {
-            done(null);
-          }
-        },
-      );
-    } else if (platform === "linux") {
-      exec(
-        'playerctl metadata --format "{{title}}||{{artist}}||{{album}}||{{status}}"',
-        (err, stdout) => {
-          if (err || !stdout) return done(null);
-          const parts = stdout.trim().split("||");
-          done({
-            name: parts[0],
-            artist: parts[1],
-            album: parts[2],
-            state: parts[3].toLowerCase(),
-            source: "System",
-          });
-        },
-      );
-    } else {
-      done(null);
-    }
+      },
+    );
   });
 });
 
 ipcMain.handle("get-bluetooth-status", async () => {
   return new Promise((resolve) => {
-    const platform = process.platform;
-    if (platform === "darwin") {
-      exec("system_profiler SPBluetoothDataType -json", (error, stdout) => {
-        if (error) return resolve(false);
-        try {
-          const data = JSON.parse(stdout);
-          const bluetoothData = data.SPBluetoothDataType[0];
-          const hasConnectedDevices =
-            bluetoothData.device_connected &&
-            bluetoothData.device_connected.length > 0;
-          resolve(hasConnectedDevices);
-        } catch (e) {
-          resolve(false);
-        }
-      });
-    } else if (platform === "win32") {
-      const psScript = `
+    const psScript = `
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $devs = @(Get-PnpDevice -Class Bluetooth -ErrorAction SilentlyContinue | Where-Object { $_.Status -eq 'OK' -and $_.Present -eq $true -and $_.InstanceId -match 'BTHENUM' })
 $names = @($devs | ForEach-Object { $_.FriendlyName })
 @{ connected = ($devs.Count -gt 0); devices = $names } | ConvertTo-Json -Compress
 `;
-      const enc = Buffer.from(psScript, "utf16le").toString("base64");
-      exec(`powershell -NoProfile -EncodedCommand ${enc}`, (error, stdout) => {
-        if (error || !stdout) return resolve({ connected: false, devices: [] });
-        try {
-          const data = JSON.parse(stdout.trim());
-          resolve({ connected: !!data.connected, devices: Array.isArray(data.devices) ? data.devices : data.devices ? [data.devices] : [] });
-        } catch {
-          resolve({ connected: false, devices: [] });
-        }
-      });
-    } else if (platform === "linux") {
-      exec("bluetoothctl devices Connected", (error, stdout) => {
-        if (error) return resolve(false);
-        resolve(stdout.trim().length > 0);
-      });
-    } else {
-      resolve(false);
-    }
+    const enc = Buffer.from(psScript, "utf16le").toString("base64");
+    exec(`powershell -NoProfile -EncodedCommand ${enc}`, (error, stdout) => {
+      if (error || !stdout) return resolve({ connected: false, devices: [] });
+      try {
+        const data = JSON.parse(stdout.trim());
+        resolve({ connected: !!data.connected, devices: Array.isArray(data.devices) ? data.devices : data.devices ? [data.devices] : [] });
+      } catch {
+        resolve({ connected: false, devices: [] });
+      }
+    });
   });
 });
 
 ipcMain.handle("get-camera-status", async () => {
   return new Promise((resolve) => {
-    const platform = process.platform;
-    if (platform === "darwin") {
-      exec('ioreg -l | grep -E "FrontCameraActive|FrontCameraStreaming"', (error, stdout) => {
-        resolve(stdout ? stdout.includes('= Yes') : false);
-      });
-    } else if (platform === "win32") {
-      execFile("reg", ["query", "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\webcam", "/s"], (error, stdout) => {
-        if (error || !stdout) return resolve(false);
-        const matches = stdout.match(/LastUsedTimeStop\s+REG_QWORD\s+0x0\b/i);
-        resolve(!!matches);
-      });
-    } else if (platform === "linux") {
-      exec("fuser /dev/video* 2>/dev/null", (error, stdout) => {
-        resolve(stdout.trim().length > 0);
-      });
-    } else {
-      resolve(false);
-    }
+    execFile("reg", ["query", "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\webcam", "/s"], (error, stdout) => {
+      if (error || !stdout) return resolve(false);
+      const matches = stdout.match(/LastUsedTimeStop\s+REG_QWORD\s+0x0\b/i);
+      resolve(!!matches);
+    });
   });
 });
 
 ipcMain.handle("get-microphone-status", async () => {
   return new Promise((resolve) => {
-    const platform = process.platform;
-    if (platform === "darwin") {
-      exec('ioreg -l | grep -E "IOAudioStreamActive|IOAudioEngine|IOAudioStream" | grep -i "Yes"', (error, stdout) => {
-        resolve(stdout ? stdout.trim().length > 0 : false);
-      });
-    } else if (platform === "win32") {
-      execFile("reg", ["query", "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone", "/s"], (error, stdout) => {
-        if (error || !stdout) return resolve(false);
-        const matches = stdout.match(/LastUsedTimeStop\s+REG_QWORD\s+0x0\b/i);
-        resolve(!!matches);
-      });
-    } else if (platform === "linux") {
-      exec("pactl list source-outputs | grep -q 'Source #'", (error) => {
-        resolve(!error);
-      });
-    } else {
-      resolve(false);
-    }
+    execFile("reg", ["query", "HKCU\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone", "/s"], (error, stdout) => {
+      if (error || !stdout) return resolve(false);
+      const matches = stdout.match(/LastUsedTimeStop\s+REG_QWORD\s+0x0\b/i);
+      resolve(!!matches);
+    });
   });
 });
 
 app.on("window-all-closed", () => {
-  // Quit whenever there is no tray icon keeping the app alive.
-  // On macOS the 'activate' handler re-creates the window, matching expected behaviour.
   if (!tray) {
     app.quit();
   }
@@ -1589,40 +1370,16 @@ app.on("window-all-closed", () => {
 
 // System Media Controls Handler
 ipcMain.handle("control-system-media", async (event, command, ...args) => {
-  const platform = process.platform;
-  if (platform === "darwin") {
-    const script = `
-        tell application "System Events"
-            set spotifyRunning to (name of every process) contains "Spotify"
-            set musicRunning to (name of every process) contains "Music"
-        end tell
-        if spotifyRunning then
-            tell application "Spotify" to ${command} track
-        else if musicRunning then
-            tell application "Music" to ${command} track
-        end if
-        `;
-    execFile("osascript", ["-e", script]);
-  } else if (platform === "win32") {
-    const seekSec = typeof args[0] === 'number' ? args[0] : 0;
-    logToFile(`Executing media control: ${command} ${seekSec > 0 ? `(seek: ${seekSec}s)` : ''}`);
-    execFile(
-      "powershell.exe",
-      ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", psControlScriptPath, "-command", command, "-seekSeconds", seekSec.toString()],
-      { timeout: 4000 },
-      (err) => {
-        if (err) logToFile("Media control error:", err);
-      }
-    );
-  } else if (platform === "linux") {
-    let cmd = command;
-    if (command === "playpause") cmd = "play-pause";
-    if (command === "seek" && typeof args[0] === 'number') {
-      exec(`playerctl position ${args[0]}`);
-    } else {
-      exec(`playerctl ${cmd}`);
+  const seekSec = typeof args[0] === 'number' ? args[0] : 0;
+  logToFile(`Executing media control: ${command} ${seekSec > 0 ? `(seek: ${seekSec}s)` : ''}`);
+  execFile(
+    "powershell.exe",
+    ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", psControlScriptPath, "-command", command, "-seekSeconds", seekSec.toString()],
+    { timeout: 4000 },
+    (err) => {
+      if (err) logToFile("Media control error:", err);
     }
-  }
+  );
 });
 
 let previousCpus = null;

@@ -1,6 +1,6 @@
 # 💊 About Quick Pill — Complete Product Overview & Guide
 
-> **Quick Pill** is a cross-platform, non-intrusive desktop assistant and Dynamic Island companion for **Windows**. Floating unobtrusively at the top of your screen, Quick Pill brings real-time system metrics, music controls, notifications, privacy alerts, and productivity widgets right to your fingertips without interrupting your active workspace.
+> **Quick Pill** is a non-intrusive desktop assistant and Dynamic Island companion for **Windows**. Floating unobtrusively at the top of your screen, Quick Pill brings real-time system metrics, music controls, notifications, privacy alerts, and productivity widgets right to your fingertips without interrupting your active workspace.
 
 ---
 
@@ -105,7 +105,7 @@ The primary objective of Quick Pill is **zero-distraction productivity & unified
 
 | Layer | Technology | Purpose |
 | :--- | :--- | :--- |
-| **Desktop Framework** | **Electron 38+** | Cross-platform desktop window runtime |
+| **Desktop Framework** | **Electron 38+** | Windows desktop window runtime |
 | **Build & Tooling** | **Electron Forge 7+ & Vite 5+** | Fast HMR development, bundling, and distribution installers |
 | **Frontend Library** | **React 19** | Modern component-based state management |
 | **Animation Engine** | **Framer Motion 12** | Smooth spring physics, morphing animations, and layout transitions |

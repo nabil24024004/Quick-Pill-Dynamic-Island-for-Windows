@@ -108,7 +108,7 @@ npm install
 npm start
 ```
 
-The development server will launch Quick Pill with hot reload enabled. Press `Ctrl+R` (or `Cmd+R` on macOS) to refresh the app.
+The development server will launch Quick Pill with hot reload enabled. Press `Ctrl+R` to refresh the app.
 
 #### Build for Current OS
 ```bash

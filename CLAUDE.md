@@ -6,7 +6,7 @@ Welcome to the **Quick Pill** project codebase! This file serves as the definiti
 
 ## 📌 Project Overview
 
-**Quick Pill** is a cross-platform desktop application that recreates Apple's Dynamic Island experience on **Windows**. It acts as a non-intrusive notification hub, system monitor, media controller, and customizable widget panel that expands on hover or click while floating seamlessly above all desktop windows.
+**Quick Pill** is a desktop application that recreates Apple's Dynamic Island experience on **Windows 10 & 11**. It acts as a non-intrusive notification hub, system monitor, media controller, and customizable widget panel that expands on hover or click while floating seamlessly above all desktop windows.
 
 - **Product Name**: Quick Pill
 - **Current Version**: 5.2.0
@@ -19,13 +19,13 @@ Welcome to the **Quick Pill** project codebase! This file serves as the definiti
 
 | Layer | Technology / Library | Description |
 | :--- | :--- | :--- |
-| **Desktop Framework** | [Electron 38+](https://www.electronjs.org/) | Cross-platform desktop runtime |
+| **Desktop Framework** | [Electron 38+](https://www.electronjs.org/) | Windows desktop runtime |
 | **Build & Tooling** | [Electron Forge 7+](https://www.electronforge.io/) & [Vite 5+](https://vitejs.dev/) | HMR development, bundling, and distribution packaging |
 | **Frontend Library** | [React 19](https://react.dev/) | Component-based UI library |
 | **Animations** | [Framer Motion 12](https://www.framer.com/motion/) | Smooth UI physics, layout transitions, and mode expansions |
 | **Icons** | [Lucide React](https://lucide.dev/) | Modern SVG icon set |
 | **Styling** | Vanilla CSS (`src/App.css`) | Custom animations, themes, dark glassmorphism, responsive metrics |
-| **OS Integration** | PowerShell (Win32) | Native media control, hardware stats, app discovery, camera/mic status |
+| **OS Integration** | PowerShell / Win32 / WinRT | Native media control, hardware stats, app discovery, camera/mic status |
 
 ---
 
@@ -44,8 +44,7 @@ Ripple Island/
 │   ├── main.js              # Electron main process (OS integrations, IPC handlers, window setup)
 │   └── preload.js           # Secure contextBridge exposing electronAPI to renderer
 ├── update/                  # Native extension scripts / hooks (e.g. WH C++ hooks)
-├── entitlements.plist       # macOS code signing entitlements
-├── forge.config.js          # Electron Forge packaging, makers (WiX, DMG, DEB, RPM, ZIP), fuses & post-hooks
+├── forge.config.js          # Electron Forge packaging, makers (Squirrel, ZIP), fuses & post-hooks
 ├── index.html               # Main HTML entry document for Vite renderer
 ├── package.json             # Dependencies, scripts, and permissions
 ├── vite.main.config.mjs     # Vite configuration for Electron Main process
@@ -109,8 +108,6 @@ Quick Pill includes **feature tabs** managed in [Island.jsx](file:///d:/Ripple%2
 - **Node.js**: v16+ and `npm`
 - **Build Tools**:
   - Windows: Visual Studio C++ Build Tools
-  - macOS: Xcode Command Line Tools (`xcode-select --install`)
-  - Linux: `build-essential`, `dpkg`, `fakeroot`, `rpm`
 
 ### Command Reference
 
@@ -124,26 +121,17 @@ npm start
 # Package application into binaries (without building installers)
 npm run package
 
-# Build production installers for current platform
+# Build production installers for Windows
 npm run make
 ```
 
-### Multi-Platform Cross-Packaging
+### Windows Packaging
 
-To compile production release binaries for targeted operating systems and architectures:
+To compile production release binaries for Windows (x64):
 
 ```bash
-# Windows (x64 Installer / WiX MSI & ZIP)
+# Windows (x64 Installer & ZIP)
 npm run make -- --platform=win32 --arch=x64
-
-# Linux (x64 .deb & .rpm)
-npm run make -- --platform=linux --arch=x64
-
-# macOS (Apple Silicon arm64 .dmg)
-npm run make -- --platform=darwin --arch=arm64
-
-# macOS (Intel x64 .dmg)
-npm run make -- --platform=darwin --arch=x64
 ```
 
 > Output build artifacts are compiled to `out/make/` and renamed according to versioning rules defined in `forge.config.js` (`postMake` hook).
@@ -157,12 +145,12 @@ npm run make -- --platform=darwin --arch=x64
 All interactions with native operating system APIs execute asynchronously via Electron IPC:
 
 - `electronAPI.setIgnoreMouseEvents(ignore, forward)`: Toggles mouse passthrough so clicks pass through empty transparent areas while catching mouse events over active Island controls.
-- `electronAPI.getSystemMedia()` / `controlSystemMedia(cmd)`: Fetches metadata (title, artist, artwork) and controls playback via AppleScript on macOS, PowerShell/WinRT on Windows, or `playerctl` on Linux.
+- `electronAPI.getSystemMedia()` / `controlSystemMedia(cmd)`: Fetches metadata (title, artist, artwork) and controls playback via PowerShell / WinRT on Windows.
 - `electronAPI.getSystemMetrics()`: Retrieves CPU load percentage and RAM usage via PowerShell WMI (`Win32_Processor`, `Win32_OperatingSystem`).
-- `electronAPI.getBluetoothStatus()`, `getCameraStatus()`, `getMicrophoneStatus()`: Queries OS hardware status indicators.
+- `electronAPI.getBluetoothStatus()`, `getCameraStatus()`, `getMicrophoneStatus()`: Queries Windows registry and hardware status indicators.
 - `electronAPI.searchApps(query)` / `launchApp(name)`: Discovers installed Start Menu / UWP apps on Windows and launches applications.
 - `electronAPI.getDisplays()` / `setDisplay(id)`: Controls multi-monitor placement and bounds alignment.
-- `electronAPI.setAutoLaunch(enable)`: Configures OS startup registry entries (Windows) or `.config/autostart` desktop files (Linux).
+- `electronAPI.setAutoLaunch(enable)`: Configures OS startup registry entries (`app.setLoginItemSettings`).
 - `electronAPI.checkForUpdates()`: Checks remote `version.json` for new releases.
 - `electronAPI.startUpdateDownload()` / `cancelUpdateDownload()`: Streams release binary download with progress tracking.
 - `electronAPI.installUpdate()`: Executes NSIS setup (`/S` silent upgrade) and restarts app cleanly.
@@ -174,7 +162,7 @@ All interactions with native operating system APIs execute asynchronously via El
 
 1. **Manifest File (`version.json`)**:
    - Hosted at `https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/version.json` and in `web app/public/version.json`.
-   - Contains release version, changelog, download URLs, and SHA-256 hashes for Windows (`nsis`), macOS (`dmg`), and Linux (`deb`).
+   - Contains release version, changelog, download URLs, and SHA-256 hashes for Windows (`nsis`).
 2. **Update Engine (`src/updater.js`)**:
    - Runs in Electron Main process (`main.js`).
    - Automatically checks for updates 4s after startup (if auto-check enabled).
@@ -186,10 +174,9 @@ All interactions with native operating system APIs execute asynchronously via El
 
 1. **Safety & Electron Security**:
    - Keep `contextBridge` isolated in [preload.js](file:///d:/Ripple%20Island/src/preload.js). Do NOT enable `nodeIntegration` in BrowserWindow `webPreferences`.
-   - Sanitize all string inputs passed to OS shells (PowerShell, `osascript`, `exec`) to prevent command execution escaping.
-2. **Cross-Platform Compatibility**:
-   - Always check platform guards: `process.platform === 'win32'`, `'darwin'`, or `'linux'` in `main.js`.
-   - Use `window.electronAPI.platform` inside React renderer components when rendering platform-specific UI elements.
+   - Sanitize all string inputs passed to PowerShell / shell execution to prevent command execution escaping.
+2. **Windows Platform Targeting**:
+   - Application targets Windows 10 and 11 environments.
 3. **State Persistence**:
    - User settings (theme, background color, tab ordering, location, default tab, active display) are persisted in `localStorage`.
    - When introducing new user preferences, provide default fallbacks using nullish coalescing or logical OR.

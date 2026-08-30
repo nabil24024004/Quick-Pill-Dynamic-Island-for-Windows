@@ -17,7 +17,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getDisplays: () => ipcRenderer.invoke('get-displays'),
   setDisplay: (displayId) => ipcRenderer.invoke('set-display', displayId),
   updateWindowPosition: (xPerc, yPx) => ipcRenderer.invoke('update-window-position', xPerc, yPx),
-  setAutoLaunch: (enable) => process.platform !== 'darwin' ? ipcRenderer.invoke('set-auto-launch', enable) : Promise.resolve(),
+  setAutoLaunch: (enable) => ipcRenderer.invoke('set-auto-launch', enable),
   getClipboardText: () => ipcRenderer.invoke('get-clipboard-text'),
   writeClipboardText: (text) => ipcRenderer.invoke('write-clipboard-text', text),
   clearClipboard: () => ipcRenderer.invoke('clear-clipboard'),
@@ -47,5 +47,5 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('update-event', handler);
     return () => ipcRenderer.removeListener('update-event', handler);
   },
-  platform: process.platform
+  platform: 'win32'
 });

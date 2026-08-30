@@ -3,7 +3,7 @@
  * scripts/generate-manifest.js
  * 
  * Automatically generates or updates `version.json` with accurate file sizes and SHA-256 hashes
- * for built release binaries (Windows .exe, macOS .dmg, Linux .deb/.rpm).
+ * for built release binaries (Windows .exe).
  *
  * Usage:
  *   node scripts/generate-manifest.js [options]
@@ -58,14 +58,6 @@ function generateManifest() {
                       findArtifact(searchDirs, /QuickPill-Windows.*\.exe$/i) ||
                       findArtifact(searchDirs, /quick-pill-.*-setup\.exe$/i);
 
-  // Look for macOS installer
-  const macArtifact = findArtifact(searchDirs, /QuickPill-macOS.*\.dmg$/i) ||
-                      findArtifact(searchDirs, /.*\.dmg$/i);
-
-  // Look for Linux installer
-  const linuxArtifact = findArtifact(searchDirs, /QuickPill-Linux.*\.deb$/i) ||
-                        findArtifact(searchDirs, /.*\.deb$/i);
-
   const manifest = {
     version: version,
     name: `Quick Pill ${version}`,
@@ -82,18 +74,6 @@ function generateManifest() {
         sha256: winArtifact ? calculateFileSha256(winArtifact) : '',
         size: winArtifact ? getFileSize(winArtifact) : 89452012,
         installerType: 'nsis'
-      },
-      'darwin-arm64': {
-        url: `https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-macOS-arm64-v${version}.dmg`,
-        sha256: macArtifact ? calculateFileSha256(macArtifact) : '',
-        size: macArtifact ? getFileSize(macArtifact) : 91230410,
-        installerType: 'dmg'
-      },
-      'linux-x64': {
-        url: `https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v${version}.deb`,
-        sha256: linuxArtifact ? calculateFileSha256(linuxArtifact) : '',
-        size: linuxArtifact ? getFileSize(linuxArtifact) : 78291040,
-        installerType: 'deb'
       }
     }
   };
