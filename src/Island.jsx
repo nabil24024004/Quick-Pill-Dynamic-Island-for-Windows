@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp } from "lucide-react";
 import "./App.css";
 
 // Helper format file sizes (Bytes -> KB -> MB)
@@ -420,6 +420,7 @@ const TABS = [
   { id: 0, name: "Browser Search", icon: (color) => <Search size={16} color={color} /> },
   { id: 1, name: "Weather", icon: (color) => <CloudSun size={16} color={color} /> },
   { id: 2, name: "Overview", icon: (color) => <Sun size={16} color={color} /> },
+  { id: 11, name: "Battery Hub", icon: (color) => <BatteryCharging size={16} color={color} /> },
   { id: 3, name: "Now Playing", icon: (color) => <Music size={16} color={color} /> },
   { id: 4, name: "Calendar", icon: (color) => <CalendarIcon size={16} color={color} /> },
   { id: 5, name: "Notifications", icon: (color) => <Bell size={16} color={color} /> },
@@ -533,7 +534,691 @@ const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSee
 };
 
 
-const FlipCard = ({ digit }) => {
+const AppleSwitch = ({ checked, onChange, disabled = false }) => (
+  <button
+    type="button"
+    role="switch"
+    aria-checked={checked}
+    disabled={disabled}
+    onClick={(e) => {
+      e.stopPropagation();
+      if (!disabled && onChange) onChange(!checked);
+    }}
+    style={{
+      width: 38,
+      height: 22,
+      borderRadius: 11,
+      background: checked ? '#34c759' : 'rgba(255, 255, 255, 0.16)',
+      border: 'none',
+      padding: 2,
+      display: 'inline-flex',
+      alignItems: 'center',
+      cursor: disabled ? 'not-allowed' : 'pointer',
+      position: 'relative',
+      transition: 'background 0.2s ease',
+      boxShadow: checked ? '0 0 10px rgba(52, 199, 89, 0.35)' : 'none',
+      flexShrink: 0
+    }}
+  >
+    <motion.div
+      animate={{ x: checked ? 16 : 0 }}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
+      style={{
+        width: 18,
+        height: 18,
+        borderRadius: 9,
+        background: '#ffffff',
+        boxShadow: '0 2px 5px rgba(0, 0, 0, 0.35)'
+      }}
+    />
+  </button>
+);
+
+const AppleSegmented = ({ value, options, onChange }) => (
+  <div style={{
+    display: 'inline-flex',
+    background: 'rgba(255, 255, 255, 0.08)',
+    borderRadius: 8,
+    padding: 2,
+    border: '1px solid rgba(255, 255, 255, 0.08)'
+  }}>
+    {options.map((opt) => {
+      const isSelected = value === opt.value;
+      return (
+        <button
+          key={opt.value}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onChange(opt.value);
+          }}
+          style={{
+            background: isSelected ? 'rgba(255, 255, 255, 0.22)' : 'transparent',
+            border: 'none',
+            color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
+            borderRadius: 6,
+            padding: '3px 9px',
+            fontSize: 11,
+            fontWeight: isSelected ? 700 : 500,
+            cursor: 'pointer',
+            transition: 'all 0.15s ease',
+            boxShadow: isSelected ? '0 1px 4px rgba(0,0,0,0.2)' : 'none'
+          }}
+        >
+          {opt.label}
+        </button>
+      );
+    })}
+  </div>
+);
+
+// Curated Daily Wisdom & Inspiration Quotes with famous author portraits
+const DAILY_QUOTES = [
+  {
+    quote: "The only way to do great work is to love what you do.",
+    author: "Steve Jobs",
+    title: "Co-founder of Apple",
+    image: "https://upload.wikimedia.org/wikipedia/commons/d/dc/Steve_Jobs_Headshot_2010-CROP_%28cropped_2%29.jpg",
+    initials: "SJ",
+    gradient: "linear-gradient(135deg, #0070f3, #00c6ff)"
+  },
+  {
+    quote: "Imagination is more important than knowledge. Knowledge is limited.",
+    author: "Albert Einstein",
+    title: "Theoretical Physicist",
+    image: "https://upload.wikimedia.org/wikipedia/commons/3/3e/Einstein_1921_by_F_Schmutzer_-_restoration.jpg",
+    initials: "AE",
+    gradient: "linear-gradient(135deg, #f59e0b, #d97706)"
+  },
+  {
+    quote: "You have power over your mind — not outside events. Realize this, and you will find strength.",
+    author: "Marcus Aurelius",
+    title: "Roman Emperor & Stoic",
+    image: "https://upload.wikimedia.org/wikipedia/commons/7/70/Marcus_Aurelius_Glyptothek_Munich.jpg",
+    initials: "MA",
+    gradient: "linear-gradient(135deg, #8b5cf6, #6366f1)"
+  },
+  {
+    quote: "Simplicity is the ultimate sophistication.",
+    author: "Leonardo da Vinci",
+    title: "Polymath & Artist",
+    image: "https://upload.wikimedia.org/wikipedia/commons/b/ba/Leonardo_self.jpg",
+    initials: "LV",
+    gradient: "linear-gradient(135deg, #10b981, #059669)"
+  },
+  {
+    quote: "Sometimes it is the people no one imagines anything of who do the things no one can imagine.",
+    author: "Alan Turing",
+    title: "Father of Modern Computing",
+    image: "https://upload.wikimedia.org/wikipedia/commons/a/a1/Alan_Turing_Aged_16.jpg",
+    initials: "AT",
+    gradient: "linear-gradient(135deg, #3b82f6, #1d4ed8)"
+  },
+  {
+    quote: "The present is theirs; the future, for which I really worked, is mine.",
+    author: "Nikola Tesla",
+    title: "Inventor & Electrical Pioneer",
+    image: "https://upload.wikimedia.org/wikipedia/commons/7/79/Tesla_circa_1890.jpeg",
+    initials: "NT",
+    gradient: "linear-gradient(135deg, #ec4899, #be185d)"
+  },
+  {
+    quote: "Be yourself; everyone else is already taken.",
+    author: "Oscar Wilde",
+    title: "Author & Playwright",
+    image: "https://upload.wikimedia.org/wikipedia/commons/a/a7/Oscar_Wilde_Sarony.jpg",
+    initials: "OW",
+    gradient: "linear-gradient(135deg, #f43f5e, #e11d48)"
+  },
+  {
+    quote: "Nothing in life is to be feared, it is only to be understood.",
+    author: "Marie Curie",
+    title: "Physicist & Chemist",
+    image: "https://upload.wikimedia.org/wikipedia/commons/c/c8/Marie_Curie_c._1920s.jpg",
+    initials: "MC",
+    gradient: "linear-gradient(135deg, #06b6d4, #0891b2)"
+  },
+  {
+    quote: "We are what we repeatedly do. Excellence, then, is not an act, but a habit.",
+    author: "Aristotle",
+    title: "Greek Philosopher",
+    image: "https://upload.wikimedia.org/wikipedia/commons/a/ae/Aristotle_Altemps_Inv8575.jpg",
+    initials: "AR",
+    gradient: "linear-gradient(135deg, #eab308, #ca8a04)"
+  },
+  {
+    quote: "Somewhere, something incredible is waiting to be known.",
+    author: "Carl Sagan",
+    title: "Astronomer & Author",
+    image: "https://upload.wikimedia.org/wikipedia/commons/b/be/Carl_Sagan_Planetary_Society.JPG",
+    initials: "CS",
+    gradient: "linear-gradient(135deg, #a855f7, #7c3aed)"
+  },
+  {
+    quote: "He who has a why to live can bear almost any how.",
+    author: "Friedrich Nietzsche",
+    title: "Philosopher & Poet",
+    image: "https://upload.wikimedia.org/wikipedia/commons/1/1b/Nietzsche187a.jpg",
+    initials: "FN",
+    gradient: "linear-gradient(135deg, #64748b, #475569)"
+  },
+  {
+    quote: "The secret of getting ahead is getting started.",
+    author: "Mark Twain",
+    title: "Author & Humorist",
+    image: "https://upload.wikimedia.org/wikipedia/commons/0/0c/Mark_Twain_by_AF_Bradley.jpg",
+    initials: "MT",
+    gradient: "linear-gradient(135deg, #14b8a6, #0d9488)"
+  },
+  {
+    quote: "Do not go where the path may lead, go instead where there is no path and leave a trail.",
+    author: "Ralph Waldo Emerson",
+    title: "Essayist & Philosopher",
+    image: "https://upload.wikimedia.org/wikipedia/commons/d/d5/Ralph_Waldo_Emerson_ca1857_retouched.jpg",
+    initials: "RE",
+    gradient: "linear-gradient(135deg, #6366f1, #4f46e5)"
+  },
+  {
+    quote: "It does not matter how slowly you go as long as you do not stop.",
+    author: "Confucius",
+    title: "Teacher & Philosopher",
+    image: "https://upload.wikimedia.org/wikipedia/commons/4/4f/Confucius_Tang_Dynasty.jpg",
+    initials: "CF",
+    gradient: "linear-gradient(135deg, #f97316, #ea580c)"
+  },
+  {
+    quote: "Stay hungry, stay foolish.",
+    author: "Stewart Brand",
+    title: "Creator of Whole Earth",
+    image: "https://upload.wikimedia.org/wikipedia/commons/8/87/Stewart_Brand_at_Flickr.jpg",
+    initials: "SB",
+    gradient: "linear-gradient(135deg, #10b981, #047857)"
+  },
+  {
+    quote: "First principles thinking is boiling things down to their fundamental truths.",
+    author: "Elon Musk",
+    title: "Tech Entrepreneur",
+    image: "https://upload.wikimedia.org/wikipedia/commons/3/34/Elon_Musk_Royal_Society_%28crop2%29.jpg",
+    initials: "EM",
+    gradient: "linear-gradient(135deg, #0ea5e9, #0284c7)"
+  },
+  {
+    quote: "Success is the courage to continue after failure.",
+    author: "Winston Churchill",
+    title: "British Statesman",
+    image: "https://upload.wikimedia.org/wikipedia/commons/b/bc/Sir_Winston_Churchill_-_1940%2C_by_Yousuf_Karsh.jpg",
+    initials: "WC",
+    gradient: "linear-gradient(135deg, #78716c, #57534e)"
+  },
+  {
+    quote: "The future belongs to those who believe in the beauty of their dreams.",
+    author: "Eleanor Roosevelt",
+    title: "Human Rights Leader",
+    image: "https://upload.wikimedia.org/wikipedia/commons/2/22/Eleanor_Roosevelt_portrait_1933.jpg",
+    initials: "ER",
+    gradient: "linear-gradient(135deg, #ec4899, #db2777)"
+  },
+  {
+    quote: "It always seems impossible until it's done.",
+    author: "Nelson Mandela",
+    title: "Revolutionary & Leader",
+    image: "https://upload.wikimedia.org/wikipedia/commons/0/02/Nelson_Mandela_1994.jpg",
+    initials: "NM",
+    gradient: "linear-gradient(135deg, #22c55e, #16a34a)"
+  },
+  {
+    quote: "The mind is everything. What you think you become.",
+    author: "Buddha",
+    title: "Spiritual Teacher",
+    image: "https://upload.wikimedia.org/wikipedia/commons/5/5a/Buddha_in_Sarnath_Museum_%28Dhammajak_Mutra%29.jpg",
+    initials: "BD",
+    gradient: "linear-gradient(135deg, #eab308, #f59e0b)"
+  }
+];
+
+// Quoteman's Pic Avatar with Fallback Badge
+const QuotemanAvatar = ({ quote, size = 50 }) => {
+  const [imgError, setImgError] = useState(false);
+
+  useEffect(() => {
+    setImgError(false);
+  }, [quote.image]);
+
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        minWidth: size,
+        minHeight: size,
+        borderRadius: 13,
+        overflow: 'hidden',
+        position: 'relative',
+        border: '1.5px solid rgba(255, 255, 255, 0.2)',
+        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.45)',
+        background: quote.gradient || 'linear-gradient(135deg, #0070f3, #00c6ff)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexShrink: 0
+      }}
+    >
+      {!imgError && quote.image ? (
+        <img
+          src={quote.image}
+          alt={quote.author}
+          onError={() => setImgError(true)}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            display: 'block'
+          }}
+        />
+      ) : (
+        <span
+          style={{
+            color: '#ffffff',
+            fontSize: size * 0.38,
+            fontWeight: 800,
+            fontFamily: 'OpenRunde, system-ui, sans-serif',
+            letterSpacing: '0.5px'
+          }}
+        >
+          {quote.initials}
+        </span>
+      )}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 2,
+          right: 2,
+          width: 15,
+          height: 15,
+          borderRadius: '50%',
+          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          border: '1px solid rgba(255, 255, 255, 0.2)'
+        }}
+      >
+        <Quote size={8} color="#ff9500" />
+      </div>
+    </div>
+  );
+};
+
+// Apple Dynamic Island Liquid Wave Battery Capsule (Horizontal Fill: Left-to-Right / Fluid Flow: Right-to-Left)
+const AppleBatteryCapsule = ({ percent = 100, charging = false, width = 168, height = 66 }) => {
+  const safePercent = typeof percent === "number" && !isNaN(percent) ? Math.min(100, Math.max(0, percent)) : 85;
+  const canvasRef = useRef(null);
+  const fillXRef = useRef((safePercent / 100) * (width - 10));
+
+  // Apple System Palette for Liquid & Meniscus Waves
+  const frontColor = charging
+    ? '#30D158'
+    : (safePercent <= 10 ? '#FF453A' : (safePercent <= 20 ? '#FFD60A' : '#30D158'));
+  const frontTopColor = charging
+    ? '#34E065'
+    : (safePercent <= 10 ? '#FF6961' : (safePercent <= 20 ? '#FFE043' : '#34E065'));
+  const frontBottomColor = charging
+    ? '#24B046'
+    : (safePercent <= 10 ? '#D32F2F' : (safePercent <= 20 ? '#D4A000' : '#24B046'));
+  const backColor = charging
+    ? '#15803D'
+    : (safePercent <= 10 ? '#991B1B' : (safePercent <= 20 ? '#B45309' : '#15803D'));
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    let animationFrameId;
+    const startTime = performance.now();
+
+    // High-DPI Canvas scaling for Retina / crisp rendering
+    const dpr = window.devicePixelRatio || 2;
+    const rect = canvas.getBoundingClientRect();
+    const w = rect.width || (width - 10);
+    const h = rect.height || (height - 10);
+
+    canvas.width = Math.round(w * dpr);
+    canvas.height = Math.round(h * dpr);
+    ctx.scale(dpr, dpr);
+
+    // Initial fill target
+    const targetFillX = (safePercent / 100) * w;
+    if (fillXRef.current === undefined) fillXRef.current = targetFillX;
+
+    // Organic rising micro-bubbles inside the liquid
+    const bubbleCount = charging ? 8 : 5;
+    const bubbles = Array.from({ length: bubbleCount }, (_, i) => ({
+      xRatio: 0.08 + (i / bubbleCount) * 0.84,
+      y: Math.random() * (h - 12) + 8,
+      radius: 1.4 + Math.random() * 2.0,
+      speedY: 0.45 + Math.random() * 0.65,
+      wobbleSpeed: 1.8 + Math.random() * 1.6,
+      wobbleAmp: 1.4 + Math.random() * 1.4,
+      phase: Math.random() * Math.PI * 2,
+      alpha: 0.35 + Math.random() * 0.35
+    }));
+
+    const render = (now) => {
+      const elapsed = (now - startTime) / 1000;
+
+      // Smoothly interpolate current fillX towards targetFillX
+      fillXRef.current += (targetFillX - fillXRef.current) * 0.08;
+      const currentFillX = Math.max(0, Math.min(w, fillXRef.current));
+
+      // Clear Canvas
+      ctx.clearRect(0, 0, w, h);
+
+      // Clip canvas to rounded capsule interior
+      ctx.save();
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(0, 0, w, h, 13);
+      } else {
+        ctx.rect(0, 0, w, h);
+      }
+      ctx.clip();
+
+      const isNearlyFull = currentFillX >= w - 2.5;
+
+      // --- 1. BACK WAVE LAYER (Darker emerald / amber / red depth) ---
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      ctx.lineTo(0, 0);
+
+      if (isNearlyFull) {
+        // When nearly 100% full, liquid reaches right wall with subtle wave sloshing along top
+        for (let x = 0; x <= w; x += 3) {
+          const topY = Math.max(0, Math.sin(x * 0.05 + elapsed * 2.2) * 2.4 + 2);
+          ctx.lineTo(x, topY);
+        }
+        ctx.lineTo(w, h);
+      } else {
+        // Meniscus wave along right liquid edge
+        ctx.lineTo(Math.max(0, currentFillX - 3), 0);
+        for (let y = 0; y <= h; y += 2) {
+          const wave1 = Math.sin(y * 0.08 + elapsed * 2.2) * 3.4;
+          const wave2 = Math.cos(y * 0.16 - elapsed * 1.5) * 1.8;
+          const wx = Math.max(0, Math.min(w, currentFillX - 3 + wave1 + wave2));
+          ctx.lineTo(wx, y);
+        }
+        ctx.lineTo(0, h);
+      }
+      ctx.closePath();
+      ctx.fillStyle = backColor;
+      ctx.globalAlpha = 0.75;
+      ctx.fill();
+      ctx.restore();
+
+      // --- 2. FRONT WAVE LAYER (Vibrant Apple green / yellow / red gradient) ---
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      ctx.lineTo(0, 0);
+
+      if (isNearlyFull) {
+        // Wave along top moving continuously from RIGHT TO LEFT (+ elapsed * 2.8)
+        for (let x = 0; x <= w; x += 3) {
+          const topY = Math.max(0, Math.sin(x * 0.045 + elapsed * 2.8 + 0.9) * 2.8 + 2.2);
+          ctx.lineTo(x, topY);
+        }
+        // Down the right wall with gentle surge against glass
+        for (let y = 0; y <= h; y += 3) {
+          const rightX = w - Math.max(0, Math.sin(y * 0.09 + elapsed * 2.5) * 1.8);
+          ctx.lineTo(rightX, y);
+        }
+        ctx.lineTo(0, h);
+      } else {
+        // Meniscus wave along right liquid edge
+        ctx.lineTo(Math.max(0, currentFillX), 0);
+        for (let y = 0; y <= h; y += 2) {
+          const wave1 = Math.sin(y * 0.07 + elapsed * 2.7) * 4.2;
+          const wave2 = Math.cos(y * 0.14 - elapsed * 1.9 + 1.0) * 2.4;
+          const wx = Math.max(0, Math.min(w, currentFillX + wave1 + wave2));
+          ctx.lineTo(wx, y);
+        }
+        ctx.lineTo(0, h);
+      }
+      ctx.closePath();
+
+      const frontGrad = ctx.createLinearGradient(0, 0, 0, h);
+      frontGrad.addColorStop(0, frontTopColor);
+      frontGrad.addColorStop(1, frontBottomColor);
+      ctx.fillStyle = frontGrad;
+      ctx.globalAlpha = 0.96;
+      ctx.fill();
+
+      // Luminous surface-tension meniscus crest highlight
+      if (!isNearlyFull && currentFillX > 5) {
+        ctx.beginPath();
+        for (let y = 0; y <= h; y += 2) {
+          const wave1 = Math.sin(y * 0.07 + elapsed * 2.7) * 4.2;
+          const wave2 = Math.cos(y * 0.14 - elapsed * 1.9 + 1.0) * 2.4;
+          const wx = Math.max(0, Math.min(w, currentFillX + wave1 + wave2));
+          if (y === 0) ctx.moveTo(wx, y);
+          else ctx.lineTo(wx, y);
+        }
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
+        ctx.lineWidth = 1.5;
+        ctx.globalAlpha = 0.85;
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      // --- 3. INTERNAL FLUID SHIMMER / LIGHT WAVE (Travels RIGHT TO LEFT) ---
+      const activeLiquidWidth = Math.min(w, currentFillX + 4);
+      if (activeLiquidWidth > 12) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(0, 0, activeLiquidWidth, h);
+        ctx.clip();
+
+        // Shimmer ribbon 1 sweeps continuously from right to left
+        const shimmerOffset1 = (elapsed * 38) % (w + 100);
+        const shimmerX1 = (w + 50) - shimmerOffset1;
+        const shimmerGrad1 = ctx.createLinearGradient(shimmerX1 - 35, 0, shimmerX1 + 35, 0);
+        shimmerGrad1.addColorStop(0, 'rgba(255, 255, 255, 0)');
+        shimmerGrad1.addColorStop(0.5, 'rgba(255, 255, 255, 0.15)');
+        shimmerGrad1.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = shimmerGrad1;
+        ctx.fillRect(0, 0, activeLiquidWidth, h);
+
+        // Shimmer ribbon 2 sweeps at secondary cadence
+        const shimmerOffset2 = (elapsed * 24 + 60) % (w + 100);
+        const shimmerX2 = (w + 50) - shimmerOffset2;
+        const shimmerGrad2 = ctx.createLinearGradient(shimmerX2 - 25, 0, shimmerX2 + 25, 0);
+        shimmerGrad2.addColorStop(0, 'rgba(255, 255, 255, 0)');
+        shimmerGrad2.addColorStop(0.5, 'rgba(255, 255, 255, 0.09)');
+        shimmerGrad2.addColorStop(1, 'rgba(255, 255, 255, 0)');
+        ctx.fillStyle = shimmerGrad2;
+        ctx.fillRect(0, 0, activeLiquidWidth, h);
+
+        ctx.restore();
+      }
+
+      // --- 4. RISING MICRO-BUBBLES (Buoyant, swaying, zero seam) ---
+      if (activeLiquidWidth > 15) {
+        for (let i = 0; i < bubbles.length; i++) {
+          const b = bubbles[i];
+          b.y -= b.speedY;
+          if (b.y < 5) {
+            b.y = h + Math.random() * 8;
+            b.xRatio = 0.08 + Math.random() * 0.84;
+            b.radius = 1.4 + Math.random() * 2.0;
+            b.speedY = 0.45 + Math.random() * 0.65;
+          }
+
+          const currentBx = b.xRatio * activeLiquidWidth + Math.sin(elapsed * b.wobbleSpeed + b.phase) * b.wobbleAmp;
+
+          if (currentBx > 5 && currentBx < activeLiquidWidth - 4 && b.y <= h && b.y >= 4) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(currentBx, b.y, b.radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${b.alpha})`;
+            ctx.fill();
+
+            // Specular shine point
+            ctx.beginPath();
+            ctx.arc(currentBx - b.radius * 0.3, b.y - b.radius * 0.3, b.radius * 0.35, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+            ctx.fill();
+            ctx.restore();
+          }
+        }
+      }
+
+      ctx.restore(); // Restore outer clip
+
+      animationFrameId = requestAnimationFrame(render);
+    };
+
+    animationFrameId = requestAnimationFrame(render);
+
+    return () => {
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+    };
+  }, [safePercent, charging, frontColor, frontTopColor, frontBottomColor, backColor, width, height]);
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        display: 'inline-flex',
+        alignItems: 'center',
+        userSelect: 'none',
+        paddingRight: 5
+      }}
+    >
+      {/* Outer Apple Battery Chassis */}
+      <div
+        style={{
+          position: 'relative',
+          width,
+          height,
+          borderRadius: 18,
+          background: 'rgba(255, 255, 255, 0.05)',
+          border: '2px solid rgba(255, 255, 255, 0.22)',
+          boxSizing: 'border-box',
+          padding: 3,
+          overflow: 'hidden'
+        }}
+      >
+        {/* Liquid Wave Tank Cavity */}
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            height: '100%',
+            borderRadius: 13,
+            overflow: 'hidden',
+            background: 'rgba(0, 0, 0, 0.42)'
+          }}
+        >
+          {/* Smooth 60fps Liquid Physics Canvas */}
+          <canvas
+            ref={canvasRef}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              display: 'block'
+            }}
+          />
+
+          {/* Glass Wall Reflection Pill (Apple Dynamic Island style) */}
+          <div
+            style={{
+              position: 'absolute',
+              left: 6,
+              top: 12,
+              width: 4.5,
+              height: 36,
+              borderRadius: 2.5,
+              backgroundColor: 'rgba(255, 255, 255, 0.22)',
+              pointerEvents: 'none',
+              zIndex: 6
+            }}
+          />
+
+          {/* Top Curved Sheen Glare */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 1,
+              left: 4,
+              right: 4,
+              height: '35%',
+              background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.01) 100%)',
+              borderRadius: '12px 12px 4px 4px',
+              pointerEvents: 'none',
+              zIndex: 7
+            }}
+          />
+
+          {/* Center Typography & Charging Bolt */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 5,
+              zIndex: 10,
+              pointerEvents: 'none'
+            }}
+          >
+            {charging && (
+              <motion.div
+                animate={{ opacity: [0.85, 1, 0.85], scale: [0.96, 1.06, 0.96] }}
+                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
+                style={{ display: 'flex', alignItems: 'center' }}
+              >
+                <Zap size={18} color="#ffffff" fill="#ffffff" />
+              </motion.div>
+            )}
+            <span
+              style={{
+                fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+                fontSize: 27,
+                fontWeight: 700,
+                color: '#ffffff',
+                letterSpacing: '-0.5px',
+                textShadow: '0 1px 4px rgba(0, 0, 0, 0.85), 0 2px 8px rgba(0, 0, 0, 0.7)'
+              }}
+            >
+              {safePercent}%
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Apple Terminal Bump */}
+      <div
+        style={{
+          width: 5,
+          height: 22,
+          borderRadius: '0 4px 4px 0',
+          backgroundColor: 'rgba(255, 255, 255, 0.22)',
+          marginLeft: -1,
+          flexShrink: 0
+        }}
+      />
+    </div>
+  );
+};
+const BigAnimatedBattery = AppleBatteryCapsule;
+
+const FlipCard = ({ digit, width = 72, height = 64, fontSize = 38 }) => {
   const [currentDigit, setCurrentDigit] = useState(digit);
   const [previousDigit, setPreviousDigit] = useState(digit);
   const [isFlipping, setIsFlipping] = useState(false);
@@ -552,13 +1237,13 @@ const FlipCard = ({ digit }) => {
     <div
       style={{
         position: 'relative',
-        width: 140,
-        height: 124,
+        width,
+        height,
         background: '#18181c',
-        borderRadius: 18,
-        padding: 5,
+        borderRadius: 12,
+        padding: 3,
         boxSizing: 'border-box',
-        boxShadow: '0 12px 28px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.14)',
+        boxShadow: '0 8px 20px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.14)',
         border: '1.5px solid #2b2b32',
         perspective: 1000
       }}
@@ -569,7 +1254,7 @@ const FlipCard = ({ digit }) => {
           width: '100%',
           height: '100%',
           background: 'linear-gradient(to bottom, #ececec 0%, #d6d6d6 49%, #c6c6c6 51%, #e2e2e2 100%)',
-          borderRadius: 13,
+          borderRadius: 8,
           overflow: 'hidden',
           boxShadow: 'inset 0 1.5px 2px rgba(255,255,255,0.9), inset 0 -1.5px 3px rgba(0,0,0,0.35)'
         }}
@@ -591,13 +1276,13 @@ const FlipCard = ({ digit }) => {
         >
           <span
             style={{
-              fontSize: 82,
+              fontSize,
               fontWeight: 800,
               color: '#0070f3',
               fontFamily: 'OpenRunde, system-ui, sans-serif',
-              letterSpacing: '-2px',
+              letterSpacing: '-1.5px',
               userSelect: 'none',
-              marginTop: 4
+              marginTop: 1
             }}
           >
             {currentDigit}
@@ -621,13 +1306,13 @@ const FlipCard = ({ digit }) => {
         >
           <span
             style={{
-              fontSize: 82,
+              fontSize,
               fontWeight: 800,
               color: '#0070f3',
               fontFamily: 'OpenRunde, system-ui, sans-serif',
-              letterSpacing: '-2px',
+              letterSpacing: '-1.5px',
               userSelect: 'none',
-              marginBottom: 4
+              marginBottom: 1
             }}
           >
             {isFlipping ? previousDigit : currentDigit}
@@ -659,13 +1344,13 @@ const FlipCard = ({ digit }) => {
           >
             <span
               style={{
-                fontSize: 82,
+                fontSize,
                 fontWeight: 800,
                 color: '#0070f3',
                 fontFamily: 'OpenRunde, system-ui, sans-serif',
-                letterSpacing: '-2px',
+                letterSpacing: '-1.5px',
                 userSelect: 'none',
-                marginTop: 4
+                marginTop: 1
               }}
             >
               {previousDigit}
@@ -680,9 +1365,9 @@ const FlipCard = ({ digit }) => {
             top: '50%',
             left: 0,
             right: 0,
-            height: 2.5,
+            height: 2,
             background: '#18181c',
-            marginTop: -1.25,
+            marginTop: -1,
             zIndex: 30,
             boxShadow: '0 1px 1px rgba(255,255,255,0.45)'
           }}
@@ -694,11 +1379,11 @@ const FlipCard = ({ digit }) => {
             position: 'absolute',
             left: -1,
             top: '50%',
-            marginTop: -6,
-            width: 7,
-            height: 12,
+            marginTop: -4.5,
+            width: 5,
+            height: 9,
             background: '#1c1c20',
-            borderRadius: '0 3px 3px 0',
+            borderRadius: '0 2px 2px 0',
             zIndex: 31
           }}
         />
@@ -709,11 +1394,11 @@ const FlipCard = ({ digit }) => {
             position: 'absolute',
             right: -1,
             top: '50%',
-            marginTop: -6,
-            width: 7,
-            height: 12,
+            marginTop: -4.5,
+            width: 5,
+            height: 9,
             background: '#1c1c20',
-            borderRadius: '3px 0 0 3px',
+            borderRadius: '2px 0 0 2px',
             zIndex: 31
           }}
         />
@@ -812,7 +1497,21 @@ export default function Island() {
     return `${hours}:${minutes}`;
   });
   const [mode, setMode] = useState("still");
-  const [tabOrder, setTabOrder] = useState(() => JSON.parse(localStorage.getItem("tab-order") || "[2,4,5,6,7,8,10,0,1,3,9]"));
+  const [tabOrder, setTabOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("tab-order") || "null");
+      if (Array.isArray(saved)) {
+        if (!saved.includes(11)) {
+          const idx2 = saved.indexOf(2);
+          if (idx2 !== -1) saved.splice(idx2 + 1, 0, 11);
+          else saved.push(11);
+          localStorage.setItem("tab-order", JSON.stringify(saved));
+        }
+        return saved;
+      }
+    } catch {}
+    return [2, 11, 4, 5, 6, 7, 8, 10, 0, 1, 3, 9];
+  });
   const [hiddenTabs, setHiddenTabs] = useState(() => JSON.parse(localStorage.getItem("hidden-tabs") || "[6]"));
   const [defaultTabId, setDefaultTabId] = useState(() => Number(localStorage.getItem("default-tab") || 2));
 
@@ -860,10 +1559,26 @@ export default function Island() {
   const [bgColor, setBgColor] = useState(localStorage.getItem("bg-color") || "#000000");
   const [textColor, setTextColor] = useState(localStorage.getItem("text-color") || "#FFFFFF");
   const [bgImage, setBgImage] = useState(localStorage.getItem("bg-image") || "none");
+  const [settingsTab, setSettingsTab] = useState("general");
   const [browserSearch, setBrowserSearch] = useState("");
   const [clipboard, setClipboard] = useState([]);
   const [charging, setCharging] = useState(false);
   const [chargingAlert, setChargingAlert] = useState(false);
+  const [batteryDischargingTime, setBatteryDischargingTime] = useState(null);
+  const [batteryChargingTime, setBatteryChargingTime] = useState(null);
+  const [batteryHistory, setBatteryHistory] = useState(() => {
+    try {
+      const saved = localStorage.getItem("quick_pill_battery_history");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const cutoff = Date.now() - 6 * 60 * 60 * 1000;
+          return parsed.filter(s => s.timestamp > cutoff);
+        }
+      }
+    } catch {}
+    return [];
+  });
   const [spotifyTrack, setSpotifyTrack] = useState(null);
   const [bluetooth, setBluetooth] = useState({ connected: false, devices: [] });
   const [bluetoothAlert, setBluetoothAlert] = useState(false);
@@ -1086,6 +1801,52 @@ export default function Island() {
   const currentTab = currentTabId;
   const totalTabs = visibleTabs.length;
 
+  // Daily Quote feature state & handlers
+  const [dailyQuoteIndex, setDailyQuoteIndex] = useState(() => {
+    try {
+      const now = new Date();
+      const startOfYear = new Date(now.getFullYear(), 0, 0);
+      const diff = now - startOfYear;
+      const oneDay = 1000 * 60 * 60 * 24;
+      const dayOfYear = Math.floor(diff / oneDay);
+      const defaultIndex = dayOfYear % DAILY_QUOTES.length;
+
+      const saved = localStorage.getItem("quick_pill_quote_index");
+      const savedDate = localStorage.getItem("quick_pill_quote_date");
+      const todayStr = now.toDateString();
+      if (saved !== null && savedDate === todayStr) {
+        return parseInt(saved, 10) % DAILY_QUOTES.length;
+      }
+      return defaultIndex;
+    } catch {
+      return 0;
+    }
+  });
+  const [quoteCopied, setQuoteCopied] = useState(false);
+
+  const handleNextQuote = (e) => {
+    e?.stopPropagation?.();
+    setDailyQuoteIndex(prev => {
+      const next = (prev + 1) % DAILY_QUOTES.length;
+      try {
+        localStorage.setItem("quick_pill_quote_index", String(next));
+        localStorage.setItem("quick_pill_quote_date", new Date().toDateString());
+      } catch (err) {}
+      return next;
+    });
+  };
+
+  const handleCopyQuote = (e, q) => {
+    e?.stopPropagation?.();
+    try {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(`"${q.quote}" — ${q.author}`);
+      }
+      setQuoteCopied(true);
+      setTimeout(() => setQuoteCopied(false), 2000);
+    } catch (err) {}
+  };
+
   const [showPausedQuickView, setShowPausedQuickView] = useState(false);
   const pausedTimeout = useRef(null);
 
@@ -1131,10 +1892,10 @@ export default function Island() {
     const saved = localStorage.getItem("island-y");
     const num = Number(saved);
     if (saved !== null && !isNaN(num)) {
-      if (num === 20) return 6;
+      if (num === 20 || num === 6) return 0;
       return Math.max(0, Math.min(1000, num));
     }
-    return 6;
+    return 0;
   });
 
   const tabVariants = {
@@ -1326,7 +2087,7 @@ export default function Island() {
   const width = notificationAlert
     ? 300
     : mode === "large"
-      ? (currentTab === 9 ? 495 : currentTab === 1 ? 390 : currentTab === 10 ? 370 : currentTab === 0 ? 405 : currentTab === 4 ? 400 : currentTab === 6 ? 340 : currentTab === 3 ? 380 : 380)
+      ? (currentTab === 9 ? 620 : (currentTab === 2 || currentTab === 11 ? 560 : 540))
       : (mode === "quick" && isPlaying && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert)
         ? nowPlayingWidth
         : (mode === "quick" || alert || chargingAlert || bluetoothAlert || cameraAlert || microphoneAlert || volumeAlert || keyLockAlert || usbAlert || notificationAlert)
@@ -1337,7 +2098,7 @@ export default function Island() {
   const height = notificationAlert
     ? 46
     : mode === "large"
-      ? (currentTab === 9 ? (positionMode === "free" ? 435 : 355) : currentTab === 8 ? 180 : currentTab === 1 ? 272 : currentTab === 4 ? 210 : currentTab === 5 ? 240 : currentTab === 7 ? 230 : currentTab === 6 ? 180 : currentTab === 10 ? 192 : currentTab === 3 ? 185 : currentTab === 0 ? 120 : 190)
+      ? (currentTab === 9 ? 220 : 145)
       : 40;
 
   useEffect(() => {
@@ -1518,11 +2279,15 @@ export default function Island() {
         const update = () => {
           setPercent(Math.round(battery.level * 100));
           setCharging(battery.charging);
+          setBatteryDischargingTime(battery.dischargingTime);
+          setBatteryChargingTime(battery.chargingTime);
         };
         handler = update;
         update();
         battery.addEventListener("chargingchange", handler);
         battery.addEventListener("levelchange", handler);
+        battery.addEventListener("chargingtimechange", handler);
+        battery.addEventListener("dischargingtimechange", handler);
       } catch {
         setPercent(null);
       }
@@ -1532,9 +2297,191 @@ export default function Island() {
       if (battery && handler) {
         battery.removeEventListener("levelchange", handler);
         battery.removeEventListener("chargingchange", handler);
+        battery.removeEventListener("chargingtimechange", handler);
+        battery.removeEventListener("dischargingtimechange", handler);
       }
     };
   }, []);
+
+  // Continuous Battery Drain & Charge Telemetry Collector (Sampled every 30s + on state change)
+  useEffect(() => {
+    if (percent === null) return;
+
+    const recordSample = () => {
+      const now = Date.now();
+      setBatteryHistory(prev => {
+        const lastSample = prev[prev.length - 1];
+        if (
+          lastSample &&
+          (now - lastSample.timestamp < 15000) &&
+          lastSample.percent === percent &&
+          lastSample.charging === charging
+        ) {
+          return prev;
+        }
+        const cutoff = now - 6 * 60 * 60 * 1000; // 6-hour sliding retention window
+        const updated = [...prev.filter(s => s.timestamp > cutoff), { timestamp: now, percent, charging }];
+        try {
+          localStorage.setItem("quick_pill_battery_history", JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+    };
+
+    recordSample();
+    const interval = setInterval(recordSample, 30000);
+    return () => clearInterval(interval);
+  }, [percent, charging]);
+
+  // Intelligent Battery Runtime, Drain Velocity & Power Profile Analytics Engine (Apple HIG)
+  const batteryAnalytics = useMemo(() => {
+    const currentPercent = percent !== null ? Math.min(100, Math.max(0, percent)) : 85;
+    const isCharging = charging;
+    const now = Date.now();
+
+    // 1. Analyze historical sliding window drain / charge velocity
+    let measuredDrainRate = null; // % per hour
+    let measuredChargeRate = null; // % per hour
+
+    if (batteryHistory.length >= 2) {
+      const matchingSamples = batteryHistory.filter(s => s.charging === isCharging);
+      if (matchingSamples.length >= 2) {
+        const oldest = matchingSamples[0];
+        const newest = matchingSamples[matchingSamples.length - 1];
+        const timeDiffHours = (newest.timestamp - oldest.timestamp) / (1000 * 60 * 60);
+
+        if (timeDiffHours >= 0.02) {
+          const pctDiff = newest.percent - oldest.percent;
+          if (!isCharging && pctDiff < 0) {
+            measuredDrainRate = Math.abs(pctDiff) / timeDiffHours;
+          } else if (isCharging && pctDiff > 0) {
+            measuredChargeRate = pctDiff / timeDiffHours;
+          }
+        }
+      }
+    }
+
+    // 2. Hardware CPU-modulated baseline drain rate
+    const cpuLoad = (systemStats && typeof systemStats.cpu === "number") ? systemStats.cpu : 15;
+    const baselineDrainRate = 8.0 + (cpuLoad / 100) * 16.0;
+
+    let effectiveDrainRate = baselineDrainRate;
+    if (measuredDrainRate && measuredDrainRate >= 3 && measuredDrainRate <= 50) {
+      effectiveDrainRate = measuredDrainRate * 0.7 + baselineDrainRate * 0.3;
+    }
+
+    let effectiveChargeRate = 42.0;
+    if (measuredChargeRate && measuredChargeRate >= 10 && measuredChargeRate <= 90) {
+      effectiveChargeRate = measuredChargeRate * 0.75 + 42.0 * 0.25;
+    }
+
+    let minutesRemaining = 0;
+    let timeRemainingStr = "";
+    let endTargetTimeStr = "";
+    let rateText = "";
+    let powerModeTag = "Normal Power";
+
+    if (isCharging) {
+      powerModeTag = "AC Power";
+      if (currentPercent >= 100) {
+        timeRemainingStr = "Fully Charged";
+        endTargetTimeStr = "Power Adapter Connected";
+        rateText = "100%";
+      } else {
+        if (batteryChargingTime && isFinite(batteryChargingTime) && batteryChargingTime > 0 && batteryChargingTime < 86400) {
+          minutesRemaining = Math.max(1, Math.round(batteryChargingTime / 60));
+        } else {
+          const needed = 100 - currentPercent;
+          const hours = needed / effectiveChargeRate;
+          minutesRemaining = Math.max(1, Math.round(hours * 60));
+        }
+
+        const hrs = Math.floor(minutesRemaining / 60);
+        const mins = minutesRemaining % 60;
+        timeRemainingStr = hrs > 0 ? (mins > 0 ? `${hrs} hr ${mins} min` : `${hrs} hr`) : `${mins} min`;
+
+        const targetDate = new Date(now + minutesRemaining * 60 * 1000);
+        let targetHours = targetDate.getHours();
+        const targetMins = targetDate.getMinutes().toString().padStart(2, '0');
+        if (hourFormat) {
+          const ampm = targetHours >= 12 ? 'PM' : 'AM';
+          targetHours = targetHours % 12 || 12;
+          endTargetTimeStr = `Full by ~${targetHours}:${targetMins} ${ampm}`;
+        } else {
+          endTargetTimeStr = `Full by ~${targetHours.toString().padStart(2, '0')}:${targetMins}`;
+        }
+
+        rateText = `+${Math.round(effectiveChargeRate)}% / hr`;
+      }
+    } else {
+      // Discharging (Battery Mode)
+      if (currentPercent <= 20) {
+        powerModeTag = "Low Power";
+      } else if (effectiveDrainRate > 17) {
+        powerModeTag = "High Usage";
+      } else {
+        powerModeTag = "Normal Power";
+      }
+
+      if (batteryDischargingTime && isFinite(batteryDischargingTime) && batteryDischargingTime > 60 && batteryDischargingTime < 86400) {
+        minutesRemaining = Math.max(1, Math.round(batteryDischargingTime / 60));
+      } else {
+        const hours = currentPercent / effectiveDrainRate;
+        minutesRemaining = Math.max(1, Math.min(1080, Math.round(hours * 60)));
+      }
+
+      const hrs = Math.floor(minutesRemaining / 60);
+      const mins = minutesRemaining % 60;
+      timeRemainingStr = hrs > 0 ? (mins > 0 ? `${hrs} hr ${mins} min` : `${hrs} hr`) : `${mins} min`;
+
+      const targetDate = new Date(now + minutesRemaining * 60 * 1000);
+      let targetHours = targetDate.getHours();
+      const targetMins = targetDate.getMinutes().toString().padStart(2, '0');
+      if (hourFormat) {
+        const ampm = targetHours >= 12 ? 'PM' : 'AM';
+        targetHours = targetHours % 12 || 12;
+        endTargetTimeStr = `Depletes at ~${targetHours}:${targetMins} ${ampm}`;
+      } else {
+        endTargetTimeStr = `Depletes at ~${targetHours.toString().padStart(2, '0')}:${targetMins}`;
+      }
+
+      rateText = `~${effectiveDrainRate.toFixed(1)}% / hr`;
+    }
+
+    // Generate 8-bar Apple Activity graph
+    const activityBars = [];
+    const barCount = 8;
+    if (batteryHistory.length >= barCount) {
+      const step = Math.floor(batteryHistory.length / barCount);
+      for (let i = 0; i < barCount; i++) {
+        const idx = Math.min(batteryHistory.length - 1, i * step);
+        const lvl = batteryHistory[idx].percent;
+        activityBars.push({
+          height: Math.max(20, Math.min(100, lvl)),
+          isCurrent: i === barCount - 1
+        });
+      }
+    } else {
+      for (let i = 0; i < barCount; i++) {
+        const offset = (barCount - 1 - i) * (isCharging ? -1.5 : 1.2);
+        const val = Math.max(20, Math.min(100, currentPercent + offset));
+        activityBars.push({
+          height: val,
+          isCurrent: i === barCount - 1
+        });
+      }
+    }
+
+    return {
+      currentPercent,
+      isCharging,
+      timeRemainingStr,
+      endTargetTimeStr,
+      rateText,
+      powerModeTag,
+      activityBars
+    };
+  }, [percent, charging, batteryDischargingTime, batteryChargingTime, batteryHistory, systemStats, hourFormat]);
 
   // Battery alerts
   useEffect(() => {
@@ -2323,11 +3270,30 @@ export default function Island() {
       case 'top-right': return { left: 'calc(100% - 15px)', top: '6px', x: '-100%' };
       case 'bottom-left': return { left: '15px', top: 'auto', bottom: '45px', x: '0%' };
       case 'bottom-right': return { left: 'calc(100% - 15px)', top: 'auto', bottom: '45px', x: '-100%' };
-      case 'top-center': return { left: '49.8%', top: '6px', x: '-50%' };
+      case 'top-center': return { left: '49.8%', top: '0px', x: '-50%' };
       case 'bottom-center': return { left: '49.8%', top: 'auto', bottom: '45px', x: '-50%' };
       default: return { left: `${islandX}%`, top: `${islandY}px`, x: '-50%' };
     }
   }, [positionMode, islandX, islandY]);
+
+  const isAtTop = (sideStyles.top === '0px' || (positionMode === 'free' && islandY === 0)) && theme !== 'win95';
+  const islandBorderStroke = theme === "win95"
+    ? "none"
+    : islandBorderEnabled
+      ? (cameraInUse
+          ? "rgba(255, 215, 0, 0.8)"
+          : microphoneInUse
+            ? "rgba(255, 154, 0, 0.8)"
+            : (charging || chargingAlert)
+              ? "rgba(111, 255, 123, 0.5)"
+              : (percent <= 20 || alert)
+                ? "rgba(255, 63, 63, 0.5)"
+                : bluetoothAlert
+                  ? "rgba(0, 150, 255, 0.34)"
+                  : hideNotActiveIslandEnabled
+                    ? "none"
+                    : `color-mix(in srgb, ${textColor}, transparent 70%)`)
+      : "none";
 
   return (
     <motion.div
@@ -2409,6 +3375,10 @@ export default function Island() {
         left: sideStyles.left,
         top: sideStyles.top || 'auto',
         bottom: sideStyles.bottom || 'auto',
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
       }}
       animate={{
         width: `${width}px`,
@@ -2425,11 +3395,21 @@ export default function Island() {
             ? 0
             : 1,
         x: sideStyles.x,
-        borderRadius:
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
+        borderBottomLeftRadius:
           mode === "large" && theme === "win95"
             ? 0
             : mode === "large"
-              ? (currentTab === 0 ? 28 : 32)
+              ? 26
+              : theme === "win95"
+                ? 0
+                : 20,
+        borderBottomRightRadius:
+          mode === "large" && theme === "win95"
+            ? 0
+            : mode === "large"
+              ? 26
               : theme === "win95"
                 ? 0
                 : 20,
@@ -2458,13 +3438,16 @@ export default function Island() {
         backgroundPosition: "center",
         backgroundSize: "cover",
         justifyContent: (mode === "large" && currentTab === 3) ? "flex-start" : "center",
-        overflow: "hidden",
+        overflow: "visible",
         fontFamily: theme === "win95" ? "w95" : "OpenRunde",
-        border: theme === "win95" ? "2px solid rgb(254, 254, 254)" : islandBorderEnabled ? cameraInUse ? `1px solid rgba(255, 215, 0, 0.8)` : microphoneInUse ? `1px solid rgba(255, 154, 0, 0.8)` : (charging || chargingAlert) ? `1px solid rgba(111, 255, 123, 0.5)` : (percent <= 20 || alert) ? `1px solid rgba(255, 63, 63, 0.5)` : bluetoothAlert ? `1px solid rgba(0, 150, 255, 0.34)` : hideNotActiveIslandEnabled ? "none" : `1px solid color-mix(in srgb, ${textColor}, transparent 70%)` : "none",
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
+        border: theme === "win95" ? "2px solid rgb(254, 254, 254)" : islandBorderStroke !== "none" ? `1px solid ${islandBorderStroke}` : "none",
+        borderTop: (isAtTop || islandBorderStroke === "none") ? "none" : undefined,
         borderColor:
           theme === "win95"
             ? "#FFFFFF #808080 #808080 #FFFFFF"
-            : "none",
+            : undefined,
         '--island-text-color': textColor,
         '--island-bg-color': bgColor,
         position: 'fixed',
@@ -2472,6 +3455,65 @@ export default function Island() {
         pointerEvents: isTransitioning ? 'auto' : (ctrlHeld && isHovered) ? 'none' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled)) ? 'none' : 'auto'
       }}
     >
+      {/* Dynamic Island Notch Ear Fillets (Concave upper corners) */}
+      {isAtTop && (
+        <>
+          {/* Left Notch Ear */}
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: -12,
+              width: 13,
+              height: 12,
+              pointerEvents: 'none',
+              zIndex: 999
+            }}
+            viewBox="0 0 13 12"
+          >
+            <path
+              d="M 0,0 A 12,12 0 0,1 12,12 H 13 V 0 Z"
+              fill={bgColor || "#000000"}
+            />
+            {islandBorderStroke !== "none" && (
+              <path
+                d="M 0,0 A 12,12 0 0,1 12,12"
+                fill="none"
+                stroke={islandBorderStroke}
+                strokeWidth="1"
+              />
+            )}
+          </svg>
+
+          {/* Right Notch Ear */}
+          <svg
+            style={{
+              position: 'absolute',
+              top: 0,
+              right: -12,
+              width: 13,
+              height: 12,
+              pointerEvents: 'none',
+              zIndex: 999
+            }}
+            viewBox="0 0 13 12"
+          >
+            <path
+              d="M 0,0 V 12 H 1 A 12,12 0 0,1 13,0 Z"
+              fill={bgColor || "#000000"}
+            />
+            {islandBorderStroke !== "none" && (
+              <path
+                d="M 1,12 A 12,12 0 0,1 13,0"
+                fill="none"
+                stroke={islandBorderStroke}
+                strokeWidth="1"
+              />
+            )}
+          </svg>
+        </>
+      )}
+
       {/* Depleting Orange Border Stroke & Synchronized Glow for Active Timer */}
       {(isTimerRunning || timerSeconds > 0) && (() => {
         const progress = timerTotalDuration > 0 ? Math.min(1, Math.max(0, timerSeconds / timerTotalDuration)) : 0;
@@ -2892,7 +3934,10 @@ export default function Island() {
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              position: "absolute"
+              position: "absolute",
+              overflow: "hidden",
+              borderBottomLeftRadius: mode === "large" ? 26 : 20,
+              borderBottomRightRadius: mode === "large" ? 26 : 20
             }}
           >
             {/*Browser Search*/}
@@ -2928,159 +3973,468 @@ export default function Island() {
                   width: '100%',
                   height: '100%',
                   display: 'flex',
-                  flexDirection: 'column',
+                  flexDirection: 'row',
+                  alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '16px 20px',
+                  padding: '10px 16px',
                   boxSizing: 'border-box',
+                  gap: 16,
                   userSelect: 'none'
                 }}>
-                  {/* Top Header: 3D Weather Icon + Location Header on Left & Temp/Status on Right */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                    {/* Left: 3D Layered Animated Weather Icon & Location Info */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <Animated3DWeatherIcon status={statusStr} size={50} />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                          {locName}
-                        </span>
-                        <span style={{ fontSize: 11, fontWeight: 500, color: 'rgba(255, 255, 255, 0.55)', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                          Updated 5m ago
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Right: Giant Temp & Condition Title */}
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontSize: 30, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif', lineHeight: 1, letterSpacing: '-0.5px' }}>
+                  {/* Left Column: 3D Weather Icon + Location + Temp & Condition */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 175, flexShrink: 0 }}>
+                    <Animated3DWeatherIcon status={statusStr} size={42} />
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                        {locName}
+                      </span>
+                      <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif', lineHeight: 1.1 }}>
                         {tempVal}°{weatherUnit === 'f' ? 'F' : 'C'}
                       </div>
-                      <div style={{ fontSize: 12.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', marginTop: 4, fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', fontFamily: 'OpenRunde, system-ui, sans-serif', marginTop: 2 }}>
                         {statusStr}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Stats Row + 3-Day Forecast Cards */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0, height: '100%', justifyContent: 'center' }}>
+                    {/* Middle Stats Row: Humidity | Precip | Wind */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, width: '100%' }}>
+                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '3px 2px' }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Hum</span>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginTop: 1 }}>{humidityVal}</div>
+                      </div>
+                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '3px 2px' }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Precip</span>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginTop: 1 }}>{precipVal}</div>
+                      </div>
+                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '3px 2px' }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Wind</span>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginTop: 1 }}>{windVal}</div>
                       </div>
                     </div>
-                  </div>
 
-                  {/* Middle Stats Row: Humidity | Precip | Wind */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, width: '100%' }}>
-                    <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '7px 4px' }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Humidity</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', marginTop: 2 }}>{humidityVal}</div>
+                    {/* Bottom Row: 3-Day Forecast Glass Cards */}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, width: '100%' }}>
+                      {[
+                        { day: 'Today', icon: 'Partly Sunny', hi: `${tempVal}°`, lo: `${tempVal - 6}°`, rain: '5%' },
+                        { day: 'Tomorrow', icon: 'Partly Cloudy', hi: `${tempVal - 2}°`, lo: `${tempVal - 8}°`, rain: '15%' },
+                        { day: 'Wed', icon: 'Rain', hi: `${tempVal - 4}°`, lo: `${tempVal - 9}°`, rain: '80%' }
+                      ].map((fc) => (
+                        <motion.div
+                          key={fc.day}
+                          whileHover={{ y: -2, scale: 1.02 }}
+                          style={{
+                            background: 'rgba(255, 255, 255, 0.08)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            borderRadius: 10,
+                            padding: '4px 2px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-around',
+                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)'
+                          }}
+                        >
+                          <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>{fc.day}</span>
+                          <Animated3DWeatherIcon status={fc.icon} size={16} />
+                          <span style={{ fontSize: 10.5, fontWeight: 800, color: '#ffffff' }}>{fc.hi}</span>
+                          <span style={{ fontSize: 9, fontWeight: 600, color: '#4fc3f7' }}>{fc.rain}</span>
+                        </motion.div>
+                      ))}
                     </div>
-                    <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '7px 4px' }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Precip</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', marginTop: 2 }}>{precipVal}</div>
-                    </div>
-                    <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '7px 4px' }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Wind</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: '#ffffff', marginTop: 2 }}>{windVal}</div>
-                    </div>
-                  </div>
-
-                  {/* Bottom Row: 3-Day Forecast Glass Cards */}
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, width: '100%' }}>
-                    {[
-                      { day: 'Today', icon: 'Partly Sunny', hi: `${tempVal}°`, lo: `${tempVal - 6}°`, rain: '5%' },
-                      { day: 'Tomorrow', icon: 'Partly Cloudy', hi: `${tempVal - 2}°`, lo: `${tempVal - 8}°`, rain: '15%' },
-                      { day: 'Wed', icon: 'Rain', hi: `${tempVal - 4}°`, lo: `${tempVal - 9}°`, rain: '80%' }
-                    ].map((fc) => (
-                      <motion.div
-                        key={fc.day}
-                        whileHover={{ y: -3, scale: 1.03 }}
-                        style={{
-                          background: 'rgba(255, 255, 255, 0.08)',
-                          border: '1px solid rgba(255, 255, 255, 0.12)',
-                          borderRadius: 14,
-                          padding: '8px 4px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          boxShadow: '0 4px 14px rgba(0, 0, 0, 0.3)'
-                        }}
-                      >
-                        <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>{fc.day}</span>
-                        <div style={{ margin: '4px 0' }}>
-                          <Animated3DWeatherIcon status={fc.icon} size={22} />
-                        </div>
-                        <span style={{ fontSize: 12, fontWeight: 800, color: '#ffffff' }}>{fc.hi}/{fc.lo}</span>
-                        <span style={{ fontSize: 10, fontWeight: 600, color: '#4fc3f7', marginTop: 1 }}>{fc.rain}</span>
-                      </motion.div>
-                    ))}
                   </div>
                 </div>
               );
             })()}
-            {/* Overview / Retro Flip Clock Tab */}
+            {/* Overview / StandBy Clock & Daily Quote Tab */}
             {currentTab === 2 && (() => {
               const d = new Date();
               let h = d.getHours();
-              const m = String(d.getMinutes()).padStart(2, '0');
-              const ampm = h >= 12 ? 'PM' : 'AM';
-              h = h % 12;
-              h = h ? h : 12;
-              const hStr = String(h).padStart(2, '0');
-              const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
-              const monthName = d.toLocaleDateString('en-US', { month: 'short' });
+              if (hourFormat) {
+                h = h % 12;
+                h = h ? h : 12;
+              }
+              const hStr = hourFormat ? String(h) : String(h).padStart(2, '0');
+              const mStr = String(d.getMinutes()).padStart(2, '0');
+              const dayAbbr = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
               const dayNum = d.getDate();
-              const fullDateUpper = `${dayName.toUpperCase()}, ${monthName.toUpperCase()} ${dayNum}`;
+              const tempVal = typeof weather?.temp === "number" && !isNaN(weather.temp) ? weather.temp : 58;
+              const currentQuote = DAILY_QUOTES[dailyQuoteIndex % DAILY_QUOTES.length];
 
               return (
                 <div style={{
                   width: '100%',
                   height: '100%',
                   display: 'flex',
-                  flexDirection: 'column',
+                  flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '12px 18px 14px 18px',
+                  padding: '12px 18px',
                   boxSizing: 'border-box',
-                  position: 'relative'
+                  gap: 16,
+                  userSelect: 'none'
                 }}>
-
-                  {/* Center Retro Mechanical Split-Flap Flip Clock */}
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 10 }}>
-                    <FlipCard digit={hStr} />
-
-                    {/* Glowing Orange Colon Dots */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center', justifyContent: 'center' }}>
-                      <motion.div
-                        animate={{ opacity: [1, 0.35, 1], scale: [1, 1.15, 1] }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                        style={{
-                          width: 11,
-                          height: 11,
-                          borderRadius: '50%',
-                          background: '#ff9500',
-                          boxShadow: '0 0 12px #ff9500'
-                        }}
-                      />
-                      <motion.div
-                        animate={{ opacity: [1, 0.35, 1], scale: [1, 1.15, 1] }}
-                        transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-                        style={{
-                          width: 11,
-                          height: 11,
-                          borderRadius: '50%',
-                          background: '#ff9500',
-                          boxShadow: '0 0 12px #ff9500'
-                        }}
-                      />
+                  {/* Left: iOS StandBy Style Clock (Scaled to 80% height) */}
+                  <div style={{
+                    height: '82%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    flexShrink: 0
+                  }}>
+                    {/* Big Bold Rounded Time Digits - 80% Notch Height */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      fontFamily: 'OpenRunde, -apple-system, system-ui, sans-serif',
+                      fontSize: 96,
+                      fontWeight: 800,
+                      letterSpacing: '-4px',
+                      lineHeight: 0.9,
+                      color: '#6ea8fe',
+                      userSelect: 'none'
+                    }}>
+                      <span>{hStr}</span>
+                      {/* Round Colon Dots */}
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 14,
+                        margin: '0 6px'
+                      }}>
+                        <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#6ea8fe' }} />
+                        <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#6ea8fe' }} />
+                      </div>
+                      <span>{mStr}</span>
                     </div>
 
-                    <FlipCard digit={m} />
+                    {/* Day/Date & Temp Stack (e.g. TUE 6 / 58°) */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'center',
+                      gap: 4,
+                      fontFamily: 'OpenRunde, -apple-system, system-ui, sans-serif',
+                      marginLeft: 2
+                    }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.4px', lineHeight: 1.1 }}>
+                        <span style={{ color: '#6ea8fe' }}>{dayAbbr} </span>
+                        <span style={{ color: '#ffffff' }}>{dayNum}</span>
+                      </div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.4px', lineHeight: 1.1, marginTop: 1 }}>
+                        {tempVal}°
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Bottom Caption: FLIP CLOCK • MON, JUL 27 • AM */}
+                  {/* Vertical Subtle Separator */}
                   <div style={{
-                    textAlign: 'center',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: 'rgba(255,255,255,0.65)',
-                    letterSpacing: '0.9px',
-                    fontFamily: 'OpenRunde, system-ui, sans-serif',
-                    textTransform: 'uppercase'
+                    width: 1,
+                    height: '65%',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    flexShrink: 0
+                  }} />
+
+                  {/* Right: Realigned Minimalist Quote & Quoteman's Pic (No headers/buttons) */}
+                  <motion.div
+                    whileHover={{ scale: 1.01 }}
+                    whileTap={{ scale: 0.99 }}
+                    onClick={handleNextQuote}
+                    title="Click to cycle quote"
+                    style={{
+                      flex: 1,
+                      height: '100%',
+                      minWidth: 0,
+                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%)',
+                      border: '1px solid rgba(255, 255, 255, 0.09)',
+                      borderRadius: 14,
+                      padding: '10px 14px',
+                      boxSizing: 'border-box',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      position: 'relative',
+                      backdropFilter: 'blur(16px)',
+                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
+                      cursor: 'pointer',
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={currentQuote.author + currentQuote.quote}
+                        initial={{ opacity: 0, x: 6 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -6 }}
+                        transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          width: '100%',
+                          height: '100%'
+                        }}
+                      >
+                        {/* Quoteman's Pic Avatar */}
+                        <QuotemanAvatar quote={currentQuote} size={50} />
+
+                        {/* Quote & Author Details */}
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          flex: 1,
+                          minWidth: 0
+                        }}>
+                          <p style={{
+                            margin: 0,
+                            fontSize: 11.5,
+                            lineHeight: 1.35,
+                            color: 'rgba(255, 255, 255, 0.95)',
+                            fontStyle: 'italic',
+                            fontWeight: 500,
+                            fontFamily: 'OpenRunde, system-ui, sans-serif',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: 'vertical',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            “{currentQuote.quote}”
+                          </p>
+
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 5,
+                            marginTop: 5,
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                          }}>
+                            <span style={{
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: '#6ea8fe',
+                              fontFamily: 'OpenRunde, system-ui, sans-serif'
+                            }}>
+                              — {currentQuote.author}
+                            </span>
+                            <span style={{
+                              fontSize: 9.5,
+                              fontWeight: 500,
+                              color: 'rgba(255, 255, 255, 0.45)',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis'
+                            }}>
+                              • {currentQuote.title}
+                            </span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    </AnimatePresence>
+                  </motion.div>
+                </div>
+              );
+            })()}
+
+            {/* Battery Hub Screen (Apple Dynamic Island Design) */}
+            {currentTab === 11 && (() => {
+              const statusColor = batteryAnalytics.currentPercent <= 10
+                ? '#FF453A'
+                : (batteryAnalytics.currentPercent <= 20 ? '#FFD60A' : '#30D158');
+
+              return (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '14px 22px',
+                  boxSizing: 'border-box',
+                  gap: 18,
+                  userSelect: 'none'
+                }}>
+                  {/* Left Column: Apple Battery Graphic & Clean Status Caption */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    width: 190,
+                    flexShrink: 0
                   }}>
-                    FLIP CLOCK • {fullDateUpper} • {ampm}
+                    <AppleBatteryCapsule
+                      percent={batteryAnalytics.currentPercent}
+                      charging={batteryAnalytics.isCharging}
+                      width={168}
+                      height={66}
+                    />
+
+                    {/* Apple Status Caption */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: 12,
+                      fontWeight: 500,
+                      color: 'rgba(235, 235, 245, 0.65)',
+                      fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
+                    }}>
+                      {batteryAnalytics.isCharging ? (
+                        <>
+                          <Zap size={12} color="#30D158" fill="#30D158" />
+                          <span>Charging • AC Power</span>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            backgroundColor: statusColor
+                          }} />
+                          <span>{batteryAnalytics.currentPercent <= 20 ? 'Low Power Mode' : 'On Battery Power'}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Vertical Hairline Divider */}
+                  <div style={{
+                    width: 1,
+                    height: '70%',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    flexShrink: 0
+                  }} />
+
+                  {/* Right Column: Apple-style Estimated Runtime & Usage */}
+                  <div style={{
+                    flex: 1,
+                    height: '100%',
+                    minWidth: 0,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    padding: '3px 0'
+                  }}>
+                    {/* Header Row: Label & Power Mode */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{
+                        fontSize: 10.5,
+                        fontWeight: 600,
+                        letterSpacing: '0.06em',
+                        color: 'rgba(235, 235, 245, 0.5)',
+                        textTransform: 'uppercase',
+                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
+                      }}>
+                        {batteryAnalytics.isCharging ? 'Time Until Full' : 'Estimated Remaining'}
+                      </span>
+
+                      <span style={{
+                        fontSize: 10.5,
+                        fontWeight: 500,
+                        color: 'rgba(235, 235, 245, 0.6)',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
+                      }}>
+                        {batteryAnalytics.powerModeTag}
+                      </span>
+                    </div>
+
+                    {/* Hero Runtime Display */}
+                    <div style={{ marginTop: 1 }}>
+                      <div style={{
+                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+                        fontSize: 32,
+                        fontWeight: 700,
+                        color: '#ffffff',
+                        letterSpacing: '-0.8px',
+                        lineHeight: 1
+                      }}>
+                        {batteryAnalytics.timeRemainingStr}
+                      </div>
+                      <div style={{
+                        fontSize: 12.5,
+                        fontWeight: 500,
+                        color: batteryAnalytics.isCharging ? '#30D158' : 'rgba(235, 235, 245, 0.65)',
+                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
+                        marginTop: 4
+                      }}>
+                        {batteryAnalytics.endTargetTimeStr}
+                      </div>
+                    </div>
+
+                    {/* Apple-style Activity Level & Pace Card */}
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: 10,
+                      padding: '6px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 12
+                    }}>
+                      {/* Recent Activity Bar Graph */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 16 }}>
+                          {batteryAnalytics.activityBars.map((bar, i) => (
+                            <div
+                              key={i}
+                              style={{
+                                width: 3.5,
+                                height: `${bar.height}%`,
+                                minHeight: 4,
+                                borderRadius: 2,
+                                backgroundColor: bar.isCurrent
+                                  ? (batteryAnalytics.currentPercent <= 10
+                                      ? '#FF453A'
+                                      : (batteryAnalytics.currentPercent <= 20 ? '#FFD60A' : '#30D158'))
+                                  : 'rgba(255, 255, 255, 0.22)',
+                                transition: 'height 0.3s ease'
+                              }}
+                            />
+                          ))}
+                        </div>
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 500,
+                          color: 'rgba(235, 235, 245, 0.6)',
+                          fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
+                        }}>
+                          Recent Activity
+                        </span>
+                      </div>
+
+                      {/* Average Pace */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{
+                          fontSize: 11,
+                          fontWeight: 500,
+                          color: 'rgba(235, 235, 245, 0.5)',
+                          fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
+                        }}>
+                          {batteryAnalytics.isCharging ? 'Charge Pace' : 'Discharge'}
+                        </span>
+                        <span style={{
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: batteryAnalytics.isCharging ? '#30D158' : '#ffffff',
+                          fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
+                        }}>
+                          {batteryAnalytics.rateText}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 </div>
               );
@@ -3147,109 +4501,160 @@ export default function Island() {
                       />
 
                       {/* Content Layer */}
-                      <div style={{ position: 'relative', zIndex: 2, display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between', padding: '2px 4px' }}>
-                        {/* Top App Name Badge */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 400, color: 'rgba(255,255,255,0.75)' }}>
-                          <Music size={14} color="rgba(255,255,255,0.85)" />
-                          <span>{cleanAppName(spotifyTrack?.source)}</span>
-                        </div>
-
-                        {/* Middle Title & Artist */}
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginTop: 2 }}>
-                          <ScrollingTitle text={spotifyTrack.name || "Unknown Title"} fontSize={15} />
-                          <p
-                            style={{
-                              margin: 0,
-                              fontSize: 13,
-                              fontWeight: 400,
-                              color: 'rgba(255,255,255,0.65)',
-                              whiteSpace: 'nowrap',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              maxWidth: '300px',
-                              fontFamily: 'OpenRunde, system-ui, sans-serif'
-                            }}
-                          >
-                            {spotifyTrack.artist || "Unknown Artist"}
-                          </p>
-                        </div>
-
-                        {/* Progress Waveform Scrubber Timeline */}
-                        <WaveformScrubber
-                          position={mediaPosition}
-                          duration={spotifyTrack.duration || 0}
-                          isPlaying={spotifyTrack.state === 'playing'}
-                          onSeek={(sec) => {
-                            setMediaPosition(sec);
-                            if (window.electronAPI?.controlSystemMedia) {
-                              window.electronAPI.controlSystemMedia('seek', sec);
-                            }
-                          }}
-                        />
-
-                        {/* Bottom Middle 3 Playback Control Buttons */}
-                        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 32, marginTop: 2 }}>
-                          {/* 1. Previous button */}
-                          <button
-                            className="media-btn"
-                            onClick={() => {
-                              lastMediaActionRef.current = Date.now();
-                              if (window.electronAPI?.controlSystemMedia) {
-                                window.electronAPI.controlSystemMedia('previous');
-                              }
-                            }}
-                            style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            title="Previous Track"
-                            aria-label="Previous Track"
-                          >
-                            <SkipBackIcon size={22} color="#ffffff" fill="#ffffff" />
-                          </button>
-
-                          {/* 2. Center Play/Pause button */}
-                          <button
-                            className="media-btn"
-                            onClick={() => {
-                              lastMediaActionRef.current = Date.now();
-                              setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
-                              if (window.electronAPI?.controlSystemMedia) {
-                                window.electronAPI.controlSystemMedia('playpause');
-                              }
-                            }}
-                            style={{
-                              background: 'rgba(255,255,255,0.16)',
-                              backdropFilter: 'blur(8px)',
-                              border: '1px solid rgba(255,255,255,0.25)',
+                      <div style={{
+                        position: 'relative',
+                        zIndex: 2,
+                        display: 'flex',
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        height: '100%',
+                        width: '100%',
+                        gap: 16,
+                        padding: '4px 8px',
+                        boxSizing: 'border-box'
+                      }}>
+                        {/* Left: Album Artwork Card Thumbnail */}
+                        {spotifyTrack.artwork_url && (
+                          <div style={{
+                            width: 80,
+                            height: 80,
+                            borderRadius: 14,
+                            overflow: 'hidden',
+                            flexShrink: 0,
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
+                            position: 'relative'
+                          }}>
+                            <img
+                              src={spotifyTrack.artwork_url}
+                              alt=""
+                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            />
+                            {/* App badge at bottom-right corner */}
+                            <div style={{
+                              position: 'absolute',
+                              bottom: 4,
+                              right: 4,
+                              width: 20,
+                              height: 20,
                               borderRadius: '50%',
-                              width: 40,
-                              height: 40,
-                              color: '#ffffff',
-                              cursor: 'pointer',
+                              backgroundColor: 'rgba(0,0,0,0.7)',
+                              backdropFilter: 'blur(4px)',
                               display: 'flex',
                               alignItems: 'center',
-                              justifyContent: 'center',
-                              boxShadow: '0 2px 10px rgba(0,0,0,0.35)'
-                            }}
-                            title={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
-                            aria-label={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
-                          >
-                            {spotifyTrack.state === 'playing' ? <Pause size={20} color="#ffffff" fill="#ffffff" /> : <Play size={20} color="#ffffff" fill="#ffffff" />}
-                          </button>
+                              justifyContent: 'center'
+                            }}>
+                              <Music size={11} color="#ffffff" />
+                            </div>
+                          </div>
+                        )}
 
-                          {/* 3. Next button */}
-                          <button
-                            className="media-btn"
-                            onClick={() => {
-                              lastMediaActionRef.current = Date.now();
-                              if (window.electronAPI?.controlSystemMedia) {
-                                window.electronAPI.controlSystemMedia('next');
-                              }
-                            }}
-                            style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                            title="Next Track"
-                            aria-label="Next Track"
-                          >
-                            <SkipForwardIcon size={22} color="#ffffff" fill="#ffffff" />
-                          </button>
+                        {/* Right: Metadata + Controls Column */}
+                        <div style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'space-between',
+                          flex: 1,
+                          minWidth: 0,
+                          height: 80
+                        }}>
+                          {/* Title & Artist */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.6)' }}>
+                              <Music size={12} color="rgba(255,255,255,0.75)" />
+                              <span>{cleanAppName(spotifyTrack?.source)}</span>
+                            </div>
+                            <ScrollingTitle text={spotifyTrack.name || "Unknown Title"} fontSize={14} />
+                            <p
+                              style={{
+                                margin: 0,
+                                fontSize: 12,
+                                fontWeight: 400,
+                                color: 'rgba(255,255,255,0.65)',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                maxWidth: '360px',
+                                fontFamily: 'OpenRunde, system-ui, sans-serif'
+                              }}
+                            >
+                              {spotifyTrack.artist || "Unknown Artist"}
+                            </p>
+                          </div>
+
+                          {/* Row: Scrubber + Controls */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <WaveformScrubber
+                                position={mediaPosition}
+                                duration={spotifyTrack.duration || 0}
+                                isPlaying={spotifyTrack.state === 'playing'}
+                                onSeek={(sec) => {
+                                  setMediaPosition(sec);
+                                  if (window.electronAPI?.controlSystemMedia) {
+                                    window.electronAPI.controlSystemMedia('seek', sec);
+                                  }
+                                }}
+                              />
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                              <button
+                                className="media-btn"
+                                onClick={() => {
+                                  lastMediaActionRef.current = Date.now();
+                                  if (window.electronAPI?.controlSystemMedia) {
+                                    window.electronAPI.controlSystemMedia('previous');
+                                  }
+                                }}
+                                style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                title="Previous Track"
+                                aria-label="Previous Track"
+                              >
+                                <SkipBackIcon size={18} color="#ffffff" fill="#ffffff" />
+                              </button>
+                              <button
+                                className="media-btn"
+                                onClick={() => {
+                                  lastMediaActionRef.current = Date.now();
+                                  setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
+                                  if (window.electronAPI?.controlSystemMedia) {
+                                    window.electronAPI.controlSystemMedia('playpause');
+                                  }
+                                }}
+                                style={{
+                                  background: 'rgba(255,255,255,0.2)',
+                                  backdropFilter: 'blur(8px)',
+                                  border: '1px solid rgba(255,255,255,0.25)',
+                                  borderRadius: '50%',
+                                  width: 32,
+                                  height: 32,
+                                  color: '#ffffff',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  boxShadow: '0 2px 10px rgba(0,0,0,0.35)'
+                                }}
+                                title={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
+                                aria-label={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
+                              >
+                                {spotifyTrack.state === 'playing' ? <Pause size={16} color="#ffffff" fill="#ffffff" /> : <Play size={16} color="#ffffff" fill="#ffffff" />}
+                              </button>
+                              <button
+                                className="media-btn"
+                                onClick={() => {
+                                  lastMediaActionRef.current = Date.now();
+                                  if (window.electronAPI?.controlSystemMedia) {
+                                    window.electronAPI.controlSystemMedia('next');
+                                  }
+                                }}
+                                style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                title="Next Track"
+                                aria-label="Next Track"
+                              >
+                                <SkipForwardIcon size={18} color="#ffffff" fill="#ffffff" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </motion.div>
@@ -3292,7 +4697,7 @@ export default function Island() {
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '12px 16px',
+                    padding: '8px 16px',
                     boxSizing: 'border-box',
                     gap: 16,
                     userSelect: 'none'
@@ -3301,13 +4706,13 @@ export default function Island() {
                   {/* Left Column: Hero Date Card */}
                   <div
                     style={{
-                      width: 118,
+                      width: 105,
                       height: '100%',
                       background: '#1b1b1f',
-                      borderRadius: 16,
+                      borderRadius: 14,
                       border: '1.5px solid #2c2c34',
                       boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-                      padding: '12px 10px',
+                      padding: '6px 8px',
                       boxSizing: 'border-box',
                       display: 'flex',
                       flexDirection: 'column',
@@ -3320,10 +4725,10 @@ export default function Island() {
                     <div style={{ textAlign: 'center' }}>
                       <div
                         style={{
-                          fontSize: 13,
+                          fontSize: 11,
                           fontWeight: 800,
                           color: '#ff3b30',
-                          letterSpacing: '1.2px',
+                          letterSpacing: '1px',
                           textTransform: 'uppercase',
                           fontFamily: 'OpenRunde, system-ui, sans-serif'
                         }}
@@ -3332,7 +4737,7 @@ export default function Island() {
                       </div>
                       <div
                         style={{
-                          fontSize: 11,
+                          fontSize: 9.5,
                           fontWeight: 600,
                           color: 'rgba(255,255,255,0.45)',
                           marginTop: 1,
@@ -3346,11 +4751,11 @@ export default function Island() {
                     {/* Giant Day Number */}
                     <div
                       style={{
-                        fontSize: 54,
+                        fontSize: 38,
                         fontWeight: 800,
                         color: '#ffffff',
                         fontFamily: 'OpenRunde, system-ui, sans-serif',
-                        letterSpacing: '-2px',
+                        letterSpacing: '-1.5px',
                         lineHeight: 1
                       }}
                     >
@@ -3360,7 +4765,7 @@ export default function Island() {
                     {/* Full Weekday Name */}
                     <div
                       style={{
-                        fontSize: 12,
+                        fontSize: 10.5,
                         fontWeight: 600,
                         color: 'rgba(255,255,255,0.65)',
                         fontFamily: 'OpenRunde, system-ui, sans-serif'
@@ -3371,35 +4776,35 @@ export default function Island() {
                   </div>
 
                   {/* Right Column: Month Grid */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minWidth: 0 }}>
                     {/* Calendar Month Nav Controls (Compact) */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
                       <button
                         onClick={() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 2 }}
+                        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 1 }}
                       >
-                        <ChevronLeft size={14} />
+                        <ChevronLeft size={13} />
                       </button>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
                         {calendarDate.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
                       </span>
                       <button
                         onClick={() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 2 }}
+                        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 1 }}
                       >
-                        <ChevronRight size={14} />
+                        <ChevronRight size={13} />
                       </button>
                     </div>
 
                     {/* Weekday Header (S M T W T F S) - Red for S & S */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, textAlign: 'center' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, textAlign: 'center' }}>
                       {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
                         const isWeekend = idx === 0 || idx === 6;
                         return (
                           <div
                             key={`cal-h-${idx}`}
                             style={{
-                              fontSize: 12,
+                              fontSize: 10,
                               fontWeight: 800,
                               color: isWeekend ? '#ff3b30' : 'rgba(255,255,255,0.6)',
                               fontFamily: 'OpenRunde, system-ui, sans-serif'
@@ -3412,7 +4817,7 @@ export default function Island() {
                     </div>
 
                     {/* Date Days Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', textAlign: 'center' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', textAlign: 'center' }}>
                       {days.map((item, idx) => {
                         const col = idx % 7;
                         const isWeekend = col === 0 || col === 6;
@@ -3430,11 +4835,11 @@ export default function Island() {
                           <div
                             key={`cal-d-${idx}`}
                             style={{
-                              height: 22,
+                              height: 13,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              fontSize: 12,
+                              fontSize: 9.5,
                               fontWeight: isToday ? 800 : 600,
                               fontFamily: 'OpenRunde, system-ui, sans-serif',
                               color: isToday ? '#ffffff' : dayCellColor
@@ -3443,15 +4848,16 @@ export default function Island() {
                             {isToday ? (
                               <div
                                 style={{
-                                  width: 23,
-                                  height: 23,
+                                  width: 15,
+                                  height: 15,
                                   borderRadius: '50%',
                                   background: '#c42b27',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   color: '#ffffff',
-                                  boxShadow: '0 2px 6px rgba(196, 43, 39, 0.6)'
+                                  boxShadow: '0 2px 6px rgba(196, 43, 39, 0.6)',
+                                  fontSize: 9
                                 }}
                               >
                                 {item.day}
@@ -3522,34 +4928,82 @@ export default function Island() {
 
             {/* Game / System Performance Overlay Tab */}
             {currentTab === 6 && (
-              <div className="stats-container">
-                <div className="stat-bar-group">
-                  <div className="stat-label-row">
-                    <span>CPU LOAD</span>
-                    <span>{systemStats.cpu}%</span>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 12,
+                width: '100%',
+                height: '100%',
+                padding: '12px 18px',
+                boxSizing: 'border-box',
+                userSelect: 'none'
+              }}>
+                {/* CPU Card */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.09)',
+                  borderRadius: 14,
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.05em' }}>CPU LOAD</span>
+                    <Activity size={14} color="#0070f3" />
                   </div>
-                  <div className="stat-bar-track">
-                    <div className="stat-bar-fill" style={{ width: `${systemStats.cpu}%` }} />
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                    {systemStats.cpu}%
+                  </div>
+                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${systemStats.cpu}%`, height: '100%', background: '#0070f3', borderRadius: 3, transition: 'width 0.4s ease' }} />
                   </div>
                 </div>
 
-                <div className="stat-bar-group">
-                  <div className="stat-label-row">
-                    <span>MEMORY USAGE</span>
-                    <span>{systemStats.ram}%</span>
+                {/* Memory Card */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.09)',
+                  borderRadius: 14,
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.05em' }}>MEMORY</span>
+                    <Zap size={14} color="#a855f7" />
                   </div>
-                  <div className="stat-bar-track">
-                    <div className="stat-bar-fill" style={{ width: `${systemStats.ram}%` }} />
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                    {systemStats.ram}%
+                  </div>
+                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${systemStats.ram}%`, height: '100%', background: '#a855f7', borderRadius: 3, transition: 'width 0.4s ease' }} />
                   </div>
                 </div>
 
-                <div className="stat-bar-group">
-                  <div className="stat-label-row">
-                    <span>BATTERY</span>
-                    <span>{percent !== null ? `${percent}%` : 'N/A'}</span>
+                {/* Battery Card */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.06)',
+                  border: '1px solid rgba(255,255,255,0.09)',
+                  borderRadius: 14,
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.05em' }}>BATTERY</span>
+                    <Sun size={14} color={(percent || 0) <= 20 ? '#ff3b30' : '#34c759'} />
                   </div>
-                  <div className="stat-bar-track">
-                    <div className="stat-bar-fill" style={{ width: `${percent || 0}%` }} />
+                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                    {percent !== null ? `${percent}%` : 'N/A'}
+                  </div>
+                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${percent || 0}%`, height: '100%', background: (percent || 0) <= 20 ? '#ff3b30' : '#34c759', borderRadius: 3, transition: 'width 0.4s ease' }} />
                   </div>
                 </div>
               </div>
@@ -3623,31 +5077,151 @@ export default function Island() {
               </div>
             )}
 
-            {/* Minimalist Apple/Things 3 Tasks UI */}
+            {/* Minimalist Apple Reminders Horizontal Tasks UI */}
             {currentTab === 8 && (
               <div
                 style={{
                   width: '100%',
                   height: '100%',
                   display: 'flex',
-                  flexDirection: 'column',
+                  flexDirection: 'row',
+                  alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '14px 16px',
+                  padding: '10px 16px',
                   boxSizing: 'border-box',
+                  gap: 16,
                   userSelect: 'none'
                 }}
               >
-                {/* Task List */}
+                {/* Left Column: List Header + Quick Add Input Card */}
                 <div
                   style={{
-                    flex: 1,
-                    overflowY: 'auto',
-                    overflowX: 'hidden',
-                    marginBottom: 8,
-                    paddingRight: 2,
+                    width: 165,
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    flexShrink: 0
+                  }}
+                >
+                  {/* Top Header Card */}
+                  <div style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: 12,
+                    padding: '8px 10px',
                     display: 'flex',
                     flexDirection: 'column',
                     gap: 3
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 6,
+                          background: '#ff9500',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#ffffff'
+                        }}>
+                          <Check size={13} strokeWidth={2.5} />
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: textColor, fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                          Reminders
+                        </span>
+                      </div>
+                      <span style={{
+                        fontSize: 10,
+                        fontWeight: 700,
+                        padding: '1px 6px',
+                        borderRadius: 10,
+                        background: tasks.length > 0 ? 'rgba(255, 149, 0, 0.2)' : 'rgba(52, 199, 89, 0.2)',
+                        color: tasks.length > 0 ? '#ff9500' : '#34c759'
+                      }}>
+                        {tasks.length}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.5)', marginTop: 2 }}>
+                      {tasks.length === 0 ? "All tasks completed" : `${tasks.length} task${tasks.length === 1 ? '' : 's'} remaining`}
+                    </span>
+                  </div>
+
+                  {/* Bottom Quick Add Capsule */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      width: '100%',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.12)',
+                      borderRadius: 10,
+                      padding: '2px 3px 2px 10px',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <input
+                      type="text"
+                      placeholder="New task..."
+                      value={taskText}
+                      onChange={(e) => setTaskText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") addTask();
+                      }}
+                      style={{
+                        flex: 1,
+                        height: 28,
+                        background: 'none',
+                        color: textColor,
+                        border: 'none',
+                        fontSize: 11.5,
+                        fontWeight: 400,
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                        fontFamily: 'OpenRunde, system-ui, sans-serif'
+                      }}
+                    />
+
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => addTask()}
+                      style={{
+                        height: 24,
+                        padding: '0 8px',
+                        background: '#ff9500',
+                        color: '#ffffff',
+                        border: 'none',
+                        borderRadius: 7,
+                        fontSize: 11,
+                        fontWeight: 700,
+                        fontFamily: 'OpenRunde, system-ui, sans-serif',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}
+                    >
+                      Add
+                    </motion.button>
+                  </div>
+                </div>
+
+                {/* Right Column: Scrollable Task List or Clean Empty State */}
+                <div
+                  style={{
+                    flex: 1,
+                    height: '100%',
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    minWidth: 0,
+                    paddingRight: 2
                   }}
                 >
                   <AnimatePresence mode="popLayout">
@@ -3655,26 +5229,27 @@ export default function Island() {
                       <motion.div
                         key="empty-tasks"
                         initial={{ opacity: 0 }}
-                        animate={{ opacity: 0.4 }}
+                        animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         style={{
                           height: '100%',
                           display: 'flex',
+                          flexDirection: 'column',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          fontSize: 13,
-                          fontWeight: 400,
                           color: textColor,
-                          fontFamily: 'OpenRunde, system-ui, sans-serif'
+                          userSelect: 'none'
                         }}
                       >
-                        No tasks yet. Add one below!
+                        <CheckCircle2 size={26} color="#34c759" style={{ opacity: 0.85, marginBottom: 4 }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>No pending tasks</span>
+                        <span style={{ fontSize: 10.5, color: 'rgba(255, 255, 255, 0.45)', marginTop: 2 }}>You're all caught up!</span>
                       </motion.div>
                     ) : (
                       tasks.map((task, index) => (
                         <motion.div
                           key={`task-${task}-${index}`}
-                          initial={{ opacity: 0, y: 4 }}
+                          initial={{ opacity: 0, y: 3 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, x: 10, height: 0, marginBottom: 0, padding: 0 }}
                           transition={{ duration: 0.15 }}
@@ -3682,13 +5257,15 @@ export default function Island() {
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
-                            gap: 10,
-                            padding: '6px 8px',
-                            borderRadius: 8,
+                            gap: 8,
+                            padding: '6px 10px',
+                            borderRadius: 10,
+                            background: 'rgba(255, 255, 255, 0.05)',
+                            border: '1px solid rgba(255, 255, 255, 0.07)',
                             boxSizing: 'border-box'
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
                             {/* Minimal Circular Check Button */}
                             <motion.button
                               whileTap={{ scale: 0.85 }}
@@ -3705,19 +5282,20 @@ export default function Island() {
                                 transition: 'all 0.15s ease'
                               }}
                               onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.8)';
-                                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                                e.currentTarget.style.borderColor = '#34c759';
+                                e.currentTarget.style.background = 'rgba(52, 199, 89, 0.2)';
                               }}
                               onMouseLeave={(e) => {
                                 e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)';
                                 e.currentTarget.style.background = 'none';
                               }}
+                              title="Mark as completed"
                             />
 
                             <span
                               style={{
-                                fontSize: 13,
-                                fontWeight: 400,
+                                fontSize: 12,
+                                fontWeight: 500,
                                 color: textColor,
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
@@ -3745,6 +5323,7 @@ export default function Island() {
                               justifyContent: 'center',
                               borderRadius: 4
                             }}
+                            title="Delete task"
                           >
                             <Trash2 size={13} color={textColor} />
                           </motion.button>
@@ -3752,67 +5331,6 @@ export default function Island() {
                       ))
                     )}
                   </AnimatePresence>
-                </div>
-
-                {/* Minimal Single-Capsule Input Row */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    width: '100%',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    borderRadius: 12,
-                    padding: '3px 4px 3px 12px',
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <input
-                    type="text"
-                    placeholder="New task..."
-                    value={taskText}
-                    onChange={(e) => setTaskText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") addTask();
-                    }}
-                    style={{
-                      flex: 1,
-                      height: 32,
-                      background: 'none',
-                      color: textColor,
-                      border: 'none',
-                      fontSize: 13,
-                      fontWeight: 400,
-                      outline: 'none',
-                      boxSizing: 'border-box',
-                      fontFamily: 'OpenRunde, system-ui, sans-serif'
-                    }}
-                  />
-
-                  <motion.button
-                    whileHover={{ background: 'rgba(255, 255, 255, 0.25)' }}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => addTask()}
-                    style={{
-                      height: 28,
-                      padding: '0 12px',
-                      background: 'rgba(255, 255, 255, 0.16)',
-                      color: textColor,
-                      border: 'none',
-                      borderRadius: 8,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      fontFamily: 'OpenRunde, system-ui, sans-serif',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}
-                  >
-                    Add
-                  </motion.button>
                 </div>
               </div>
             )}
@@ -3826,7 +5344,7 @@ export default function Island() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '16px 20px',
+                padding: '8px 18px',
                 boxSizing: 'border-box',
                 userSelect: 'none'
               }}>
@@ -3834,15 +5352,15 @@ export default function Island() {
                   /* STATE 1: Select Timer Setup Screen (Image 2) */
                   <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                     {/* Title Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 0 }}>
-                      <AlarmClock size={16} color="#ffffff" />
-                      <span style={{ fontSize: 15, fontWeight: 700, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 0 }}>
+                      <AlarmClock size={14} color="#ffffff" />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
                         Select Timer
                       </span>
                     </div>
 
                     {/* Preset Chips Row: 15m, 30m, 60m, 100m */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, width: '100%' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, width: '100%' }}>
                       {[
                         { label: '15m', sec: 900 },
                         { label: '30m', sec: 1800 },
@@ -3861,10 +5379,10 @@ export default function Island() {
                           style={{
                             background: '#222227',
                             border: '1px solid rgba(255,255,255,0.08)',
-                            borderRadius: 14,
-                            height: 46,
+                            borderRadius: 10,
+                            height: 32,
                             color: '#ffffff',
-                            fontSize: 14,
+                            fontSize: 12,
                             fontWeight: 700,
                             fontFamily: 'OpenRunde, system-ui, sans-serif',
                             cursor: 'pointer',
@@ -3880,32 +5398,32 @@ export default function Island() {
                     </div>
 
                     {/* Bottom Row: Custom Time Picker (-) 05:00 (+) & Vibrant Orange START Button */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', marginBottom: 0 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', marginBottom: 0 }}>
                       {/* Left: Custom Time Picker Pill */}
                       <div style={{
                         background: '#222227',
                         border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 14,
-                        height: 48,
+                        borderRadius: 10,
+                        height: 34,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: '0 14px',
+                        padding: '0 12px',
                         boxSizing: 'border-box',
                         boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
                       }}>
                         <button
                           onClick={() => setCustomTimerSetup(prev => Math.max(60, prev - 60))}
-                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 20, fontWeight: 700, cursor: 'pointer', padding: '0 2px' }}
+                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: 700, cursor: 'pointer', padding: '0 2px' }}
                         >
                           -
                         </button>
-                        <span style={{ fontSize: 16, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                        <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
                           {formatTimerMMSS(customTimerSetup)}
                         </span>
                         <button
                           onClick={() => setCustomTimerSetup(prev => prev + 60)}
-                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 20, fontWeight: 700, cursor: 'pointer', padding: '0 2px' }}
+                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: 700, cursor: 'pointer', padding: '0 2px' }}
                         >
                           +
                         </button>
@@ -3923,10 +5441,10 @@ export default function Island() {
                         style={{
                           background: '#ff9500',
                           border: 'none',
-                          borderRadius: 14,
-                          height: 48,
+                          borderRadius: 10,
+                          height: 34,
                           color: '#ffffff',
-                          fontSize: 15,
+                          fontSize: 12,
                           fontWeight: 800,
                           letterSpacing: '1px',
                           fontFamily: 'OpenRunde, system-ui, sans-serif',
@@ -3941,25 +5459,25 @@ export default function Island() {
                   </div>
                 ) : (
                   /* STATE 2: Active / Running / Paused Timer Screen (Image 4) */
-                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0' }}>
+                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
                     {/* Top Center: Bell / Total Duration Header */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.6 }}>
-                      <BellOff size={13} color="#ffffff" />
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                      <BellOff size={12} color="#ffffff" />
+                      <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
                         {formatTimerMMSS(timerTotalDuration)}
                       </span>
                     </div>
 
                     {/* Center Section: Left Pause/Play | Center Giant Time | Right Cancel */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 10px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 8px' }}>
                       {/* Left: Glass Circle Pause/Play Button */}
                       <motion.button
                         whileHover={{ scale: 1.08 }}
                         whileTap={{ scale: 0.92 }}
                         onClick={() => setIsTimerRunning(!isTimerRunning)}
                         style={{
-                          width: 52,
-                          height: 52,
+                          width: 44,
+                          height: 44,
                           borderRadius: '50%',
                           background: 'rgba(255, 255, 255, 0.15)',
                           border: '1px solid rgba(255, 255, 255, 0.25)',
@@ -3971,16 +5489,16 @@ export default function Island() {
                         }}
                       >
                         {isTimerRunning ? (
-                          <Pause size={22} color="#ffffff" fill="#ffffff" />
+                          <Pause size={18} color="#ffffff" fill="#ffffff" />
                         ) : (
-                          <Play size={22} color="#ffffff" fill="#ffffff" style={{ marginLeft: 2 }} />
+                          <Play size={18} color="#ffffff" fill="#ffffff" style={{ marginLeft: 2 }} />
                         )}
                       </motion.button>
 
                       {/* Center: Giant Countdown Display & Subtitle */}
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                         <div style={{
-                          fontSize: 42,
+                          fontSize: 32,
                           fontWeight: 800,
                           color: '#ffffff',
                           fontFamily: 'OpenRunde, system-ui, sans-serif',
@@ -3990,11 +5508,11 @@ export default function Island() {
                           {formatTimerMMSS(timerSeconds)}
                         </div>
                         <div style={{
-                          fontSize: 12,
+                          fontSize: 10,
                           fontWeight: 600,
                           color: 'rgba(255,255,255,0.5)',
                           fontFamily: 'OpenRunde, system-ui, sans-serif',
-                          marginTop: 4
+                          marginTop: 2
                         }}>
                           Timer
                         </div>
@@ -4009,8 +5527,8 @@ export default function Island() {
                           setTimerSeconds(0);
                         }}
                         style={{
-                          width: 52,
-                          height: 52,
+                          width: 44,
+                          height: 44,
                           borderRadius: '50%',
                           background: 'rgba(255, 59, 48, 0.25)',
                           border: '1px solid rgba(255, 59, 48, 0.5)',
@@ -4021,7 +5539,7 @@ export default function Island() {
                           boxShadow: '0 4px 14px rgba(255, 59, 48, 0.25)'
                         }}
                       >
-                        <X size={22} color="#ff3b30" />
+                        <X size={18} color="#ff3b30" />
                       </motion.button>
                     </div>
 
@@ -4032,476 +5550,680 @@ export default function Island() {
               </div>
             )}
 
-            {/*Settings Overhaul*/}
-            {currentTab === 9 && (
-              <div
-                id="settings-container"
-                ref={settingsContainerRef}
-                onMouseDown={handleSettingsMouseDown}
-                onMouseMove={handleSettingsMouseMove}
-                onMouseUp={handleSettingsMouseUp}
-                onMouseLeave={handleSettingsMouseUp}
-                onTouchStart={handleSettingsMouseDown}
-                onTouchMove={handleSettingsMouseMove}
-                onTouchEnd={handleSettingsMouseUp}
-              >
-                <div className="settings-section">
-                  <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em' }}>General</h3>
-                  <div className="settings-row">
-                    <span className="settings-label">12/24 Hour Format</span>
-                    <select value={hourFormat ? "12-hr" : "24-hr"} onChange={handleHourFormatChange}>
-                      <option value="12-hr">12-hour</option>
-                      <option value="24-hr">24-hour</option>
-                    </select>
-                  </div>
-                  <div className="settings-row">
-                    <span className="settings-label">Auto Launch on Boot</span>
-                    <select value={autoLaunchEnabled ? "true" : "false"} onChange={handleAutoLaunchChange}>
-                      <option value="true">Enabled</option>
-                      <option value="false">Disabled</option>
-                    </select>
-                  </div>
-                  {displays.length > 0 && (
-                    <div className="settings-row">
-                      <span className="settings-label">Target Display</span>
-                      <select value={currentDisplayId} onChange={handleDisplayChange}>
-                        {displays.map(d => (
-                          <option key={d.id} value={d.id}>{d.label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                </div>
+            {/* Settings Overhaul - Apple macOS System Settings Architecture */}
+            {currentTab === 9 && (() => {
+              const categories = [
+                { id: 'general', label: 'General', icon: SlidersHorizontal },
+                { id: 'appearance', label: 'Appearance', icon: Palette },
+                { id: 'position', label: 'Position', icon: Compass },
+                { id: 'tabs', label: 'Tabs', icon: Layers },
+                { id: 'features', label: 'Features', icon: Zap },
+                { id: 'weather', label: 'Weather', icon: CloudSun },
+                { id: 'updates', label: 'Updates', icon: RefreshCw, hasBadge: (updateStatus === 'available' || updateStatus === 'downloaded') }
+              ];
 
-                <div className="settings-section">
-                  <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em' }}>Software Updates</h3>
+              const appleSelectStyle = {
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.14)',
+                borderRadius: 8,
+                padding: '4px 8px',
+                color: '#ffffff',
+                fontSize: 11.5,
+                fontWeight: 600,
+                outline: 'none',
+                cursor: 'pointer',
+                fontFamily: 'OpenRunde, system-ui, sans-serif'
+              };
 
-                  <div className="settings-update-card">
-                    <div className="settings-update-header">
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{ fontSize: 13, fontWeight: 600, color: textColor }}>Quick Pill v{appVersion}</span>
-                        {updateStatus === 'checking' && (
-                          <span className="settings-update-badge checking">Checking...</span>
-                        )}
-                        {updateStatus === 'not-available' && (
-                          <span className="settings-update-badge up-to-date"><Check size={11} /> Up to date</span>
-                        )}
-                        {updateStatus === 'available' && (
-                          <span className="settings-update-badge available"><Sparkles size={11} /> v{updateInfo?.version} available</span>
-                        )}
-                        {updateStatus === 'downloading' && (
-                          <span className="settings-update-badge available"><Download size={11} /> Downloading</span>
-                        )}
-                        {updateStatus === 'downloaded' && (
-                          <span className="settings-update-badge downloaded"><CheckCircle2 size={11} /> Ready to Install</span>
-                        )}
-                        {updateStatus === 'error' && (
-                          <span className="settings-update-badge error"><AlertCircle size={11} /> Error</span>
-                        )}
-                      </div>
-
-                      <button
-                        className="settings-update-btn"
-                        onClick={handleManualCheckForUpdates}
-                        disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
-                        title="Check for updates"
-                      >
-                        <RefreshCw size={12} className={updateStatus === 'checking' ? 'spin-anim' : ''} />
-                        <span>{updateStatus === 'checking' ? 'Checking...' : 'Check Now'}</span>
-                      </button>
-                    </div>
-
-                    {updateStatus === 'available' && updateInfo && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
-                        <div style={{ fontSize: 12, opacity: 0.9, color: textColor }}>
-                          A new version <strong>v{updateInfo.version}</strong> is available {updateInfo.size > 0 ? `(${formatBytes(updateInfo.size)})` : ''}.
-                        </div>
-                        {updateInfo.changelog && updateInfo.changelog.length > 0 && (
-                          <div className="settings-update-changelog" style={{ color: textColor }}>
-                            <span style={{ fontWeight: 600, opacity: 0.7, marginBottom: 2 }}>What's New:</span>
-                            {updateInfo.changelog.map((item, idx) => (
-                              <div key={idx} className="settings-update-changelog-item">
-                                <span>•</span>
-                                <span>{item}</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-                          <button
-                            className="settings-update-btn primary"
-                            onClick={handleStartUpdateDownload}
-                            style={{ flex: 1 }}
-                          >
-                            <Download size={13} />
-                            Download & Update
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {updateStatus === 'downloading' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 4, color: textColor }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, opacity: 0.85 }}>
-                          <span>Downloading v{updateInfo?.version}...</span>
-                          <span>{downloadProgress.percent}% ({formatBytes(downloadProgress.transferredBytes)} / {formatBytes(downloadProgress.totalBytes)})</span>
-                        </div>
-                        <div className="settings-update-progress-track">
-                          <div
-                            className="settings-update-progress-fill"
-                            style={{ width: `${downloadProgress.percent}%` }}
-                          />
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, opacity: 0.65 }}>
-                          <span>Speed: {formatBytes(downloadProgress.speedBytesPerSec)}/s</span>
-                          <button
-                            onClick={handleCancelUpdateDownload}
-                            style={{ background: 'none', border: 'none', color: textColor, opacity: 0.7, cursor: 'pointer', fontSize: 11, textDecoration: 'underline' }}
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {updateStatus === 'downloaded' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4, color: textColor }}>
-                        <div style={{ fontSize: 12, opacity: 0.9 }}>
-                          Update <strong>v{updateInfo?.version}</strong> has been downloaded and is ready to install!
-                        </div>
-                        <button
-                          className="settings-update-btn install"
-                          onClick={handleInstallUpdate}
-                          style={{ width: '100%', padding: '8px 14px' }}
-                        >
-                          <Sparkles size={14} />
-                          Restart & Install Now
-                        </button>
-                      </div>
-                    )}
-
-                    {updateStatus === 'error' && (
-                      <div style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>
-                        {updateErrorMessage || 'Failed to check or download update. Please try again.'}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="settings-row">
-                    <span className="settings-label">Auto-Check on Launch</span>
-                    <select value={autoUpdateCheckEnabled ? "true" : "false"} onChange={handleAutoUpdateCheckToggle}>
-                      <option value="true">Enabled</option>
-                      <option value="false">Disabled</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="settings-section">
-                  <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em', marginBottom: '4px' }}>Tab Management</h3>
-                  <p style={{ fontSize: 11, opacity: 0.4, marginTop: -8, marginBottom: 8 }}>Drag to reorder, click eye to hide.</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {tabOrder.map((id, i) => {
-                      const tabDef = TABS.find(t => t.id === id);
-                      if (!tabDef) return null; // Guard against stale tab IDs from localStorage
-                      const isHidden = hiddenTabs.includes(id);
+              return (
+                <div
+                  id="settings-container"
+                  ref={settingsContainerRef}
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'row',
+                    width: '100%',
+                    height: '100%',
+                    padding: 0,
+                    margin: 0,
+                    boxSizing: 'border-box',
+                    overflow: 'hidden',
+                    userSelect: 'none'
+                  }}
+                >
+                  {/* Left Sidebar: Apple-style Category Navigation */}
+                  <div style={{
+                    width: 130,
+                    height: '100%',
+                    borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+                    background: 'rgba(0, 0, 0, 0.22)',
+                    padding: '10px 6px',
+                    boxSizing: 'border-box',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 3,
+                    flexShrink: 0
+                  }}>
+                    {categories.map((cat) => {
+                      const IconComp = cat.icon;
+                      const isActive = settingsTab === cat.id;
                       return (
-                        <div
-                          key={id}
-                          className={`tab-order-item ${isHidden ? 'hidden' : ''}`}
-                          style={{ cursor: 'grab' }}
-                          draggable
-                          onDragStart={(e) => {
-                            e.dataTransfer.setData("text/plain", i);
-                            e.currentTarget.style.opacity = '0.4';
-                            e.currentTarget.style.borderStyle = 'dashed';
+                        <button
+                          key={cat.id}
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSettingsTab(cat.id);
                           }}
-                          onDragEnd={(e) => {
-                            e.currentTarget.style.opacity = isHidden ? '0.45' : '1';
-                            e.currentTarget.style.borderStyle = isHidden ? 'dashed' : 'solid';
-                          }}
-                          onDragOver={(e) => {
-                            e.preventDefault();
-                            e.currentTarget.style.background = `color-mix(in srgb, ${textColor}, transparent 90%)`;
-                            e.currentTarget.style.transform = 'translateY(-2px)';
-                          }}
-                          onDragLeave={(e) => {
-                            e.currentTarget.style.background = '';
-                            e.currentTarget.style.transform = '';
-                          }}
-                          onDrop={(e) => {
-                            e.preventDefault();
-                            e.currentTarget.style.background = '';
-                            e.currentTarget.style.transform = '';
-                            const fromIdx = parseInt(e.dataTransfer.getData("text/plain"));
-                            moveTabOrder(fromIdx, i);
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 8,
+                            padding: '6px 8px',
+                            borderRadius: 8,
+                            background: isActive ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
+                            border: 'none',
+                            color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.65)',
+                            fontSize: 12,
+                            fontWeight: isActive ? 700 : 500,
+                            cursor: 'pointer',
+                            textAlign: 'left',
+                            width: '100%',
+                            transition: 'all 0.15s ease',
+                            fontFamily: 'OpenRunde, system-ui, sans-serif'
                           }}
                         >
-                          <GripVertical size={16} style={{ opacity: 0.3, cursor: 'grab' }} />
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-                            {tabDef.icon(textColor)}
-                            <span style={{ fontSize: 14, fontWeight: 500 }}>{tabDef.name}</span>
-                          </div>
-                          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                            <button
-                              className="tab-order-btn"
-                              onClick={() => {
-                                setDefaultTabId(id);
-                                localStorage.setItem("default-tab", id);
-                              }}
-                              title="Set as default"
-                              style={{ opacity: defaultTabId === id ? 1 : 0.3, color: defaultTabId === id ? '#FFD700' : textColor }}
-                            >
-                              <Star size={16} fill={defaultTabId === id ? '#FFD700' : 'none'} />
-                            </button>
-                            <div style={{ width: 1, height: 16, background: textColor, opacity: 0.1, margin: '0 4px' }} />
-                            <button
-                              className="tab-order-btn"
-                              onClick={() => toggleTabVisibility(id)}
-                              title={isHidden ? "Show" : "Hide"}
-                              style={{ opacity: isHidden ? 1 : 0.6 }}
-                            >
-                              {isHidden ? <EyeOff size={16} /> : <Eye size={16} />}
-                            </button>
-                            <div style={{ width: 1, height: 16, background: textColor, opacity: 0.1, margin: '0 4px' }} />
-                            <button
-                              className="tab-order-btn"
-                              disabled={i === 0}
-                              onClick={() => moveTabOrder(i, i - 1)}
-                            >
-                              <ChevronLeft size={16} style={{ transform: 'rotate(90deg)' }} />
-                            </button>
-                            <button
-                              className="tab-order-btn"
-                              disabled={i === tabOrder.length - 1}
-                              onClick={() => moveTabOrder(i, i + 1)}
-                            >
-                              <ChevronLeft size={16} style={{ transform: 'rotate(-90deg)' }} />
-                            </button>
-                          </div>
-                        </div>
+                          <IconComp size={13} color={isActive ? '#0070f3' : 'currentColor'} />
+                          <span style={{ flex: 1 }}>{cat.label}</span>
+                          {cat.hasBadge && (
+                            <span style={{
+                              width: 6,
+                              height: 6,
+                              borderRadius: '50%',
+                              background: '#34c759',
+                              boxShadow: '0 0 6px #34c759'
+                            }} />
+                          )}
+                        </button>
                       );
                     })}
                   </div>
-                </div>
 
-                <div className="settings-section">
-                  <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em' }}>Island Style</h3>
-                  <div className="settings-row">
-                    <span className="settings-label">Theme</span>
-                    <select value={theme} onChange={(e) => setTheme(e.target.value)}>
-                      <option value="none">Default</option>
-                      <option value="sleek-black">Sleek Black</option>
-                      <option value="win95">Windows 95</option>
-                    </select>
-                  </div>
-                  <div className="settings-section" style={{ alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '15px', borderRadius: '18px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                    <span className="settings-label" style={{ textAlign: 'center', marginBottom: '8px', opacity: 1, color: textColor }}>Position Mode</span>
-                    <div className="radio-group" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', width: '100%', gap: '15px 10px' }}>
-                      {[
-                        { val: "top-left", label: "Top L" },
-                        { val: "top-center", label: "Top C" },
-                        { val: "top-right", label: "Top R" },
-                        { val: "bottom-left", label: "Bot L" },
-                        { val: "bottom-center", label: "Bot C" },
-                        { val: "bottom-right", label: "Bot R" }
-                      ].map((posOption) => (
-                        <label key={posOption.val} className="radio-label" style={{ justifyContent: 'center' }}>
-                          <input
-                            type="radio"
-                            name="positionMode"
-                            value={posOption.val}
-                            checked={positionMode === posOption.val}
-                            onChange={(e) => {
-                              setPositionMode(e.target.value);
-                              localStorage.setItem("position-mode", e.target.value);
-                            }}
-                          />
-                          <span className="radio-custom"></span>
-                          {posOption.label}
-                        </label>
-                      ))}
-                    </div>
-                    <div style={{ width: '100%', height: '1px', background: 'rgba(255,255,255,0.1)', margin: '10px 0' }}></div>
-                    <label className="radio-label" style={{ justifyContent: 'center' }}>
-                      <input
-                        type="radio"
-                        name="positionMode"
-                        value="free"
-                        checked={positionMode === "free"}
-                        onChange={(e) => {
-                          setPositionMode(e.target.value);
-                          localStorage.setItem("position-mode", e.target.value);
-                        }}
-                      />
-                      <span className="radio-custom"></span>
-                      FREE (MANUAL)
-                    </label>
-                  </div>
-                  <AnimatePresence>
-                    {isFree && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        transition={{ duration: 0.15 }}
-                        style={{ overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: '12px' }}
-                      >
-                        <div className="settings-row">
-                          <span className="settings-label">Position X ({islandX.toFixed(1)}%)</span>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="0.1"
-                            value={islandX}
-                            onPointerDown={(e) => {
-                              e.stopPropagation();
-                              updateDragging(true);
-                            }}
-                            onChange={handleIslandXChange}
-                            onPointerUp={(e) => {
-                              e.stopPropagation();
-                              savePosition();
-                              handleDragEndChecks(e);
-                              e.target.blur();
-                            }}
-                            list="tickmarks"
-                            style={{ flex: 1, accentColor: textColor }}
-                          />
-                          <datalist id="tickmarks">
-                            <option value="50" label="50%"></option>
-                          </datalist>
+                  {/* Right Content Area: Inset Grouped Settings Panel */}
+                  <div style={{
+                    flex: 1,
+                    height: '100%',
+                    overflowY: 'auto',
+                    overflowX: 'hidden',
+                    padding: '10px 16px',
+                    boxSizing: 'border-box',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10
+                  }}>
+                    {/* CATEGORY: GENERAL */}
+                    {settingsTab === 'general' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                          General Preferences
                         </div>
-                        <div className="settings-row">
-                          <span className="settings-label">Position Y ({islandY}px)</span>
-                          <input
-                            type="range"
-                            min="0"
-                            max="500"
-                            value={islandY}
-                            onPointerDown={(e) => {
-                              e.stopPropagation();
-                              updateDragging(true);
-                            }}
-                            onChange={handleIslandYChange}
-                            onPointerUp={(e) => {
-                              e.stopPropagation();
-                              savePosition();
-                              handleDragEndChecks(e);
-                              e.target.blur();
-                            }}
-                            style={{ flex: 1, accentColor: textColor }}
-                          />
+                        <div style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 12,
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>12/24 Hour Format</span>
+                            <AppleSegmented
+                              value={hourFormat ? "12-hr" : "24-hr"}
+                              options={[{ value: '12-hr', label: '12-Hour' }, { value: '24-hr', label: '24-Hour' }]}
+                              onChange={(val) => handleHourFormatChange({ target: { value: val } })}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: displays.length > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Auto Launch on Boot</span>
+                            <AppleSwitch
+                              checked={autoLaunchEnabled}
+                              onChange={(checked) => handleAutoLaunchChange({ target: { value: checked ? "true" : "false" } })}
+                            />
+                          </div>
+                          {displays.length > 0 && (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Target Display</span>
+                              <select
+                                value={currentDisplayId}
+                                onChange={handleDisplayChange}
+                                style={appleSelectStyle}
+                              >
+                                {displays.map(d => (
+                                  <option key={d.id} value={d.id} style={{ background: '#1c1c1e', color: '#fff' }}>{d.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                         </div>
-                      </motion.div>
+                      </div>
                     )}
-                  </AnimatePresence>
-                  <div className="settings-row">
-                    <span className="settings-label">Island Border</span>
-                    <select value={islandBorderEnabled ? "true" : "false"} onChange={handleIslandBorderChange}>
-                      <option value="true">Show</option>
-                      <option value="false">Hide</option>
-                    </select>
-                  </div>
-                  <div className="settings-row">
-                    <span className="settings-label">Hide When Inactive</span>
-                    <select value={hideNotActiveIslandEnabled ? "true" : "false"} onChange={handlehideNotActiveIslandChange}>
-                      <option value="true">Yes</option>
-                      <option value="false">No</option>
-                    </select>
+
+                    {/* CATEGORY: APPEARANCE */}
+                    {settingsTab === 'appearance' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                          Appearance & Theme
+                        </div>
+                        <div style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 12,
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Theme</span>
+                            <select
+                              value={theme}
+                              onChange={(e) => setTheme(e.target.value)}
+                              style={appleSelectStyle}
+                            >
+                              <option value="none" style={{ background: '#1c1c1e', color: '#fff' }}>Default</option>
+                              <option value="sleek-black" style={{ background: '#1c1c1e', color: '#fff' }}>Sleek Black</option>
+                              <option value="win95" style={{ background: '#1c1c1e', color: '#fff' }}>Windows 95</option>
+                            </select>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Island Border</span>
+                            <AppleSwitch
+                              checked={islandBorderEnabled}
+                              onChange={(checked) => handleIslandBorderChange({ target: { value: checked ? "true" : "false" } })}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Hide When Inactive</span>
+                            <AppleSwitch
+                              checked={hideNotActiveIslandEnabled}
+                              onChange={(checked) => handlehideNotActiveIslandChange({ target: { value: checked ? "true" : "false" } })}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ width: 13, height: 13, borderRadius: '50%', background: bgColor, border: '1px solid rgba(255,255,255,0.2)' }} />
+                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Island Color</span>
+                            </div>
+                            <input
+                              className="select-input"
+                              style={{ width: 85, padding: '3px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
+                              placeholder="#000000"
+                              value={bgColor}
+                              onChange={handleBgColorChange}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <div style={{ width: 13, height: 13, borderRadius: '50%', background: textColor, border: '1px solid rgba(255,255,255,0.2)' }} />
+                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Text Color</span>
+                            </div>
+                            <input
+                              className="select-input"
+                              style={{ width: 85, padding: '3px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
+                              placeholder="#FAFAFA"
+                              value={textColor}
+                              onChange={handleTextColorChange}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '7px 12px' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Background Image URL</span>
+                            <input
+                              className="select-input"
+                              style={{ width: '100%', padding: '4px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
+                              placeholder="https://..."
+                              value={bgImage}
+                              onChange={handleBgImageChange}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CATEGORY: POSITION */}
+                    {settingsTab === 'position' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                          Position & Placement
+                        </div>
+                        <div style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 12,
+                          padding: '8px 10px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8
+                        }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 5, width: '100%' }}>
+                            {[
+                              { val: "top-left", label: "Top Left" },
+                              { val: "top-center", label: "Top Center" },
+                              { val: "top-right", label: "Top Right" },
+                              { val: "bottom-left", label: "Bottom Left" },
+                              { val: "bottom-center", label: "Bottom Center" },
+                              { val: "bottom-right", label: "Bottom Right" }
+                            ].map((pos) => {
+                              const isSel = positionMode === pos.val;
+                              return (
+                                <button
+                                  key={pos.val}
+                                  type="button"
+                                  onClick={() => {
+                                    setPositionMode(pos.val);
+                                    localStorage.setItem("position-mode", pos.val);
+                                  }}
+                                  style={{
+                                    padding: '5px 6px',
+                                    borderRadius: 7,
+                                    background: isSel ? 'rgba(0, 112, 243, 0.35)' : 'rgba(255, 255, 255, 0.06)',
+                                    border: isSel ? '1px solid rgba(0, 112, 243, 0.7)' : '1px solid rgba(255, 255, 255, 0.08)',
+                                    color: isSel ? '#ffffff' : 'rgba(255, 255, 255, 0.75)',
+                                    fontSize: 10.5,
+                                    fontWeight: isSel ? 700 : 500,
+                                    cursor: 'pointer',
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                >
+                                  {pos.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          <div style={{ width: '100%', height: 1, background: 'rgba(255,255,255,0.06)' }} />
+
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Free (Manual) Position</span>
+                            <AppleSwitch
+                              checked={positionMode === "free"}
+                              onChange={(checked) => {
+                                const newMode = checked ? "free" : "top-center";
+                                setPositionMode(newMode);
+                                localStorage.setItem("position-mode", newMode);
+                              }}
+                            />
+                          </div>
+
+                          {positionMode === "free" && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <span style={{ fontSize: 10.5, opacity: 0.75 }}>X ({islandX.toFixed(1)}%)</span>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="100"
+                                  step="0.1"
+                                  value={islandX}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    updateDragging(true);
+                                  }}
+                                  onChange={handleIslandXChange}
+                                  onPointerUp={(e) => {
+                                    e.stopPropagation();
+                                    savePosition();
+                                    handleDragEndChecks(e);
+                                    e.target.blur();
+                                  }}
+                                  style={{ flex: 1, accentColor: '#0070f3' }}
+                                />
+                              </div>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                                <span style={{ fontSize: 10.5, opacity: 0.75 }}>Y ({islandY}px)</span>
+                                <input
+                                  type="range"
+                                  min="0"
+                                  max="500"
+                                  value={islandY}
+                                  onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    updateDragging(true);
+                                  }}
+                                  onChange={handleIslandYChange}
+                                  onPointerUp={(e) => {
+                                    e.stopPropagation();
+                                    savePosition();
+                                    handleDragEndChecks(e);
+                                    e.target.blur();
+                                  }}
+                                  style={{ flex: 1, accentColor: '#0070f3' }}
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CATEGORY: TABS */}
+                    {settingsTab === 'tabs' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                            Tab Management
+                          </span>
+                          <span style={{ fontSize: 9.5, opacity: 0.5 }}>Drag or use arrows</span>
+                        </div>
+                        <div style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 12,
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column'
+                        }}>
+                          {tabOrder.map((id, i) => {
+                            const tabDef = TABS.find(t => t.id === id);
+                            if (!tabDef) return null;
+                            const isHidden = hiddenTabs.includes(id);
+                            return (
+                              <div
+                                key={id}
+                                className={`tab-order-item ${isHidden ? 'hidden' : ''}`}
+                                style={{
+                                  padding: '4px 8px',
+                                  borderBottom: i < tabOrder.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                                  cursor: 'grab'
+                                }}
+                                draggable
+                                onDragStart={(e) => {
+                                  e.dataTransfer.setData("text/plain", i);
+                                  e.currentTarget.style.opacity = '0.4';
+                                }}
+                                onDragEnd={(e) => {
+                                  e.currentTarget.style.opacity = isHidden ? '0.45' : '1';
+                                }}
+                                onDragOver={(e) => {
+                                  e.preventDefault();
+                                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                                }}
+                                onDragLeave={(e) => {
+                                  e.currentTarget.style.background = '';
+                                }}
+                                onDrop={(e) => {
+                                  e.preventDefault();
+                                  e.currentTarget.style.background = '';
+                                  const fromIdx = parseInt(e.dataTransfer.getData("text/plain"));
+                                  moveTabOrder(fromIdx, i);
+                                }}
+                              >
+                                <GripVertical size={13} style={{ opacity: 0.35, cursor: 'grab' }} />
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
+                                  {tabDef.icon(textColor)}
+                                  <span style={{ fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {tabDef.name}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                                  <button
+                                    type="button"
+                                    className="tab-order-btn"
+                                    onClick={() => {
+                                      setDefaultTabId(id);
+                                      localStorage.setItem("default-tab", id);
+                                    }}
+                                    title="Set as default"
+                                    style={{ opacity: defaultTabId === id ? 1 : 0.3, color: defaultTabId === id ? '#FFD700' : textColor, padding: 2 }}
+                                  >
+                                    <Star size={13} fill={defaultTabId === id ? '#FFD700' : 'none'} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="tab-order-btn"
+                                    onClick={() => toggleTabVisibility(id)}
+                                    title={isHidden ? "Show" : "Hide"}
+                                    style={{ opacity: isHidden ? 1 : 0.6, padding: 2 }}
+                                  >
+                                    {isHidden ? <EyeOff size={13} /> : <Eye size={13} />}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="tab-order-btn"
+                                    disabled={i === 0}
+                                    onClick={() => moveTabOrder(i, i - 1)}
+                                    style={{ padding: 2 }}
+                                  >
+                                    <ChevronLeft size={13} style={{ transform: 'rotate(90deg)' }} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="tab-order-btn"
+                                    disabled={i === tabOrder.length - 1}
+                                    onClick={() => moveTabOrder(i, i + 1)}
+                                    style={{ padding: 2 }}
+                                  >
+                                    <ChevronLeft size={13} style={{ transform: 'rotate(-90deg)' }} />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CATEGORY: FEATURES */}
+                    {settingsTab === 'features' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                          Features & Alerts
+                        </div>
+                        <div style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 12,
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Low Battery Alerts</span>
+                            <AppleSwitch
+                              checked={batteryAlertsEnabled}
+                              onChange={(checked) => handleBatteryAlertsChange({ target: { value: checked ? "true" : "false" } })}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Standby Mode</span>
+                            <AppleSwitch
+                              checked={standbyBorderEnabled}
+                              onChange={(checked) => handleStandbyChange({ target: { value: checked ? "true" : "false" } })}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Large Standby Mode</span>
+                            <AppleSwitch
+                              checked={largeStandbyEnabled}
+                              onChange={(checked) => handleLargeStandbyChange({ target: { value: checked ? "true" : "false" } })}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Show Info When Idle</span>
+                            <AppleSwitch
+                              checked={showInfoWhenIdleEnabled}
+                              onChange={(checked) => handleShowInfoWhenIdleChange({ target: { value: checked ? "true" : "false" } })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CATEGORY: WEATHER */}
+                    {settingsTab === 'weather' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                          Weather Preferences
+                        </div>
+                        <div style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 12,
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Location</span>
+                            <input
+                              className="select-input"
+                              style={{ width: 140, padding: '3px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
+                              placeholder="City, ST, Country"
+                              value={weatherLocation}
+                              onChange={(e) => {
+                                setWeatherLocation(e.target.value);
+                                localStorage.setItem("location", e.target.value);
+                              }}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Temperature Unit</span>
+                            <AppleSegmented
+                              value={weatherUnit}
+                              options={[{ value: 'c', label: '°C Celsius' }, { value: 'f', label: '°F Fahrenheit' }]}
+                              onChange={(val) => handleWeatherUnitChange({ target: { value: val } })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CATEGORY: UPDATES */}
+                    {settingsTab === 'updates' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                          Software Updates
+                        </div>
+                        <div className="settings-update-card" style={{ padding: '8px 10px', borderRadius: 12 }}>
+                          <div className="settings-update-header">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 11.5, fontWeight: 600, color: textColor }}>Quick Pill v{appVersion}</span>
+                              {updateStatus === 'checking' && (
+                                <span className="settings-update-badge checking">Checking...</span>
+                              )}
+                              {updateStatus === 'not-available' && (
+                                <span className="settings-update-badge up-to-date"><Check size={11} /> Up to date</span>
+                              )}
+                              {updateStatus === 'available' && (
+                                <span className="settings-update-badge available"><Sparkles size={11} /> v{updateInfo?.version}</span>
+                              )}
+                              {updateStatus === 'downloading' && (
+                                <span className="settings-update-badge available"><Download size={11} /> Downloading</span>
+                              )}
+                              {updateStatus === 'downloaded' && (
+                                <span className="settings-update-badge downloaded"><CheckCircle2 size={11} /> Ready</span>
+                              )}
+                              {updateStatus === 'error' && (
+                                <span className="settings-update-badge error"><AlertCircle size={11} /> Error</span>
+                              )}
+                            </div>
+
+                            <button
+                              className="settings-update-btn"
+                              onClick={handleManualCheckForUpdates}
+                              disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
+                              title="Check for updates"
+                              style={{ padding: '3px 7px', fontSize: 10.5 }}
+                            >
+                              <RefreshCw size={11} className={updateStatus === 'checking' ? 'spin-anim' : ''} />
+                              <span>{updateStatus === 'checking' ? 'Checking...' : 'Check Now'}</span>
+                            </button>
+                          </div>
+
+                          {updateStatus === 'available' && updateInfo && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 3 }}>
+                              <div style={{ fontSize: 10.5, opacity: 0.9, color: textColor }}>
+                                A new version <strong>v{updateInfo.version}</strong> is available {updateInfo.size > 0 ? `(${formatBytes(updateInfo.size)})` : ''}.
+                              </div>
+                              {updateInfo.changelog && updateInfo.changelog.length > 0 && (
+                                <div className="settings-update-changelog" style={{ color: textColor, padding: '4px 6px', fontSize: 9.5 }}>
+                                  <span style={{ fontWeight: 600, opacity: 0.7, marginBottom: 2 }}>What's New:</span>
+                                  {updateInfo.changelog.map((item, idx) => (
+                                    <div key={idx} className="settings-update-changelog-item">
+                                      <span>•</span>
+                                      <span>{item}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <button
+                                className="settings-update-btn primary"
+                                onClick={handleStartUpdateDownload}
+                                style={{ width: '100%', padding: '5px 10px', fontSize: 11, marginTop: 2 }}
+                              >
+                                <Download size={12} />
+                                Download & Update
+                              </button>
+                            </div>
+                          )}
+
+                          {updateStatus === 'downloading' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 3, color: textColor }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, opacity: 0.85 }}>
+                                <span>Downloading v{updateInfo?.version}...</span>
+                                <span>{downloadProgress.percent}% ({formatBytes(downloadProgress.transferredBytes)} / {formatBytes(downloadProgress.totalBytes)})</span>
+                              </div>
+                              <div className="settings-update-progress-track" style={{ height: 4 }}>
+                                <div
+                                  className="settings-update-progress-fill"
+                                  style={{ width: `${downloadProgress.percent}%` }}
+                                />
+                              </div>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9.5, opacity: 0.65 }}>
+                                <span>Speed: {formatBytes(downloadProgress.speedBytesPerSec)}/s</span>
+                                <button
+                                  onClick={handleCancelUpdateDownload}
+                                  style={{ background: 'none', border: 'none', color: textColor, opacity: 0.7, cursor: 'pointer', fontSize: 9.5, textDecoration: 'underline' }}
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          )}
+
+                          {updateStatus === 'downloaded' && (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 3, color: textColor }}>
+                              <div style={{ fontSize: 11, opacity: 0.9 }}>
+                                Update <strong>v{updateInfo?.version}</strong> downloaded!
+                              </div>
+                              <button
+                                className="settings-update-btn install"
+                                onClick={handleInstallUpdate}
+                                style={{ width: '100%', padding: '5px 10px', fontSize: 11 }}
+                              >
+                                <Sparkles size={12} />
+                                Restart & Install Now
+                              </button>
+                            </div>
+                          )}
+
+                          {updateStatus === 'error' && (
+                            <div style={{ fontSize: 10, color: '#ef4444', marginTop: 2 }}>
+                              {updateErrorMessage || 'Failed to check or download update.'}
+                            </div>
+                          )}
+                        </div>
+
+                        <div style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 12,
+                          overflow: 'hidden'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Auto-Check on Launch</span>
+                            <AppleSwitch
+                              checked={autoUpdateCheckEnabled}
+                              onChange={(checked) => handleAutoUpdateCheckToggle({ target: { value: checked ? "true" : "false" } })}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
-
-                <div className="settings-section">
-                  <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em' }}>Colors & Assets</h3>
-                  <div className="settings-row">
-                    <span className="settings-label">Island Color</span>
-                    <input
-                      className="select-input"
-                      style={{ width: '100px' }}
-                      placeholder="#000000"
-                      value={bgColor}
-                      onChange={handleBgColorChange}
-                    />
-                  </div>
-                  <div className="settings-row">
-                    <span className="settings-label">Text Color</span>
-                    <input
-                      className="select-input"
-                      style={{ width: '100px' }}
-                      placeholder="#FAFAFA"
-                      value={textColor}
-                      onChange={handleTextColorChange}
-                    />
-                  </div>
-                  <div className="settings-row" style={{ flexDirection: 'column', alignItems: 'flex-start' }}>
-                    <span className="settings-label">Background Image URL</span>
-                    <input
-                      className="select-input"
-                      placeholder="https://..."
-                      value={bgImage}
-                      onChange={handleBgImageChange}
-                    />
-                  </div>
-                </div>
-
-                <div className="settings-section">
-                  <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em' }}>Features</h3>
-                  <div className="settings-row">
-                    <span className="settings-label">Low Battery Alerts</span>
-                    <select value={batteryAlertsEnabled ? "true" : "false"} onChange={handleBatteryAlertsChange}>
-                      <option value="true">Enabled</option>
-                      <option value="false">Disabled</option>
-                    </select>
-                  </div>
-                  <div className="settings-row">
-                    <span className="settings-label">Standby Mode</span>
-                    <select value={standbyBorderEnabled ? "true" : "false"} onChange={handleStandbyChange}>
-                      <option value="true">Enabled</option>
-                      <option value="false">Disabled</option>
-                    </select>
-                  </div>
-                  <div className="settings-row">
-                    <span className="settings-label">Large Standby Mode</span>
-                    <select value={largeStandbyEnabled ? "true" : "false"} onChange={handleLargeStandbyChange}>
-                      <option value="true">Enabled</option>
-                      <option value="false">Disabled</option>
-                    </select>
-                  </div>
-                  <div className="settings-row">
-                    <span className="settings-label">Show Info when idle</span>
-                    <select value={showInfoWhenIdleEnabled ? "true" : "false"} onChange={handleShowInfoWhenIdleChange}>
-                      <option value="true">Enabled</option>
-                      <option value="false">Disabled</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="settings-section">
-                  <h3 style={{ fontSize: 13, textTransform: 'uppercase', opacity: 0.5, letterSpacing: '0.05em' }}>Weather</h3>
-                  <div className="settings-row">
-                    <span className="settings-label">Location</span>
-                    <input
-                      className="select-input"
-                      placeholder="City, ST, Country"
-                      value={weatherLocation}
-                      onChange={(e) => {
-                        setWeatherLocation(e.target.value);
-                        localStorage.setItem("location", e.target.value);
-                      }}
-                    />
-                  </div>
-                  <div className="settings-row">
-                    <span className="settings-label">Unit</span>
-                    <select value={weatherUnit} onChange={handleWeatherUnitChange}>
-                      <option value="f">Fahrenheit (°F)</option>
-                      <option value="c">Celsius (°C)</option>
-                    </select>
-                  </div>
-                </div>
-
-              </div>
-            )}
+              );
+            })()}
           </motion.div>
         )}
       </AnimatePresence>

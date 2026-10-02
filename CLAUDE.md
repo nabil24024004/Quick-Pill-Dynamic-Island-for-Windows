@@ -9,7 +9,7 @@ Welcome to the **Quick Pill** project codebase! This file serves as the definiti
 **Quick Pill** is a desktop application that recreates Apple's Dynamic Island experience on **Windows 10 & 11**. It acts as a non-intrusive notification hub, system monitor, media controller, and customizable widget panel that expands on hover or click while floating seamlessly above all desktop windows.
 
 - **Product Name**: Quick Pill
-- **Current Version**: 5.2.0
+- **Current Version**: 5.3.0
 - **License**: MIT
 - **Author**: Abrar Nabil
 
@@ -59,14 +59,16 @@ Ripple Island/
 The Island interface operates across **3 primary modes** and **2 optional toggle modes**:
 
 1. **Still Mode (Idle)**:
-   - Minimalist, non-distracting resting state (width: ~170px).
-   - Floats at top center of screen (configurable position/display).
+   - Minimalist, non-distracting resting state (width: ~170px, height: 40px).
+   - Positioned flush against top screen bezel (`top: 0px` default) with flat top corners (`radius: 0`), concave notch ear fillets, and rounded bottom corners (`20px`).
 2. **Quick Mode (Hover)**:
-   - Expands on mouse hover.
+   - Compact status preview on hover when configured.
    - Shows current time, live weather, battery level, camera/mic active status, and music "Now Playing" preview with hover-activated media controls.
-3. **Large Mode (Active Click)**:
-   - Full interface accessed by clicking the Island.
-   - Displays interactive Tab widgets with keyboard (`Ctrl + [Num]`, Arrow Keys) and mouse wheel navigation.
+3. **Large Mode (Active Hover / NotchNook Compact Style)**:
+   - Full interactive dashboard accessed on hover / click.
+   - Dynamic Island / MacBook Notch geometry: flush to top bezel (`top: 0px`), flat top corners (`borderTopLeftRadius: 0`, `borderTopRightRadius: 0`), smooth concave fillet notch ears merging with the bezel, and rounded bottom corners (`26px`).
+   - **Horizontal Compact Expansion**: Spreads sideways horizontally (`width: 520px`, or `540px` for settings) with a unified, compact height of `135px` across all tabs rather than jumping up in height vertically.
+   - **Horizontal Widget Layouts**: All tabs (Now Playing side-by-side album art card & scrubber, Weather 3D icon & 3-day forecast, Calendar mini-grid & date card, System performance gauges, Tasks, and Timer setup/countdown) are designed horizontally to fit within the sleek 135px height.
 4. **Stealth Mode (Optional Setting)**:
    - Makes the Island completely transparent when idle to maximize screen real estate.
 5. **Standby Mode (Optional Setting)**:
@@ -96,7 +98,7 @@ Quick Pill includes **feature tabs** managed in [Island.jsx](file:///d:/Ripple%2
 
 ## 🎨 UI Physics & Design System
 
-- **Dynamic Pill Shape**: Semicircular stadium pill geometry (`borderRadius: 20` for 40px height in Still mode, expanding smoothly to `32` in Large mode).
+- **Dynamic Pill Shape**: MacBook-inspired Dynamic Island notch geometry (flat top edge with `borderTopLeftRadius: 0` and `borderTopRightRadius: 0`, and smooth curved bottom corners with `borderBottomLeftRadius`/`borderBottomRightRadius`: 20 in Still/Quick mode, expanding to 32 in Large mode, resting flush at `top: 0px` by default).
 - **Spring Physics**: Framer Motion tuned spring transitions (`stiffness: 340, damping: 28, mass: 0.8`) ensuring frame-accurate morphing without snap artifacts.
 - **Drop Shadows**: Animated `boxShadow` (`0 8px 24px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.18)`) across hovered and unhovered states.
 

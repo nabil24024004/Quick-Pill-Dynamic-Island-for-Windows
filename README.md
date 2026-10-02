@@ -7,7 +7,7 @@ Quick Pill is a desktop application that recreates Apple's Dynamic Island experi
 <div align="center">
 
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-5.2.0-blue)](package.json)
+[![Version](https://img.shields.io/badge/Version-5.3.0-blue)](package.json)
 
 https://github.com/user-attachments/assets/7408347c-52d8-474c-82e7-0946082be474
 

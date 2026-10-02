@@ -1,20 +1,21 @@
 {
-  "version": "5.2.0",
-  "name": "Quick Pill 5.2.0",
-  "releaseDate": "2026-08-25",
+  "version": "5.3.0",
+  "name": "Quick Pill 5.3.0",
+  "releaseDate": "2026-10-02",
   "mandatory": false,
   "minSupportedVersion": "4.0.0",
   "changelog": [
+    "Added Apple Dynamic Island Battery Hub with real-time drain analysis, battery duration forecasting, and Apple HIG layout.",
+    "Integrated 60 FPS Canvas-driven fluid wave physics engine with continuous right-to-left wave currents and buoyant micro-bubbles.",
+    "Redesigned horizontal Dynamic Island layout, improved settings dashboard, and enhanced clock widget.",
     "Added native Windows WinRT media controls with direct support for Brave, Chrome, Spotify, Edge, and VLC.",
-    "Enabled interactive waveform scrubber seeking to jump directly to any track timestamp.",
-    "Integrated multi-source auto-updater with fallback manifest resolution and zero startup latency.",
-    "Performance optimizations: 98% web asset size reduction and instant optimistic UI playback feedback."
+    "Performance optimizations and UI responsiveness improvements across all display modes."
   ],
   "platforms": {
     "win32-x64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.2.0-Setup.exe",
-      "sha256": "03177b8f9533da95e4dffd34e51239c1d370c39d6364fa3537aa461a1c6f0010",
-      "size": 111625785,
+      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.3.0-Setup.exe",
+      "sha256": "164a0beae80e2a599a9b0386c11e8f41c6a3f0bc409f18fe846d2ad074e362ae",
+      "size": 215932495,
       "installerType": "nsis"
     }
   }

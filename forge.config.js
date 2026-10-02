@@ -39,6 +39,16 @@ module.exports = {
           fs.renameSync(artifactPath, newPath);
           console.log(`Renamed: ${path.basename(artifactPath)} → ${newName}`);
           renamedArtifacts.push(newPath);
+
+          // If .exe installer, also ensure -Setup.exe alias exists for updater compatibility
+          if (ext === '.exe' && !newName.includes('-Setup')) {
+            const setupName = `QuickPill-${os}-v${version}-Setup${ext}`;
+            const setupPath = path.join(path.dirname(artifactPath), setupName);
+            try {
+              fs.copyFileSync(newPath, setupPath);
+              renamedArtifacts.push(setupPath);
+            } catch (_) {}
+          }
         }
 
         result.artifacts = renamedArtifacts;

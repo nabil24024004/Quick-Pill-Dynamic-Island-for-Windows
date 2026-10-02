@@ -1,7 +1,7 @@
 {
   "name": "quick-pill",
   "productName": "Quick Pill",
-  "version": "5.2.0",
+  "version": "5.3.0",
   "description": "A Dynamic Island for Windows",
   "main": ".vite/build/main.js",
   "scripts": {
@@ -27,7 +27,8 @@
       "target": [
         "nsis"
       ],
-      "icon": "src/assets/icons/icon.ico"
+      "icon": "src/assets/icons/icon.ico",
+      "artifactName": "QuickPill-Windows-v${version}-Setup.${ext}"
     },
     "nsis": {
       "oneClick": true,
@@ -38,7 +39,8 @@
       "installerHeaderIcon": "src/assets/icons/icon.ico",
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "Quick Pill"
+      "shortcutName": "Quick Pill",
+      "artifactName": "QuickPill-Windows-v${version}-Setup.${ext}"
     }
   },
   "keywords": [],
