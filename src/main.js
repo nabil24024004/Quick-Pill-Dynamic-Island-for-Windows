@@ -8,8 +8,15 @@ const {
   Tray,
   Menu,
   nativeImage,
-  clipboard
+  clipboard,
+  powerMonitor
 } = require("electron");
+
+// Disable Chromium background timer throttling and occlusion tracking so timers run continuously in background & lock screen
+app.commandLine.appendSwitch("disable-background-timer-throttling");
+app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
+app.commandLine.appendSwitch("disable-renderer-backgrounding");
+
 const path = require("node:path");
 const fs = require("fs");
 const os = require("os");
@@ -21,6 +28,107 @@ const { EventEmitter } = require("events");
 
 let tray = null;
 let mainWindow = null;
+let alwaysOnTopEnabled = true;
+
+function getSettingsPath() {
+  try {
+    return path.join(app.getPath("userData"), "settings.json");
+  } catch (_) {
+    return path.join(process.cwd(), "settings.json");
+  }
+}
+
+function loadAlwaysOnTopPreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.alwaysOnTop === "boolean") {
+        return data.alwaysOnTop;
+      }
+    }
+  } catch (_) {}
+  return true;
+}
+
+function saveAlwaysOnTopPreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.alwaysOnTop = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+function loadUpdaterPreferences() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.autoDownloadInstall === "boolean") {
+        return data.autoDownloadInstall;
+      }
+    }
+  } catch (_) {}
+  return true;
+}
+
+function saveUpdaterPreference(key, val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data[key] = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+alwaysOnTopEnabled = loadAlwaysOnTopPreference();
+
+function ensureAlwaysOnTop() {
+  if (!alwaysOnTopEnabled) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+
+  try {
+    // In Electron on Windows, "screen-saver" is the highest topmost level above standard topmost & fullscreen windows
+    mainWindow.setAlwaysOnTop(true, "screen-saver", 1);
+  } catch (_) {
+    try {
+      mainWindow.setAlwaysOnTop(true, "screen-saver");
+    } catch (_) {
+      try {
+        mainWindow.setAlwaysOnTop(true);
+      } catch (_) {}
+    }
+  }
+
+  try {
+    mainWindow.moveTop();
+  } catch (_) {}
+}
+
+function setAlwaysOnTopState(enable) {
+  alwaysOnTopEnabled = Boolean(enable);
+  saveAlwaysOnTopPreference(alwaysOnTopEnabled);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      if (alwaysOnTopEnabled) {
+        ensureAlwaysOnTop();
+      } else {
+        mainWindow.setAlwaysOnTop(false);
+      }
+    } catch (_) {}
+    try {
+      mainWindow.webContents.send("always-on-top-changed", alwaysOnTopEnabled);
+    } catch (_) {}
+  }
+  updateTrayMenu();
+}
 
 // --- Logging System ---
 function getLogFilePath() {
@@ -306,6 +414,7 @@ ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
         mainWindow.setIgnoreMouseEvents(true, { forward: useForward });
       } else {
         mainWindow.setIgnoreMouseEvents(false);
+        ensureAlwaysOnTop();
       }
       logToFile(`setIgnoreMouseEvents(${ignore}, forward=${forward}) executed`);
     } catch (e) {
@@ -317,8 +426,18 @@ ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
   }
 });
 
+ipcMain.handle("get-always-on-top", () => {
+  return alwaysOnTopEnabled;
+});
+
+ipcMain.handle("set-always-on-top", (event, enable) => {
+  setAlwaysOnTopState(enable);
+  return alwaysOnTopEnabled;
+});
+
 ipcMain.handle("focus-window", () => {
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    ensureAlwaysOnTop();
     mainWindow.focus();
   }
 });
@@ -366,7 +485,7 @@ ipcMain.handle("get-displays", () => {
 });
 
 ipcMain.handle("set-display", (event, displayId) => {
-  if (mainWindow) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
     const displays = screen.getAllDisplays();
     const targetDisplay =
       displays.find((d) => d.id.toString() === displayId.toString()) ||
@@ -375,6 +494,7 @@ ipcMain.handle("set-display", (event, displayId) => {
     const { x, y, width, height } = targetDisplay.bounds;
     mainWindow.setBounds({ x, y, width, height });
     mainWindow.show();
+    ensureAlwaysOnTop();
   }
 });
 
@@ -421,12 +541,15 @@ class AppUpdater extends EventEmitter {
   constructor() {
     super();
     this.manifestUrls = [...DEFAULT_MANIFEST_URLS];
-    this.currentVersion = app ? app.getVersion() : "5.3.0";
+    this.currentVersion = app ? app.getVersion() : "5.4.0";
     this.status = "idle";
     this.updateInfo = null;
     this.downloadedFilePath = null;
     this.currentDownloadRequest = null;
     this.lastProgressEmit = 0;
+    const autoPref = loadUpdaterPreferences();
+    this.autoDownload = autoPref;
+    this.autoInstall = autoPref;
   }
 
   compareVersions(v1, v2) {
@@ -572,6 +695,16 @@ class AppUpdater extends EventEmitter {
 
         this.status = "available";
         this.emit("update-available", this.updateInfo);
+
+        if (this.autoDownload && downloadUrl) {
+          logToFile(`[Auto-Updater] New update v${remoteVersion} detected. Automatically downloading in background...`);
+          setTimeout(() => {
+            this.startDownload().catch((err) => {
+              logToFile("[Auto-Updater] Automatic background download failed:", err);
+            });
+          }, 1000);
+        }
+
         return { status: "available", updateInfo: this.updateInfo };
       } else {
         this.status = "not-available";
@@ -750,6 +883,13 @@ class AppUpdater extends EventEmitter {
         };
         this.emit("update-downloaded", downloadResult);
         resolve(downloadResult);
+
+        if (this.autoInstall) {
+          logToFile(`[Auto-Updater] Update v${this.updateInfo.version} downloaded successfully. Automatically installing in background in 2 seconds...`);
+          setTimeout(() => {
+            this.installAndRelaunch();
+          }, 2000);
+        }
       });
 
       fileStream.on("error", (err) => {
@@ -847,6 +987,18 @@ ipcMain.handle("get-app-version", () => {
   return app.getVersion();
 });
 
+ipcMain.handle("get-auto-download-install", () => {
+  return autoUpdater.autoDownload && autoUpdater.autoInstall;
+});
+
+ipcMain.handle("set-auto-download-install", (event, enable) => {
+  const val = Boolean(enable);
+  autoUpdater.autoDownload = val;
+  autoUpdater.autoInstall = val;
+  saveUpdaterPreference("autoDownloadInstall", val);
+  return val;
+});
+
 const getIconPath = (forceExt = null) => {
   const ext = forceExt || "ico";
 
@@ -886,6 +1038,9 @@ const createWindow = () => {
     transparent: true,
     alwaysOnTop: true,
     resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
     frame: false,
     thickFrame: false,
     hasShadow: false,
@@ -898,6 +1053,7 @@ const createWindow = () => {
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       devTools: !app.isPackaged,
+      backgroundThrottling: false,
     },
     show: true,
   });
@@ -907,31 +1063,36 @@ const createWindow = () => {
   mainWindow.once("ready-to-show", () => {
     if (mainWindow) {
       mainWindow.show();
-      mainWindow.setAlwaysOnTop(true, "pop-up-menu");
+      ensureAlwaysOnTop();
       mainWindow.focus();
-
-      if (!app.isPackaged) {
-        try {
-          mainWindow.webContents.openDevTools({ mode: "detach" });
-        } catch (_) {}
-        console.log("\n=======================================================");
-        console.log("⚡ Quick Pill Desktop App launched in Debug Mode!");
-        console.log("📍 Location: Dynamic Island overlay at the top of your screen.");
-        console.log("🛠️ DevTools: Detached window opened for live inspection.");
-        console.log("🔄 Vite HMR: Live updates active when editing src/ files.");
-        console.log("=======================================================\n");
-      }
     }
   });
 
-  mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDescription, validatedURL) => {
-    logToFile(`Renderer failed to load (${errorCode}): ${errorDescription} at ${validatedURL}`);
-    console.error(`Renderer failed to load (${errorCode}): ${errorDescription} at ${validatedURL}`);
+  // Re-assert topmost when window blurs (e.g. user clicks or switches to another window/app)
+  mainWindow.on("blur", () => {
+    ensureAlwaysOnTop();
+  });
+
+  // Prevent window from staying minimized or hidden behind the desktop (e.g. Win+D or Win+M)
+  mainWindow.on("minimize", () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.restore();
+      ensureAlwaysOnTop();
+    }
+  });
+
+  mainWindow.on("restore", () => {
+    ensureAlwaysOnTop();
+  });
+
+  mainWindow.on("show", () => {
+    ensureAlwaysOnTop();
   });
 
   setTimeout(() => {
     if (mainWindow && !mainWindow.isVisible()) {
       mainWindow.show();
+      ensureAlwaysOnTop();
       mainWindow.focus();
     }
   }, 5000);
@@ -972,6 +1133,41 @@ const createWindow = () => {
   }
 };
 
+function updateTrayMenu() {
+  if (!tray || tray.isDestroyed()) return;
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: "Show/Hide Quick Pill",
+      click: () => {
+        if (mainWindow) {
+          if (mainWindow.isVisible()) {
+            mainWindow.hide();
+          } else {
+            mainWindow.show();
+            ensureAlwaysOnTop();
+          }
+        }
+      },
+    },
+    {
+      label: "Always on Top",
+      type: "checkbox",
+      checked: alwaysOnTopEnabled,
+      click: (item) => {
+        setAlwaysOnTopState(item.checked);
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(contextMenu);
+}
+
 app.whenReady().then(() => {
   app.setAppUserModelId("com.neosparkx.quickpill");
   cleanLegacyStartupEntries();
@@ -993,32 +1189,53 @@ app.whenReady().then(() => {
     }
     const trayIcon = icon.isEmpty() ? iconPath : icon.resize({ width: 16, height: 16 });
     tray = new Tray(trayIcon);
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: "Show/Hide Quick Pill",
-        click: () => {
-          if (mainWindow) {
-            if (mainWindow.isVisible()) {
-              mainWindow.hide();
-            } else {
-              mainWindow.show();
-            }
-          }
-        },
-      },
-      { type: "separator" },
-      {
-        label: "Quit",
-        click: () => {
-          app.quit();
-        },
-      },
-    ]);
     tray.setToolTip("Quick Pill");
-    tray.setContextMenu(contextMenu);
+    updateTrayMenu();
   } catch (e) {
     console.error("Failed to create tray:", e);
   }
+
+  // Re-assert topmost when display metrics or displays change
+  screen.on("display-metrics-changed", () => {
+    ensureAlwaysOnTop();
+  });
+  screen.on("display-added", () => {
+    ensureAlwaysOnTop();
+  });
+  screen.on("display-removed", () => {
+    ensureAlwaysOnTop();
+  });
+
+  // Re-assert topmost and notify renderer when system wakes from sleep or screen unlock
+  if (powerMonitor) {
+    powerMonitor.on("resume", () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("system-resume");
+      }
+      setTimeout(ensureAlwaysOnTop, 500);
+      setTimeout(ensureAlwaysOnTop, 2000);
+    });
+    powerMonitor.on("unlock-screen", () => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("system-resume");
+      }
+      setTimeout(ensureAlwaysOnTop, 500);
+      setTimeout(ensureAlwaysOnTop, 2000);
+    });
+  }
+
+  // Active heartbeat guard to ensure Quick Pill maintains topmost z-order across all apps
+  setInterval(() => {
+    if (alwaysOnTopEnabled && mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+      if (!mainWindow.isAlwaysOnTop()) {
+        ensureAlwaysOnTop();
+      } else {
+        try {
+          mainWindow.moveTop();
+        } catch (_) {}
+      }
+    }
+  }, 2500);
 
   // Check for updates 4 seconds after app boot so startup remains smooth
   setTimeout(() => {
@@ -1026,6 +1243,13 @@ app.whenReady().then(() => {
       logToFile("Auto-update check on startup error:", err);
     });
   }, 4000);
+
+  // Check periodically in the background every 2 hours
+  setInterval(() => {
+    autoUpdater.checkForUpdates().catch((err) => {
+      logToFile("Periodic background update check error:", err);
+    });
+  }, 2 * 60 * 60 * 1000);
 });
 const psMediaScriptPath = path.join(app.getPath("userData"), "get-media.ps1");
 const psMediaScriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8

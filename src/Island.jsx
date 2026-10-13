@@ -1545,6 +1545,7 @@ export default function Island() {
   const [percent, setPercent] = useState(null);
   const [alert, setAlert] = useState(null);
   const [batteryAlertsEnabled, setBatteryAlertsEnabled] = useState(localStorage.getItem("battery-alerts") !== "false");
+  const [alwaysOnTopEnabled, setAlwaysOnTopEnabled] = useState(localStorage.getItem("always-on-top") !== "false");
   const [islandBorderEnabled, setIslandBorderEnabled] = useState(localStorage.getItem("island-border") === "true");
   const [standbyBorderEnabled, setStandbyBorderEnabled] = useState(localStorage.getItem("standby-mode") === "true");
   const [largeStandbyEnabled, setLargeStandbyEnabled] = useState(localStorage.getItem("large-standby-mode") === "true");
@@ -1603,6 +1604,8 @@ export default function Island() {
   const [timerTotalDuration, setTimerTotalDuration] = useState(300);
   const [customTimerSetup, setCustomTimerSetup] = useState(300);
   const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const timerEndTimeRef = useRef(null);
+  const isTimerRunningRef = useRef(false);
 
   // Volume HUD State
   const [volumeLevel, setVolumeLevel] = useState(70);
@@ -1656,12 +1659,19 @@ export default function Island() {
   const [downloadProgress, setDownloadProgress] = useState({ percent: 0, transferredBytes: 0, totalBytes: 0, speedBytesPerSec: 0 });
   const [updateErrorMessage, setUpdateErrorMessage] = useState("");
   const [autoUpdateCheckEnabled, setAutoUpdateCheckEnabled] = useState(localStorage.getItem("auto-update-check") !== "false");
+  const [autoDownloadInstallEnabled, setAutoDownloadInstallEnabled] = useState(localStorage.getItem("auto-download-install") !== "false");
 
   useEffect(() => {
     if (window.electronAPI?.getAppVersion) {
       window.electronAPI.getAppVersion().then(v => {
         if (v) setAppVersion(v);
       }).catch(() => { });
+    }
+
+    if (window.electronAPI?.getAutoDownloadInstall) {
+      window.electronAPI.getAutoDownloadInstall().then(val => {
+        if (typeof val === "boolean") setAutoDownloadInstallEnabled(val);
+      }).catch(() => {});
     }
 
     if (!window.electronAPI?.onUpdateEvent) return;
@@ -1747,6 +1757,14 @@ export default function Island() {
     localStorage.setItem("auto-update-check", val ? "true" : "false");
   };
 
+  const handleAutoDownloadInstallToggle = (checked) => {
+    setAutoDownloadInstallEnabled(checked);
+    localStorage.setItem("auto-download-install", checked ? "true" : "false");
+    if (window.electronAPI?.setAutoDownloadInstall) {
+      window.electronAPI.setAutoDownloadInstall(checked);
+    }
+  };
+
   const triggerVolumeAlert = (level) => {
     setVolumeLevel(level);
     setVolumeAlert(true);
@@ -1756,32 +1774,101 @@ export default function Island() {
     }, 2000);
   };
 
+  const syncTimer = useCallback(() => {
+    if (!isTimerRunningRef.current) return;
+    if (timerEndTimeRef.current === null) return;
+
+    const remaining = Math.max(0, Math.round((timerEndTimeRef.current - Date.now()) / 1000));
+    setTimerSeconds(remaining);
+
+    if (remaining <= 0) {
+      setIsTimerRunning(false);
+      isTimerRunningRef.current = false;
+      timerEndTimeRef.current = null;
+      playTimerAlarmSound();
+      if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+          new Notification("Timer Finished! 🔔", { body: "Your countdown timer has ended." });
+        } catch (e) {
+          console.log("Notification error:", e);
+        }
+      }
+    }
+  }, []);
+
+  const startTimer = useCallback((sec) => {
+    const s = Math.max(0, sec);
+    timerEndTimeRef.current = Date.now() + s * 1000;
+    setTimerSeconds(s);
+    setIsTimerRunning(true);
+    isTimerRunningRef.current = true;
+  }, []);
+
+  const toggleTimer = useCallback(() => {
+    if (isTimerRunning) {
+      if (timerEndTimeRef.current !== null) {
+        const remaining = Math.max(0, Math.round((timerEndTimeRef.current - Date.now()) / 1000));
+        setTimerSeconds(remaining);
+      }
+      timerEndTimeRef.current = null;
+      setIsTimerRunning(false);
+      isTimerRunningRef.current = false;
+    } else {
+      if (timerSeconds > 0) {
+        timerEndTimeRef.current = Date.now() + timerSeconds * 1000;
+        setIsTimerRunning(true);
+        isTimerRunningRef.current = true;
+      }
+    }
+  }, [isTimerRunning, timerSeconds]);
+
+  const resetTimer = useCallback(() => {
+    timerEndTimeRef.current = null;
+    setIsTimerRunning(false);
+    isTimerRunningRef.current = false;
+    setTimerSeconds(0);
+  }, []);
+
   useEffect(() => {
+    isTimerRunningRef.current = isTimerRunning;
     let interval = null;
     if (isTimerRunning) {
       if ('Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
+      if (timerEndTimeRef.current === null && timerSeconds > 0) {
+        timerEndTimeRef.current = Date.now() + timerSeconds * 1000;
+      }
+      syncTimer();
       interval = setInterval(() => {
-        setTimerSeconds((prev) => {
-          if (prev <= 1) {
-            setIsTimerRunning(false);
-            playTimerAlarmSound();
-            if ('Notification' in window && Notification.permission === 'granted') {
-              try {
-                new Notification("Timer Finished! 🔔", { body: "Your countdown timer has ended." });
-              } catch (e) {
-                console.log("Notification error:", e);
-              }
-            }
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+        syncTimer();
+      }, 500);
     }
-    return () => clearInterval(interval);
-  }, [isTimerRunning]);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
+  }, [isTimerRunning, syncTimer, timerSeconds]);
+
+  // Synchronize timer immediately when waking from lock screen, sleep, or visibility change
+  useEffect(() => {
+    const onWake = () => {
+      syncTimer();
+    };
+
+    window.addEventListener('focus', onWake);
+    document.addEventListener('visibilitychange', onWake);
+
+    let unsub = null;
+    if (window.electronAPI?.onSystemResume) {
+      unsub = window.electronAPI.onSystemResume(onWake);
+    }
+
+    return () => {
+      window.removeEventListener('focus', onWake);
+      document.removeEventListener('visibilitychange', onWake);
+      if (unsub) unsub();
+    };
+  }, [syncTimer]);
 
   // Tab calculations
   const isMusicActive = !!spotifyTrack;
@@ -1900,22 +1987,27 @@ export default function Island() {
 
   const tabVariants = {
     enter: (direction) => ({
-      x: direction > 0 ? 300 : direction < 0 ? -300 : 0,
       opacity: 0,
-      scale: 0.95,
-      filter: "blur(10px)"
+      x: direction > 0 ? 10 : direction < 0 ? -10 : 0,
+      scale: 0.985
     }),
     center: {
-      x: 0,
       opacity: 1,
+      x: 0,
       scale: 1,
-      filter: "blur(0px)"
+      transition: {
+        duration: 0.16,
+        ease: [0.16, 1, 0.3, 1]
+      }
     },
     exit: (direction) => ({
-      x: direction < 0 ? 300 : direction > 0 ? -300 : 0,
       opacity: 0,
-      scale: 0.95,
-      filter: "blur(10px)"
+      x: direction < 0 ? 10 : direction > 0 ? -10 : 0,
+      scale: 0.985,
+      transition: {
+        duration: 0.10,
+        ease: [0.16, 1, 0.3, 1]
+      }
     })
   };
 
@@ -2137,6 +2229,8 @@ export default function Island() {
   // localStorage defaults
   useEffect(() => {
     const defaults = {
+      "auto-download-install": "true",
+      "always-on-top": "true",
       "battery-alerts": "true",
       "default-tab": "2",
       "island-border": "false",
@@ -2163,6 +2257,32 @@ export default function Island() {
       }
     }
   }, []);
+
+  useEffect(() => {
+    if (window.electronAPI?.getAlwaysOnTop) {
+      window.electronAPI.getAlwaysOnTop().then((enabled) => {
+        if (typeof enabled === "boolean") {
+          setAlwaysOnTopEnabled(enabled);
+        }
+      }).catch(() => {});
+    }
+    if (window.electronAPI?.onAlwaysOnTopChange) {
+      const unsub = window.electronAPI.onAlwaysOnTopChange((enabled) => {
+        setAlwaysOnTopEnabled(enabled);
+        localStorage.setItem("always-on-top", String(enabled));
+      });
+      return unsub;
+    }
+  }, []);
+
+  const handleAlwaysOnTopChange = (e) => {
+    const value = e.target.value === "true";
+    setAlwaysOnTopEnabled(value);
+    localStorage.setItem("always-on-top", value ? "true" : "false");
+    if (window.electronAPI?.setAlwaysOnTop) {
+      window.electronAPI.setAlwaysOnTop(value);
+    }
+  };
 
   const handleBatteryAlertsChange = (e) => {
     const value = e.target.value === "true";
@@ -3425,10 +3545,10 @@ export default function Island() {
       }}
       transition={{
         type: "spring",
-        stiffness: 340,
-        damping: 28,
-        mass: 0.8,
-        x: { duration: .15 }
+        stiffness: 380,
+        damping: 35,
+        mass: 0.6,
+        x: { duration: 0.15 }
       }}
       style={{
         display: "flex",
@@ -3567,67 +3687,83 @@ export default function Island() {
         );
       })()}
 
-      {/* Privacy Dots — persistent indicators for active camera/mic */}
-      {mode !== "large" && (cameraInUse || microphoneInUse) && (
-        <div style={{
+      {/* Strict App Boundary Container — strictly clips all tabs, quickviews, and transitions within the pill */}
+      <div
+        id="island-boundary-container"
+        style={{
           position: 'absolute',
-          right: 8,
-          top: '50%',
-          transform: 'translateY(-50%)',
-          zIndex: 998,
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          borderRadius: 'inherit',
+          overflow: 'hidden',
           display: 'flex',
-          gap: 4,
-          pointerEvents: 'none'
-        }}>
-          <AnimatePresence>
-            {cameraInUse && (
-              <motion.div
-                key="privacy-dot-camera"
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  backgroundColor: '#34c759',
-                  boxShadow: '0 0 6px rgba(52, 199, 89, 0.7)'
-                }}
-              />
-            )}
-            {microphoneInUse && (
-              <motion.div
-                key="privacy-dot-mic"
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  backgroundColor: '#ff9500',
-                  boxShadow: '0 0 6px rgba(255, 149, 0, 0.7)'
-                }}
-              />
-            )}
-          </AnimatePresence>
-        </div>
-      )}
+          alignItems: 'center',
+          justifyContent: (mode === "large" && currentTab === 3) ? "flex-start" : "center",
+          pointerEvents: isTransitioning ? 'auto' : (ctrlHeld && isHovered) ? 'none' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled)) ? 'none' : 'auto'
+        }}
+      >
+        {/* Privacy Dots — persistent indicators for active camera/mic */}
+        {mode !== "large" && (cameraInUse || microphoneInUse) && (
+          <div style={{
+            position: 'absolute',
+            right: 8,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            zIndex: 998,
+            display: 'flex',
+            gap: 4,
+            pointerEvents: 'none'
+          }}>
+            <AnimatePresence>
+              {cameraInUse && (
+                <motion.div
+                  key="privacy-dot-camera"
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    backgroundColor: '#34c759',
+                    boxShadow: '0 0 6px rgba(52, 199, 89, 0.7)'
+                  }}
+                />
+              )}
+              {microphoneInUse && (
+                <motion.div
+                  key="privacy-dot-mic"
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0, opacity: 0 }}
+                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: '50%',
+                    backgroundColor: '#ff9500',
+                    boxShadow: '0 0 6px rgba(255, 149, 0, 0.7)'
+                  }}
+                />
+              )}
+            </AnimatePresence>
+          </div>
+        )}
 
-      {/*Quickview*/}
-      {mode !== "large" && (mode === "quick" || (mode === "still" && showInfoWhenIdleEnabled) || (mode === "still" && (isPlaying || showPausedQuickView || isTimerRunning || timerSeconds > 0)) || alert || chargingAlert || bluetoothAlert || cameraAlert || microphoneAlert || keyLockAlert || usbAlert || notificationAlert) ? (
-        <AnimatePresence mode="wait">
-          {notificationAlert && !keyLockAlert && !usbAlert ? (
-            <motion.div
-              key={`notif-alert-${notificationAlert.id}`}
-              initial={{ opacity: 0, filter: 'blur(4px)', scale: 0.98 }}
-              animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
-              exit={{ opacity: 0, filter: 'blur(4px)', scale: 0.98 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-              style={{
-                display: 'flex',
+        {/*Quickview*/}
+        {mode !== "large" && (mode === "quick" || (mode === "still" && showInfoWhenIdleEnabled) || (mode === "still" && (isPlaying || showPausedQuickView || isTimerRunning || timerSeconds > 0)) || alert || chargingAlert || bluetoothAlert || cameraAlert || microphoneAlert || keyLockAlert || usbAlert || notificationAlert) ? (
+          <AnimatePresence mode="wait">
+            {notificationAlert && !keyLockAlert && !usbAlert ? (
+              <motion.div
+                key={`notif-alert-${notificationAlert.id}`}
+                initial={{ opacity: 0, scale: 0.99 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.99 }}
+                transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  display: 'flex',
                 alignItems: 'center',
                 width: '100%',
                 padding: '0 14px',
@@ -3686,10 +3822,10 @@ export default function Island() {
           ) : (isPlaying || showPausedQuickView) && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !keyLockAlert && !usbAlert && !notificationAlert && !isTimerRunning && timerSeconds === 0 ? (
             <motion.div
               key={spotifyTrack?.name ? `playing-${spotifyTrack.name}-${spotifyTrack.artist}` : "playing"}
-              initial={{ opacity: 0, filter: 'blur(4px)', scale: 0.98 }}
-              animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
-              exit={{ opacity: 0, filter: 'blur(4px)', scale: 0.98 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1], filter: { duration: 0.05 } }}
+              initial={{ opacity: 0, scale: 0.99 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.99 }}
+              transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -3821,10 +3957,10 @@ export default function Island() {
           ) : (
             <motion.div
               key={keyLockAlert ? "keylock" : usbAlert ? "usb" : chargingAlert ? "charging" : alert ? "battery" : bluetoothAlert ? "bluetooth" : cameraAlert ? "camera" : microphoneAlert ? "microphone" : (isTimerRunning || timerSeconds > 0) ? "timer" : "time"}
-              initial={{ opacity: 0, filter: 'blur(4px)', scale: 0.98 }}
-              animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
-              exit={{ opacity: 0, filter: 'blur(4px)', scale: 0.98 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1], filter: { duration: 0.05 } }}
+              initial={{ opacity: 0, scale: 0.99 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.99 }}
+              transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
               style={{ width: '100%', height: '100%', position: 'relative' }}
             >
               <h1
@@ -3914,7 +4050,7 @@ export default function Island() {
         </AnimatePresence >
       ) : null}
 
-      <AnimatePresence custom={direction} mode="popLayout">
+      <AnimatePresence custom={direction} mode="wait">
         {mode === "large" && (
           <motion.div
             key={currentTabId}
@@ -3923,10 +4059,6 @@ export default function Island() {
             initial="enter"
             animate="center"
             exit="exit"
-            transition={{
-              x: { type: "spring", stiffness: 400, damping: 40 },
-              opacity: { duration: 0.15 }
-            }}
             style={{
               width: "100%",
               height: "100%",
@@ -3935,9 +4067,9 @@ export default function Island() {
               alignItems: "center",
               justifyContent: "center",
               position: "absolute",
+              inset: 0,
               overflow: "hidden",
-              borderBottomLeftRadius: mode === "large" ? 26 : 20,
-              borderBottomRightRadius: mode === "large" ? 26 : 20
+              borderRadius: "inherit"
             }}
           >
             {/*Browser Search*/}
@@ -5373,8 +5505,7 @@ export default function Island() {
                           whileTap={{ scale: 0.95 }}
                           onClick={() => {
                             setTimerTotalDuration(preset.sec);
-                            setTimerSeconds(preset.sec);
-                            setIsTimerRunning(true);
+                            startTimer(preset.sec);
                           }}
                           style={{
                             background: '#222227',
@@ -5435,8 +5566,7 @@ export default function Island() {
                         whileTap={{ scale: 0.97 }}
                         onClick={() => {
                           setTimerTotalDuration(customTimerSetup);
-                          setTimerSeconds(customTimerSetup);
-                          setIsTimerRunning(true);
+                          startTimer(customTimerSetup);
                         }}
                         style={{
                           background: '#ff9500',
@@ -5474,7 +5604,7 @@ export default function Island() {
                       <motion.button
                         whileHover={{ scale: 1.08 }}
                         whileTap={{ scale: 0.92 }}
-                        onClick={() => setIsTimerRunning(!isTimerRunning)}
+                        onClick={toggleTimer}
                         style={{
                           width: 44,
                           height: 44,
@@ -5522,10 +5652,7 @@ export default function Island() {
                       <motion.button
                         whileHover={{ scale: 1.08 }}
                         whileTap={{ scale: 0.92 }}
-                        onClick={() => {
-                          setIsTimerRunning(false);
-                          setTimerSeconds(0);
-                        }}
+                        onClick={resetTimer}
                         style={{
                           width: 44,
                           height: 44,
@@ -5729,6 +5856,16 @@ export default function Island() {
                               <option value="sleek-black" style={{ background: '#1c1c1e', color: '#fff' }}>Sleek Black</option>
                               <option value="win95" style={{ background: '#1c1c1e', color: '#fff' }}>Windows 95</option>
                             </select>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Always on Top</span>
+                              <span style={{ fontSize: 9.5, opacity: 0.6, color: textColor }}>Stay above other windows at all times</span>
+                            </div>
+                            <AppleSwitch
+                              checked={alwaysOnTopEnabled}
+                              onChange={(checked) => handleAlwaysOnTopChange({ target: { value: checked ? "true" : "false" } })}
+                            />
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Island Border</span>
@@ -6184,7 +6321,7 @@ export default function Island() {
                           {updateStatus === 'downloaded' && (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 3, color: textColor }}>
                               <div style={{ fontSize: 11, opacity: 0.9 }}>
-                                Update <strong>v{updateInfo?.version}</strong> downloaded!
+                                Update <strong>v{updateInfo?.version}</strong> downloaded! {autoDownloadInstallEnabled ? 'Installing silently in the background...' : ''}
                               </div>
                               <button
                                 className="settings-update-btn install"
@@ -6208,8 +6345,20 @@ export default function Island() {
                           background: 'rgba(255, 255, 255, 0.05)',
                           border: '1px solid rgba(255, 255, 255, 0.08)',
                           borderRadius: 12,
-                          overflow: 'hidden'
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column'
                         }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Auto-Download & Install</span>
+                              <span style={{ fontSize: 9.5, opacity: 0.6, color: textColor }}>Automatically apply updates in background</span>
+                            </div>
+                            <AppleSwitch
+                              checked={autoDownloadInstallEnabled}
+                              onChange={(checked) => handleAutoDownloadInstallToggle(checked)}
+                            />
+                          </div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Auto-Check on Launch</span>
                             <AppleSwitch
@@ -6227,6 +6376,7 @@ export default function Island() {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
 
     </motion.div >
   );

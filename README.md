@@ -7,7 +7,7 @@ Quick Pill is a desktop application that recreates Apple's Dynamic Island experi
 <div align="center">
 
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-5.3.0-blue)](package.json)
+[![Version](https://img.shields.io/badge/Version-5.4.0-blue)](package.json)
 
 https://github.com/user-attachments/assets/bd057d18-f65e-4cf4-bf66-a5d107f18658
 
@@ -20,14 +20,16 @@ https://github.com/user-attachments/assets/bd057d18-f65e-4cf4-bf66-a5d107f18658
 ## Features
 
 ### Core Functionality
+- **Persistent Always-On-Top** — Elevated screen-saver priority that retains focus across multi-window switching and full-screen apps
 - **Multi-Monitor & Desktop Support** — Island syncs seamlessly across all desktops and monitors
-- **Dynamic Stadium Pill Physics** — Smooth Framer Motion spring morphing (`stiffness: 340, damping: 28`) between Still (semicircular 20px pill) and Large modes (32px pill)
+- **Dynamic Stadium Pill Physics** — Smooth Framer Motion spring morphing (`stiffness: 340, damping: 28`) between Still (semicircular 20px pill) and Large modes (32px pill) with boundary-confined page transitions
 - **Media Controls & Clean Titles** — Now playing preview with clean app naming (Spotify/Apple Music) and un-cropped marquee titles
 - **Customizable Themes** — Multiple themes including Win95, SleekBlack, and custom RGB colors
 - **Quick Apps** — One-click access to 4 apps of your choice
 - **Keyboard Shortcuts** — Quick navigation with `Ctrl + [Number]` shortcuts
 
 ### Information & Alerts
+- **Apple Battery Hub** — Dynamic Island battery dashboard with 60 FPS right-to-left fluid liquid wave canvas engine, buoyant micro-bubbles, discharge drain metrics, and duration estimation
 - **Weather Display** — Real-time weather information & forecasts
 - **Battery Alerts** — Charging status and low battery notifications
 - **Windows Notifications** — Native Windows 10/11 notification integration and management
@@ -35,6 +37,8 @@ https://github.com/user-attachments/assets/bd057d18-f65e-4cf4-bf66-a5d107f18658
 - **Hardware & System Alerts** — Real-time CPU/RAM stats, USB connection alerts, Bluetooth, and Keyboard lock (Caps/Num/Scroll) indicators
 
 ### Smart Features & Productivity
+- **Lock-Screen & Background Timers** — Wall-clock synchronized countdown timers that continue without pausing when Windows locks or goes to sleep
+- **Silent Background Updates** — Automatically detects, downloads, and silently installs updates via NSIS with configurable settings
 - **Minimalist Tasks Manager** — Apple / Things 3 style task list with circular check buttons and single-capsule input bar
 - **Timer & Presets** — Quick preset timer chips (15m, 30m, 60m, 100m) and custom time picker
 - **Browser Search** — Instant web search integration

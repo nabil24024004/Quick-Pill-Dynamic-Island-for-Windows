@@ -1,17 +1,18 @@
 import { useState, useEffect } from 'react';
 
 const DEFAULT_RELEASE = {
-  version: '5.1.0',
-  name: 'Quick Pill 5.1.0',
-  releaseDate: '2026-08-25',
+  version: '5.4.0',
+  name: 'Quick Pill 5.4.0',
+  releaseDate: '2026-10-14',
   changelog: [
-    'Added automatic update checking and in-app installer.',
-    'Improved media controller responsiveness.',
-    'Performance and stability improvements.'
+    'Integrated Apple Dynamic Island Battery Hub with 60 FPS right-to-left fluid liquid wave canvas engine and battery duration forecasting.',
+    'Enhanced Always-On-Top resilience with screen-saver priority to prevent losing focus.',
+    'Added lock-screen background timer execution and system resume wake resynchronization.',
+    'Introduced automatic background update downloads and silent background NSIS installation.'
   ],
   platforms: {
     'win32-x64': {
-      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.1.0-Setup.exe',
+      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.4.0-Setup.exe',
       installerType: 'nsis'
     }
   }
@@ -49,7 +50,7 @@ export function useReleaseInfo() {
 
   return {
     releaseInfo,
-    version: releaseInfo.version || '5.1.0',
+    version: releaseInfo.version || '5.4.0',
     windowsUrl,
     changelog: releaseInfo.changelog || [],
     isLoading

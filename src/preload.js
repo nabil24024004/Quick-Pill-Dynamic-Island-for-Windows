@@ -42,10 +42,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cancelUpdateDownload: () => ipcRenderer.invoke('cancel-update-download'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
+  getAutoDownloadInstall: () => ipcRenderer.invoke('get-auto-download-install'),
+  setAutoDownloadInstall: (enable) => ipcRenderer.invoke('set-auto-download-install', enable),
+  getAlwaysOnTop: () => ipcRenderer.invoke('get-always-on-top'),
+  setAlwaysOnTop: (enable) => ipcRenderer.invoke('set-always-on-top', enable),
+  onAlwaysOnTopChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('always-on-top-changed', handler);
+    return () => ipcRenderer.removeListener('always-on-top-changed', handler);
+  },
   onUpdateEvent: (callback) => {
     const handler = (event, data) => callback(data);
     ipcRenderer.on('update-event', handler);
     return () => ipcRenderer.removeListener('update-event', handler);
+  },
+  onSystemResume: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on('system-resume', handler);
+    return () => ipcRenderer.removeListener('system-resume', handler);
   },
   platform: 'win32'
 });
