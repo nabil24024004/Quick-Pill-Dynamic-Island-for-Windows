@@ -909,7 +909,24 @@ const createWindow = () => {
       mainWindow.show();
       mainWindow.setAlwaysOnTop(true, "pop-up-menu");
       mainWindow.focus();
+
+      if (!app.isPackaged) {
+        try {
+          mainWindow.webContents.openDevTools({ mode: "detach" });
+        } catch (_) {}
+        console.log("\n=======================================================");
+        console.log("⚡ Quick Pill Desktop App launched in Debug Mode!");
+        console.log("📍 Location: Dynamic Island overlay at the top of your screen.");
+        console.log("🛠️ DevTools: Detached window opened for live inspection.");
+        console.log("🔄 Vite HMR: Live updates active when editing src/ files.");
+        console.log("=======================================================\n");
+      }
     }
+  });
+
+  mainWindow.webContents.on("did-fail-load", (event, errorCode, errorDescription, validatedURL) => {
+    logToFile(`Renderer failed to load (${errorCode}): ${errorDescription} at ${validatedURL}`);
+    console.error(`Renderer failed to load (${errorCode}): ${errorDescription} at ${validatedURL}`);
   });
 
   setTimeout(() => {
