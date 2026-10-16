@@ -154,5 +154,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('notes:updated', handler);
     },
   },
+  shortcuts: {
+    getTabShortcuts: () => ipcRenderer.invoke('shortcuts:get-tab-shortcuts'),
+    setTabShortcuts: (shortcuts) => ipcRenderer.invoke('shortcuts:set-tab-shortcuts', shortcuts),
+    resetTabShortcuts: () => ipcRenderer.invoke('shortcuts:reset-tab-shortcuts'),
+    onOpenTabInstant: (callback) => {
+      const handler = (event, tabId) => callback(tabId);
+      ipcRenderer.on('open-tab-instant', handler);
+      return () => ipcRenderer.removeListener('open-tab-instant', handler);
+    },
+  },
   platform: 'win32'
 });

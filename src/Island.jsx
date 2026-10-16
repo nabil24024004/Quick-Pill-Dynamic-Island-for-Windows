@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing } from "lucide-react";
+import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing, Keyboard } from "lucide-react";
 import "./App.css";
 import AppLauncher from "./components/AppLauncher";
 import QuickNotes from "./components/QuickNotes";
@@ -499,6 +499,25 @@ const TABS = [
   { id: 10, name: "Timer", icon: (color) => <Timer size={16} color={color} /> },
   { id: 9, name: "Settings", icon: (color) => <Settings size={16} color={color} /> },
 ];
+
+const DEFAULT_TAB_SHORTCUTS = {
+  0: "Alt+B",   // Browser Search
+  1: "Alt+W",   // Weather
+  2: "Alt+O",   // Overview
+  11: "Alt+H",  // Battery Hub
+  12: "Alt+A",  // Audio Mixer
+  13: "Alt+P",  // Progress Island
+  14: "Alt+L",  // App Launcher
+  15: "Alt+Q",  // Quick Notes
+  3: "Alt+M",   // Now Playing
+  4: "Alt+C",   // Calendar
+  5: "Alt+N",   // Notifications
+  6: "Alt+G",   // Game / Stats
+  7: "Alt+V",   // Clipboard
+  8: "Alt+T",   // Tasks
+  10: "Alt+R",  // Timer
+  9: "Alt+S"    // Settings
+};
 
 const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSeek }) => {
   const [animTime, setAnimTime] = useState(0);
@@ -1673,6 +1692,20 @@ export default function Island() {
   const [textColor, setTextColor] = useState(localStorage.getItem("text-color") || "#FFFFFF");
   const [bgImage, setBgImage] = useState(localStorage.getItem("bg-image") || "none");
   const [settingsTab, setSettingsTab] = useState("general");
+  const [tabShortcuts, setTabShortcuts] = useState(() => {
+    try {
+      const saved = localStorage.getItem("quick_pill_tab_shortcuts");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === "object") {
+          return { ...DEFAULT_TAB_SHORTCUTS, ...parsed };
+        }
+      }
+    } catch (_) {}
+    return { ...DEFAULT_TAB_SHORTCUTS };
+  });
+  const [recordingTabId, setRecordingTabId] = useState(null);
+  const [recordingConflict, setRecordingConflict] = useState(null);
   const [browserSearch, setBrowserSearch] = useState("");
   const [clipboard, setClipboard] = useState([]);
   const [charging, setCharging] = useState(false);
@@ -1999,6 +2032,109 @@ export default function Island() {
 
   const currentTab = currentTabId;
   const totalTabs = visibleTabs.length;
+
+  // Load tab shortcuts from main process & synchronize
+  useEffect(() => {
+    if (window.electronAPI?.shortcuts?.getTabShortcuts) {
+      window.electronAPI.shortcuts.getTabShortcuts().then((saved) => {
+        if (saved && typeof saved === "object") {
+          setTabShortcuts((prev) => ({ ...prev, ...saved }));
+        }
+      }).catch(() => {});
+    }
+  }, []);
+
+  // Instant Tab Navigation from Global Shortcuts
+  useEffect(() => {
+    if (!window.electronAPI?.shortcuts?.onOpenTabInstant) return;
+    const unsub = window.electronAPI.shortcuts.onOpenTabInstant((targetId) => {
+      const tabNum = Number(targetId);
+      setMode("large");
+      setTabState([tabNum, tabNum > currentTabId ? 1 : -1]);
+    });
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
+  }, [currentTabId]);
+
+  // Interactive Tab Shortcut Keydown Recorder
+  useEffect(() => {
+    if (recordingTabId === null) return;
+    const handleRecordKey = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Escape cancels recording
+      if (e.key === "Escape") {
+        setRecordingTabId(null);
+        setRecordingConflict(null);
+        return;
+      }
+
+      // Prohibit Ctrl / Meta entirely (Click-Through feature integrity)
+      if (e.ctrlKey || e.key === "Control" || e.metaKey || e.key === "Meta") {
+        setRecordingConflict("Ctrl is reserved for Click-Through feature. Use Alt + key.");
+        return;
+      }
+
+      // Ignore bare Alt / Shift
+      if (e.key === "Alt" || e.key === "Shift") {
+        return;
+      }
+
+      let keyChar = e.key.toUpperCase();
+      // Allow letters, numbers, and F-keys
+      if (keyChar.length === 1 || (keyChar.startsWith("F") && !isNaN(keyChar.slice(1)))) {
+        const combo = `Alt+${keyChar}`;
+        const updated = { ...tabShortcuts };
+        let conflictTabName = null;
+
+        for (const [idStr, existing] of Object.entries(updated)) {
+          if (parseInt(idStr, 10) !== recordingTabId && existing && existing.toUpperCase() === combo) {
+            const conflictDef = TABS.find((t) => t.id === parseInt(idStr, 10));
+            conflictTabName = conflictDef ? conflictDef.name : `Tab ${idStr}`;
+            updated[idStr] = "";
+          }
+        }
+
+        updated[recordingTabId] = combo;
+        setTabShortcuts(updated);
+        try {
+          localStorage.setItem("quick_pill_tab_shortcuts", JSON.stringify(updated));
+        } catch (_) {}
+
+        setRecordingTabId(null);
+        setRecordingConflict(conflictTabName ? `Assigned ${combo} (cleared from ${conflictTabName})` : null);
+        setTimeout(() => setRecordingConflict(null), 3500);
+
+        if (window.electronAPI?.shortcuts?.setTabShortcuts) {
+          window.electronAPI.shortcuts.setTabShortcuts(updated).catch(() => {});
+        }
+      } else {
+        setRecordingConflict("Press a letter (A-Z) or number (0-9)");
+      }
+    };
+
+    window.addEventListener("keydown", handleRecordKey, true);
+    return () => {
+      window.removeEventListener("keydown", handleRecordKey, true);
+    };
+  }, [recordingTabId, tabShortcuts]);
+
+  const handleResetShortcuts = useCallback(async () => {
+    setTabShortcuts(DEFAULT_TAB_SHORTCUTS);
+    setRecordingTabId(null);
+    setRecordingConflict("Reset all shortcuts to defaults");
+    try {
+      localStorage.setItem("quick_pill_tab_shortcuts", JSON.stringify(DEFAULT_TAB_SHORTCUTS));
+    } catch (_) {}
+    setTimeout(() => setRecordingConflict(null), 3000);
+    if (window.electronAPI?.shortcuts?.resetTabShortcuts) {
+      try {
+        await window.electronAPI.shortcuts.resetTabShortcuts();
+      } catch (_) {}
+    }
+  }, []);
 
   // --- Audio Mixer State & Handlers ---
   const [audioDevices, setAudioDevices] = useState([]);
@@ -3764,16 +3900,22 @@ export default function Island() {
   // Keyboard Shortcuts and Navigation
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (recordingTabId !== null) return;
       if (e.key === "ArrowRight") {
         moveTab(1);
       } else if (e.key === "ArrowLeft") {
         moveTab(-1);
-      } else if (e.ctrlKey && e.key >= "1" && e.key <= "8") {
-        const idx = parseInt(e.key) - 1;
-        if (visibleTabs[idx] !== undefined) {
-          const targetId = visibleTabs[idx];
-          setMode("large");
-          setTabState([targetId, targetId > currentTabId ? 1 : -1]);
+      } else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key && e.key !== "Alt" && e.key !== "Shift") {
+        const keyChar = e.key.toUpperCase();
+        const combo = `Alt+${keyChar}`;
+        for (const [idStr, shortcut] of Object.entries(tabShortcuts)) {
+          if (shortcut && shortcut.toUpperCase() === combo) {
+            e.preventDefault();
+            const targetId = parseInt(idStr, 10);
+            setMode("large");
+            setTabState([targetId, targetId > currentTabId ? 1 : -1]);
+            break;
+          }
         }
       }
     };
@@ -3781,7 +3923,7 @@ export default function Island() {
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [moveTab, visibleTabs, currentTabId]);
+  }, [moveTab, visibleTabs, currentTabId, tabShortcuts, recordingTabId]);
 
   // Ctrl+Hover Click-Through keyboard listeners
   useEffect(() => {
@@ -7816,6 +7958,7 @@ export default function Island() {
                 { id: 'appearance', label: 'Appearance', icon: Palette },
                 { id: 'position', label: 'Position', icon: Compass },
                 { id: 'tabs', label: 'Tabs', icon: Layers },
+                { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
                 { id: 'features', label: 'Features', icon: Zap },
                 { id: 'weather', label: 'Weather', icon: CloudSun },
                 { id: 'updates', label: 'Updates', icon: RefreshCw, hasBadge: (updateStatus === 'available' || updateStatus === 'downloaded') }
@@ -8268,6 +8411,207 @@ export default function Island() {
                                   >
                                     <ChevronLeft size={13} style={{ transform: 'rotate(-90deg)' }} />
                                   </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* CATEGORY: SHORTCUTS */}
+                    {settingsTab === 'shortcuts' && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                              Tab Shortcuts
+                            </div>
+                            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>
+                              Press Alt + [Letter] to open any tab instantly. Ctrl is reserved for Click-Through.
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleResetShortcuts}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: '4px 8px',
+                              background: 'rgba(255, 255, 255, 0.08)',
+                              border: '1px solid rgba(255, 255, 255, 0.12)',
+                              borderRadius: 6,
+                              color: 'rgba(255, 255, 255, 0.8)',
+                              fontSize: 10.5,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
+                            title="Reset all tab shortcuts to defaults"
+                          >
+                            <RotateCcw size={11} />
+                            <span>Reset Defaults</span>
+                          </button>
+                        </div>
+
+                        {recordingConflict && (
+                          <div style={{
+                            padding: '5px 10px',
+                            borderRadius: 8,
+                            fontSize: 10.5,
+                            fontWeight: 600,
+                            background: recordingConflict.includes('Ctrl') ? 'rgba(239, 68, 68, 0.18)' : 'rgba(56, 189, 248, 0.18)',
+                            border: recordingConflict.includes('Ctrl') ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(56, 189, 248, 0.35)',
+                            color: recordingConflict.includes('Ctrl') ? '#fca5a5' : '#7dd3fc',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6
+                          }}>
+                            {recordingConflict.includes('Ctrl') ? <AlertCircle size={12} /> : <CheckCircle2 size={12} />}
+                            <span>{recordingConflict}</span>
+                          </div>
+                        )}
+
+                        <div style={{
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: 12,
+                          overflow: 'hidden',
+                          display: 'flex',
+                          flexDirection: 'column'
+                        }}>
+                          {TABS.map((tab, i) => {
+                            const isRecording = recordingTabId === tab.id;
+                            const currentShortcut = tabShortcuts[tab.id] || "";
+                            const parts = currentShortcut ? currentShortcut.split("+") : [];
+
+                            return (
+                              <div
+                                key={tab.id}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  padding: '6px 12px',
+                                  borderBottom: i < TABS.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
+                                  background: isRecording ? 'rgba(0, 112, 243, 0.12)' : 'transparent',
+                                  transition: 'background 0.15s ease'
+                                }}
+                              >
+                                {/* Left: Icon & Tab Name */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0, flex: 1 }}>
+                                  <div style={{
+                                    width: 24,
+                                    height: 24,
+                                    borderRadius: 6,
+                                    background: 'rgba(255, 255, 255, 0.06)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    flexShrink: 0
+                                  }}>
+                                    {tab.icon("#0070f3")}
+                                  </div>
+                                  <span style={{
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    color: textColor,
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                  }}>
+                                    {tab.name}
+                                  </span>
+                                </div>
+
+                                {/* Right: Key Badge & Action */}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  {isRecording ? (
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                                      <span style={{
+                                        padding: '3px 8px',
+                                        borderRadius: 6,
+                                        fontSize: 10.5,
+                                        fontWeight: 700,
+                                        color: '#ffffff',
+                                        background: '#0070f3',
+                                        boxShadow: '0 0 10px rgba(0, 112, 243, 0.5)',
+                                        letterSpacing: '0.02em'
+                                      }}>
+                                        Press letter...
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setRecordingTabId(null);
+                                          setRecordingConflict(null);
+                                        }}
+                                        style={{
+                                          padding: '3px 6px',
+                                          borderRadius: 6,
+                                          background: 'rgba(255,255,255,0.1)',
+                                          border: 'none',
+                                          color: 'rgba(255,255,255,0.7)',
+                                          fontSize: 10,
+                                          cursor: 'pointer'
+                                        }}
+                                        title="Cancel"
+                                      >
+                                        <X size={12} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setRecordingTabId(tab.id);
+                                        setRecordingConflict(null);
+                                      }}
+                                      style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: 4,
+                                        padding: '3px 7px',
+                                        background: currentShortcut ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.03)',
+                                        border: '1px solid rgba(255, 255, 255, 0.12)',
+                                        borderRadius: 6,
+                                        cursor: 'pointer',
+                                        transition: 'all 0.15s ease'
+                                      }}
+                                      onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)'}
+                                      onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
+                                      title="Click to customize shortcut"
+                                    >
+                                      {parts.length > 0 ? (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                          {parts.map((p, pIdx) => (
+                                            <span
+                                              key={pIdx}
+                                              style={{
+                                                fontSize: 10.5,
+                                                fontWeight: 700,
+                                                padding: '1px 5px',
+                                                borderRadius: 4,
+                                                background: p === 'Alt' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 112, 243, 0.25)',
+                                                color: p === 'Alt' ? 'rgba(255, 255, 255, 0.85)' : '#60a5fa',
+                                                fontFamily: 'monospace',
+                                                letterSpacing: '0.04em'
+                                              }}
+                                            >
+                                              {p === 'Alt' ? '⌥ Alt' : p}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
+                                          None (Click to record)
+                                        </span>
+                                      )}
+                                    </button>
+                                  )}
                                 </div>
                               </div>
                             );

@@ -10,7 +10,8 @@ const {
   Menu,
   nativeImage,
   clipboard,
-  powerMonitor
+  powerMonitor,
+  globalShortcut
 } = require("electron");
 
 // Disable Chromium background timer throttling and occlusion tracking so timers run continuously in background & lock screen
@@ -192,6 +193,106 @@ process.on("uncaughtException", (err) => {
 process.on("unhandledRejection", (reason) => {
   logToFile("UNHANDLED REJECTION (Main Process)", reason);
 });
+
+// ==========================================
+// Instant Tab Shortcuts Engine
+// ==========================================
+const DEFAULT_TAB_SHORTCUTS = {
+  0: "Alt+B",   // Browser Search
+  1: "Alt+W",   // Weather
+  2: "Alt+O",   // Overview
+  11: "Alt+H",  // Battery Hub
+  12: "Alt+A",  // Audio Mixer
+  13: "Alt+P",  // Progress Island
+  14: "Alt+L",  // App Launcher
+  15: "Alt+Q",  // Quick Notes
+  3: "Alt+M",   // Now Playing
+  4: "Alt+C",   // Calendar
+  5: "Alt+N",   // Notifications
+  6: "Alt+G",   // Game / Stats
+  7: "Alt+V",   // Clipboard
+  8: "Alt+T",   // Tasks
+  10: "Alt+R",  // Timer
+  9: "Alt+S"    // Settings
+};
+
+let registeredTabShortcuts = [];
+
+function loadTabShortcutsPreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (data && typeof data.tabShortcuts === "object" && data.tabShortcuts !== null) {
+        return { ...DEFAULT_TAB_SHORTCUTS, ...data.tabShortcuts };
+      }
+    }
+  } catch (_) {}
+  return { ...DEFAULT_TAB_SHORTCUTS };
+}
+
+function saveTabShortcutsPreference(shortcuts) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.tabShortcuts = shortcuts;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+    return true;
+  } catch (err) {
+    logToFile("Failed to save tabShortcuts preference:", err);
+    return false;
+  }
+}
+
+function openTabInstant(tabId) {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  try {
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    ensureAlwaysOnTop();
+    mainWindow.focus();
+    mainWindow.webContents.send("open-tab-instant", Number(tabId));
+  } catch (err) {
+    logToFile(`Failed to openTabInstant for tab ${tabId}:`, err);
+  }
+}
+
+function registerGlobalTabShortcuts(shortcutsMap) {
+  // Clear existing registered tab shortcuts
+  for (const accel of registeredTabShortcuts) {
+    try {
+      globalShortcut.unregister(accel);
+    } catch (_) {}
+  }
+  registeredTabShortcuts = [];
+
+  const map = shortcutsMap || loadTabShortcutsPreference();
+  for (const [tabId, rawAccel] of Object.entries(map)) {
+    if (!rawAccel || typeof rawAccel !== "string" || !rawAccel.trim()) continue;
+    const accel = rawAccel.trim();
+    // Strictly prevent Ctrl (Click-Through feature exclusivity)
+    if (accel.toUpperCase().includes("CTRL") || accel.toUpperCase().includes("CONTROL")) {
+      logToFile(`Refusing to register shortcut with Ctrl: ${accel}`);
+      continue;
+    }
+    try {
+      const ok = globalShortcut.register(accel, () => {
+        openTabInstant(parseInt(tabId, 10));
+      });
+      if (ok) {
+        registeredTabShortcuts.push(accel);
+      } else {
+        logToFile(`Global shortcut conflict/in-use for ${accel} (tab ${tabId})`);
+      }
+    } catch (err) {
+      logToFile(`Error registering global shortcut ${accel}:`, err);
+    }
+  }
+}
 
 const { exec, execFile, spawn } = require('child_process');
 
@@ -781,6 +882,37 @@ ipcMain.handle("notes:convert-to-task", async (event, noteOrId) => {
     logToFile("Error in notes:convert-to-task:", err);
     return { success: false, error: err.message };
   }
+});
+
+// Namespaced shortcuts:* channels
+ipcMain.handle("shortcuts:get-tab-shortcuts", () => {
+  return loadTabShortcutsPreference();
+});
+
+ipcMain.handle("shortcuts:set-tab-shortcuts", (event, newShortcuts) => {
+  if (!newShortcuts || typeof newShortcuts !== "object") {
+    return { success: false, error: "Invalid shortcuts object" };
+  }
+  const sanitized = {};
+  for (const [tabId, accel] of Object.entries(newShortcuts)) {
+    if (typeof accel === "string") {
+      const upper = accel.toUpperCase();
+      if (upper.includes("CTRL") || upper.includes("CONTROL")) {
+        return { success: false, error: "Ctrl cannot be used in tab shortcuts (reserved for Click-Through)" };
+      }
+      sanitized[tabId] = accel.trim();
+    }
+  }
+  const merged = { ...DEFAULT_TAB_SHORTCUTS, ...sanitized };
+  saveTabShortcutsPreference(merged);
+  registerGlobalTabShortcuts(merged);
+  return { success: true, shortcuts: merged };
+});
+
+ipcMain.handle("shortcuts:reset-tab-shortcuts", () => {
+  saveTabShortcutsPreference(DEFAULT_TAB_SHORTCUTS);
+  registerGlobalTabShortcuts(DEFAULT_TAB_SHORTCUTS);
+  return { success: true, shortcuts: DEFAULT_TAB_SHORTCUTS };
 });
 
 // Legacy backward compatibility channels
@@ -1564,6 +1696,7 @@ app.whenReady().then(() => {
   createWindow();
   startKeyLockPolling();
   startUSBPolling();
+  registerGlobalTabShortcuts();
   getLauncherEngine().getCatalog().catch((err) => logToFile("Failed to warm launcher catalog:", err));
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -2687,6 +2820,7 @@ app.whenReady().then(() => {
 
 app.on('will-quit', () => {
   audioMixerManager.stop();
+  try { globalShortcut.unregisterAll(); } catch (_) {}
   if (launcherEngineInstance) {
     try { launcherEngineInstance.destroy(); } catch (_) {}
   }
@@ -2694,6 +2828,7 @@ app.on('will-quit', () => {
 
 app.on('before-quit', () => {
   audioMixerManager.stop();
+  try { globalShortcut.unregisterAll(); } catch (_) {}
   if (launcherEngineInstance) {
     try { launcherEngineInstance.destroy(); } catch (_) {}
   }
