@@ -17,8 +17,8 @@ const DEFAULT_RELEASE = {
   platforms: {
     'win32-x64': {
       url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.0-Setup.exe',
-      sha256: '2dfb0d2a9fb496dc0428520f9a4e882a73e22f2b3efbfd8049e583535bd9be5e',
-      size: 402061370,
+      sha256: '0f372ec52c70600d8a599be78948115daa42ed8dd27086c2b246da37efd65412',
+      size: 402071823,
       installerType: 'nsis'
     }
   }
