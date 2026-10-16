@@ -40,6 +40,9 @@ class NotificationRegistry extends EventEmitter {
     /** @type {Set<string>} */
     this.excludedApps = new Set();
 
+    /** @type {Set<string>} */
+    this.dismissedIds = new Set();
+
     /** @type {boolean} */
     this.hidePreviews = false;
 
@@ -68,6 +71,9 @@ class NotificationRegistry extends EventEmitter {
       if (Array.isArray(data.excludedApps)) {
         this.excludedApps = new Set(data.excludedApps);
       }
+      if (Array.isArray(data.dismissedIds)) {
+        this.dismissedIds = new Set(data.dismissedIds.map(String));
+      }
       if (typeof data.hidePreviews === "boolean") {
         this.hidePreviews = data.hidePreviews;
       }
@@ -89,8 +95,16 @@ class NotificationRegistry extends EventEmitter {
     for (const raw of incomingRawList) {
       try {
         const notif = normalizeNotification(raw, providerId);
+        // Exclude phantom empty notifications
+        if (!notif.title?.trim() && !notif.body?.trim()) {
+          continue;
+        }
         // Exclude if app is in excluded list
         if (this.excludedApps.has(notif.applicationName.toLowerCase())) {
+          continue;
+        }
+        // Exclude if dismissed by user
+        if (this.dismissedIds.has(notif.id) || (notif.sourceNotificationId && this.dismissedIds.has(String(notif.sourceNotificationId)))) {
           continue;
         }
         incomingNormalized.push(notif);
@@ -263,6 +277,12 @@ class NotificationRegistry extends EventEmitter {
     if (!notif) return null;
     const actualId = notif.id;
 
+    // Track dismissed IDs so syncIncoming doesn't restore them
+    this.dismissedIds.add(actualId);
+    if (notif.sourceNotificationId) {
+      this.dismissedIds.add(String(notif.sourceNotificationId));
+    }
+
     const fromActive = this.activeNotifications.has(actualId);
     if (fromActive) {
       this.activeNotifications.delete(actualId);
@@ -300,6 +320,11 @@ class NotificationRegistry extends EventEmitter {
 
     if (!target) return false;
 
+    this.dismissedIds.delete(target.id);
+    if (target.sourceNotificationId) {
+      this.dismissedIds.delete(String(target.sourceNotificationId));
+    }
+
     this.recentDismissals = this.recentDismissals.filter(d => d.id !== target.id);
     this.history = this.history.filter(h => h.id !== target.id);
 
@@ -335,10 +360,21 @@ class NotificationRegistry extends EventEmitter {
    */
   clearAllActive() {
     const cleared = [];
-    for (const id of Array.from(this.activeNotifications.keys())) {
-      const d = this.dismiss(id);
-      if (d) cleared.push(d);
+    const now = Date.now();
+    for (const [id, notif] of Array.from(this.activeNotifications.entries())) {
+      this.dismissedIds.add(id);
+      if (notif.sourceNotificationId) {
+        this.dismissedIds.add(String(notif.sourceNotificationId));
+      }
+      notif.lifecycle = NOTIFICATION_LIFECYCLES.DISMISSED;
+      notif.dismissedAt = now;
+      this._addToHistory(notif);
+      cleared.push(notif);
     }
+    this.activeNotifications.clear();
+    this.recentDismissals = [...cleared.slice(0, 10)];
+    this._scheduleEmit(true);
+    this._persist();
     return cleared;
   }
 
@@ -592,7 +628,8 @@ class NotificationRegistry extends EventEmitter {
           snoozed: Array.from(this.snoozedNotifications.values()),
           history: this.history.slice(0, 50),
           excludedApps: Array.from(this.excludedApps),
-          hidePreviews: this.hidePreviews
+          hidePreviews: this.hidePreviews,
+          dismissedIds: Array.from(this.dismissedIds).slice(0, 500)
         });
       } catch (err) {
         console.warn("Failed to persist notification state:", err);

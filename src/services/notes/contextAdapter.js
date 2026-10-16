@@ -264,7 +264,7 @@ function createContextAdapter({
           "-SkipPid",
           String(ownPid),
         ],
-        { windowsHide: true },
+        { windowsHide: true, timeout: 800 },
         (err, stdout) => {
           if (err || !stdout) return resolve(null);
           try {
@@ -419,9 +419,8 @@ function createContextAdapter({
 
     // method === "external_selection"
     // Direct selection reading is restricted on Windows by UIPI and accessibility boundaries.
-    const sourceMetadata = await detectForegroundWindow();
-
     if (!fallbackToClipboard) {
+      const sourceMetadata = await detectForegroundWindow();
       return {
         success: false,
         method: "external_selection",
@@ -444,7 +443,7 @@ function createContextAdapter({
       fallbackUsed: true,
       fallbackMessage:
         "Direct text selection cannot be read due to Windows UIPI security boundaries. Captured from clipboard instead.",
-      sourceMetadata: sourceMetadata || clipCapture.sourceMetadata,
+      sourceMetadata: clipCapture.sourceMetadata,
     };
   }
 

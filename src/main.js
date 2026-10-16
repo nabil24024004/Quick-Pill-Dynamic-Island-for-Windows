@@ -442,6 +442,10 @@ ipcMain.handle("log-message", (event, level, msg, details) => {
   logToFile(`[RENDERER ${String(level).toUpperCase()}] ${msg} ${details ? JSON.stringify(details) : ""}`);
 });
 
+ipcMain.handle("log-renderer-error", (event, errorData) => {
+  logToFile(`[RENDERER ERROR] Unhandled Renderer Exception ${JSON.stringify(errorData)}`);
+});
+
 ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
@@ -1439,6 +1443,21 @@ const createWindow = () => {
     }
   });
 
+  mainWindow.webContents.on("console-message", (event, level, message, line, sourceId) => {
+    if (level >= 2) {
+      logToFile(`[RENDERER CONSOLE ${level === 3 ? "ERROR" : "WARN"}] (${sourceId ? path.basename(sourceId) : "unknown"}:${line}) ${message}`);
+    }
+  });
+
+  mainWindow.webContents.on("render-process-gone", (event, details) => {
+    logToFile(`[RENDERER PROCESS GONE] reason=${details?.reason}, exitCode=${details?.exitCode}`);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.setIgnoreMouseEvents(true, { forward: true });
+      } catch (_) {}
+    }
+  });
+
   // Re-assert topmost when window blurs (e.g. user clicks or switches to another window/app)
   mainWindow.on("blur", () => {
     ensureAlwaysOnTop();
@@ -2332,6 +2351,25 @@ try {
   });
 }
 
+async function clearAllWindowsNotifications() {
+  if (process.platform !== "win32") return false;
+  return new Promise((resolve) => {
+    const script = `
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+try {
+    $listener = [Windows.UI.Notifications.Management.UserNotificationListener, Windows.UI.Notifications, ContentType = WindowsRuntime]::Current
+    $listener.ClearNotifications()
+    Write-Output "true"
+} catch { Write-Output "false" }
+`;
+    const enc = getPowershellEncodedCommand(script);
+    exec(`powershell -NoProfile -EncodedCommand ${enc}`, (err, stdout) => {
+      resolve(stdout?.trim() === "true");
+    });
+  });
+}
+
 async function focusNotificationAppInternal(appIdOrName) {
   if (process.platform !== "win32" || !appIdOrName) return false;
   return new Promise((resolve) => {
@@ -2440,7 +2478,10 @@ ipcMain.handle("notification:dismiss-group", (event, groupId) => {
   return notificationEngine.dismissGroup(groupId);
 });
 
-ipcMain.handle("notification:clear-all", () => {
+ipcMain.handle("notification:clear-all", async () => {
+  try {
+    await clearAllWindowsNotifications();
+  } catch (_) {}
   return notificationEngine.clearAllActive();
 });
 

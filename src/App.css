@@ -822,7 +822,14 @@ label {
 #clipboard,
 .notifications-container,
 #task-list,
-#settings-container {
+#clipboard,
+.notifications-container,
+#task-list,
+#settings-container,
+.notes-scrollable,
+.launcher-scrollable,
+.progress-island-scrollable,
+.audio-mixer-scrollable {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--island-text-color), transparent 80%) transparent;
 }
@@ -830,7 +837,11 @@ label {
 #clipboard::-webkit-scrollbar,
 .notifications-container::-webkit-scrollbar,
 #task-list::-webkit-scrollbar,
-#settings-container::-webkit-scrollbar {
+#settings-container::-webkit-scrollbar,
+.notes-scrollable::-webkit-scrollbar,
+.launcher-scrollable::-webkit-scrollbar,
+.progress-island-scrollable::-webkit-scrollbar,
+.audio-mixer-scrollable::-webkit-scrollbar {
   display: block !important;
   width: 4px !important;
 }
@@ -838,14 +849,22 @@ label {
 #clipboard::-webkit-scrollbar-track,
 .notifications-container::-webkit-scrollbar-track,
 #task-list::-webkit-scrollbar-track,
-#settings-container::-webkit-scrollbar-track {
+#settings-container::-webkit-scrollbar-track,
+.notes-scrollable::-webkit-scrollbar-track,
+.launcher-scrollable::-webkit-scrollbar-track,
+.progress-island-scrollable::-webkit-scrollbar-track,
+.audio-mixer-scrollable::-webkit-scrollbar-track {
   background: transparent !important;
 }
 
 #clipboard::-webkit-scrollbar-thumb,
 .notifications-container::-webkit-scrollbar-thumb,
 #task-list::-webkit-scrollbar-thumb,
-#settings-container::-webkit-scrollbar-thumb {
+#settings-container::-webkit-scrollbar-thumb,
+.notes-scrollable::-webkit-scrollbar-thumb,
+.launcher-scrollable::-webkit-scrollbar-thumb,
+.progress-island-scrollable::-webkit-scrollbar-thumb,
+.audio-mixer-scrollable::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--island-text-color), transparent 80%) !important;
   border-radius: 4px !important;
 }
@@ -853,7 +872,11 @@ label {
 #clipboard::-webkit-scrollbar-thumb:hover,
 .notifications-container::-webkit-scrollbar-thumb:hover,
 #task-list::-webkit-scrollbar-thumb:hover,
-#settings-container::-webkit-scrollbar-thumb:hover {
+#settings-container::-webkit-scrollbar-thumb:hover,
+.notes-scrollable::-webkit-scrollbar-thumb:hover,
+.launcher-scrollable::-webkit-scrollbar-thumb:hover,
+.progress-island-scrollable::-webkit-scrollbar-thumb:hover,
+.audio-mixer-scrollable::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--island-text-color), transparent 50%) !important;
 }
 

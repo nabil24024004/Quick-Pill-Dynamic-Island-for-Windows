@@ -4,6 +4,7 @@ import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headpho
 import "./App.css";
 import AppLauncher from "./components/AppLauncher";
 import QuickNotes from "./components/QuickNotes";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 // Helper format file sizes (Bytes -> KB -> MB)
 function formatBytes(bytes, decimals = 1) {
@@ -3513,6 +3514,17 @@ export default function Island() {
   }, [notificationSnapshot]);
 
   const handleClearAll = useCallback(async () => {
+    setNotificationSnapshot(prev => ({
+      ...prev,
+      active: [],
+      standalone: [],
+      groups: [],
+      stats: {
+        ...prev.stats,
+        totalActive: 0,
+        unreviewedCount: 0
+      }
+    }));
     if (window.electronAPI?.notifications?.clearAll) {
       await window.electronAPI.notifications.clearAll();
       setUndoToast({
@@ -5455,12 +5467,14 @@ export default function Island() {
                           onChange={(e) => handleSetMasterVolume(parseFloat(e.target.value) / 100)}
                           style={{
                             flex: 1,
+                            minWidth: 0,
+                            width: '100%',
                             height: 3,
                             accentColor: '#a855f7',
                             cursor: 'pointer'
                           }}
                         />
-                        <span style={{ fontSize: 9, fontWeight: 700, color: masterAudioMuted ? '#f87171' : 'rgba(255,255,255,0.7)', width: 24, textAlign: 'right' }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 700, color: masterAudioMuted ? '#f87171' : 'rgba(255,255,255,0.7)', width: 28, textAlign: 'right', flexShrink: 0 }}>
                           {masterAudioMuted ? "M" : `${Math.round(masterAudioVolume * 100)}%`}
                         </span>
                       </div>
@@ -5850,31 +5864,6 @@ export default function Island() {
                         ))}
                       </div>
 
-                      {/* Test Checksum Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        onClick={handleStartFileHashTest}
-                        disabled={isStartingProgressTest}
-                        title="Pick a file to test real streaming progress"
-                        style={{
-                          background: 'rgba(56, 189, 248, 0.12)',
-                          border: '1px solid rgba(56, 189, 248, 0.25)',
-                          borderRadius: 6,
-                          padding: '2px 7px',
-                          color: '#38bdf8',
-                          fontSize: 9.5,
-                          fontWeight: 600,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 3
-                        }}
-                      >
-                        <Sparkles size={10} color="#38bdf8" />
-                        <span>Test File</span>
-                      </motion.button>
-
                       {/* Clear History */}
                       {historyOps.length > 0 && (
                         <motion.button
@@ -6216,26 +6205,30 @@ export default function Island() {
 
             {/* Quick App Launcher & Workspace Switcher */}
             {currentTab === 14 && (
-              <AppLauncher
-                textColor={textColor}
-                accentColor={accentColor}
-                onClose={() => setMode("still")}
-              />
+              <ErrorBoundary tabName="App Launcher" onGoHome={() => setTabState([2, -1])}>
+                <AppLauncher
+                  textColor={textColor}
+                  accentColor="#38bdf8"
+                  onClose={() => setMode("still")}
+                />
+              </ErrorBoundary>
             )}
 
             {/* Quick Notes & Contextual Capture */}
             {currentTab === 15 && (
-              <QuickNotes
-                textColor={textColor}
-                accentColor={accentColor}
-                onTaskCreated={(task) => {
-                  setTasks(prev => {
-                    const updated = [task, ...prev];
-                    localStorage.setItem("tasks", JSON.stringify(updated));
-                    return updated;
-                  });
-                }}
-              />
+              <ErrorBoundary tabName="Quick Notes" onGoHome={() => setTabState([2, -1])}>
+                <QuickNotes
+                  textColor={textColor}
+                  accentColor="#10b981"
+                  onTaskCreated={(task) => {
+                    setTasks(prev => {
+                      const updated = [task, ...prev];
+                      localStorage.setItem("tasks", JSON.stringify(updated));
+                      return updated;
+                    });
+                  }}
+                />
+              </ErrorBoundary>
             )}
 
             {/* Now Playing*/}
@@ -6926,18 +6919,21 @@ export default function Island() {
                 ) : (
                   /* 'all' or 'unread' view */
                   (() => {
-                    const standaloneItems = notificationSnapshot.standalone.filter(item => {
+                    const rawItems = Array.isArray(notificationSnapshot.active) && notificationSnapshot.active.length > 0
+                      ? notificationSnapshot.active
+                      : [
+                          ...(notificationSnapshot.standalone || []),
+                          ...(notificationSnapshot.groups?.flatMap(g => g.items) || [])
+                        ];
+
+                    const validItems = rawItems.filter(item => {
+                      if (!item) return false;
+                      if (!item.title?.trim() && !item.body?.trim()) return false;
                       if (notificationFilter === 'unread') return !item.localReviewed;
                       return true;
                     });
-                    const groupStacks = notificationSnapshot.groups.filter(group => {
-                      if (notificationFilter === 'unread') return group.unreviewedCount > 0;
-                      return true;
-                    });
 
-                    const hasAny = standaloneItems.length > 0 || groupStacks.length > 0;
-
-                    if (!hasAny && !notificationSnapshot.incomingCall) {
+                    if (validItems.length === 0 && !notificationSnapshot.incomingCall) {
                       return (
                         <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 40, fontSize: 13 }}>
                           <Bell size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
@@ -6947,6 +6943,7 @@ export default function Island() {
                     }
 
                     const renderCardItem = (notif) => {
+                      if (!notif || (!notif.title?.trim() && !notif.body?.trim())) return null;
                       const isMessaging = (notif.applicationName || "").toLowerCase().match(/whatsapp|telegram|slack|discord|signal|teams/);
                       const hasReply = notif.capabilities?.some(c => c.type === 'reply' && c.supported);
                       const currentActionStatus = actionStatuses[notif.id];
@@ -7172,60 +7169,8 @@ export default function Island() {
                           </div>
                         )}
 
-                        {/* Grouped Notification Stacks */}
-                        {groupStacks.map(group => {
-                          const isExpanded = Boolean(expandedGroupIds[group.groupId]);
-                          return (
-                            <div key={group.groupId} className="notification-group-stack">
-                              <div
-                                className="notification-group-header"
-                                onClick={() => setExpandedGroupIds(prev => ({ ...prev, [group.groupId]: !prev[group.groupId] }))}
-                              >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-                                  {group.applicationIcon ? (
-                                    <img src={group.applicationIcon} style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'cover' }} alt="" />
-                                  ) : (
-                                    <Bell size={14} opacity={0.7} />
-                                  )}
-                                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      <span style={{ fontSize: 11, fontWeight: 700 }}>{group.applicationName}</span>
-                                      <span className="notification-badge-count">{group.count} updates</span>
-                                    </div>
-                                    <span style={{ fontSize: 10, opacity: 0.65, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                      {group.latestItem?.title || group.latestItem?.body}
-                                    </span>
-                                  </div>
-                                </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  {isExpanded ? <ChevronUp size={14} opacity={0.6} /> : <ChevronDown size={14} opacity={0.6} />}
-                                  <button
-                                    type="button"
-                                    className="notification-dismiss"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleDismissGroup(group.groupId);
-                                    }}
-                                    title="Dismiss stack"
-                                  >
-                                    <X size={13} />
-                                  </button>
-                                </div>
-                              </div>
-
-                              {/* Stack Items when expanded */}
-                              {isExpanded && (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', background: 'rgba(0,0,0,0.15)' }}>
-                                  {group.items.map(notif => renderCardItem(notif))}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {/* Standalone Notifications */}
-                        {standaloneItems.map(notif => renderCardItem(notif))}
+                        {/* All Notification Cards */}
+                        {validItems.map(notif => renderCardItem(notif))}
                       </>
                     );
                   })()

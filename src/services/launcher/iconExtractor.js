@@ -12,6 +12,8 @@ const FALLBACK_ICONS = {
   uwp: `data:image/svg+xml;base64,${Buffer.from(UWP_FALLBACK_SVG).toString("base64")}`,
 };
 
+const GENERIC_DRIVE_ICON = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACgAAAAoCAYAAACM/rhtAAADc0lEQVR4nOyYTU/bMBjHH5emNKQvKRVs0jThXvgOHLkwvsPuu+2+w+67TjvuuvM+AssOkzpOfIJprfamMsoYlUCVsD0/T+LUCQmFdYFO6h9Sp7Yb//x/HtuUMsy5yjDnigE33w4UKAAhlS4Vk/qVKWBCStV//KC08eabUlip+8QldtX3P55sMChIMaCSAFLiyMBsCJBAg0sRwujmsIwhoVDFgEJbh45JGpUAY1AzAeNuDK9fhCoW0XIwBEIIG1RGgNpdumdWHywL5kuGmAaTlH+JPEMJoSi+lAXKhF8xuK0QU45ZrpkFABDlv8TcVFGYw3sNqPtCobIclGCHmManwY2DEUmUClKmJlCQin36P1Ds4P3XfRmuTMqzSRj179HTDvNffpImzOgc7TjhYlJnzzZLUJAmJ0ly8MRqpWYRbT/UBycyCXWRmuyDmHAy3HjRQBYNjmW3e8AffVAseYpEe6QG7X/5fn1K/cHz8/Per+Of21tbW71p3ePQKBECkSO41QhTSvBbXkD8Ily15LKQ0UKBm4kxqLou91trQbfb5dO6x4Ay2jIwrAhCZeRW1V3h8fGmLxEde/GEbszIwF1xebO1GgRTICcO4uDaFSXCo4y2E3RMX6VSKZ4AOod5aDv5NyJI1+NrTQ0Z5EMmHKSjK3IoDGdYUju9lzAJNbbBTBs1TtzzVnh73deQAc/qc2kfxI6ra/eCeq3Ol5aW4DYkhIDR6ah3PBxsa/XstlIartVeD+pe7dbgUDhWvVHjrdX1S04m/qL+uL8fvNvb43B34ru7u4EuO6YiAfj75IQPh0O6xyTGxWBKuy7dnla63n5Out7I1B8eHnL7WQnAarUKlUoFZtE0mPSE0v1c14VcwOXlZQLED+DBe9Y5o+PN63v6RGGZM7YHyHL0qijY702JDLmA6CBeqBEfQedVBw5OD6DyvAK1zzXIU1Y6XNU3DW/fm/EzAR3HiWcwrozBGTngfHXIVay3HzZNWbDT8hmlx1JXASoNQhTtQRuOXhzBQ/3TGDR0/CFzQWQpL99MWzpH7ftyOflVPfFONzLjIH7IHYQJq5zrrda8urxJZPVDhlxAffSoRqPBxuMx3IV836fjz1YCsNls9nd2dnj0XbKorwOZz0Y38bq4uHifqIc51//zz6N51QJwVi0AZ9UCcFYtAGfVHwAAAP//J0lmmwAAAAZJREFUAwCmQsi0YlNeygAAAABJRU5ErkJggg==';
+
 /**
  * Returns a fallback icon for the specified application type.
  * @param {'win32' | 'uwp'} [type]
@@ -32,6 +34,7 @@ async function extractWin32Icon(targetPath, options = {}) {
 
   // Clean path of quotes or icon index
   const cleanPath = targetPath.replace(/^["']|["']$/g, "").replace(/,\s*-?\d+$/, "").trim();
+  if (!cleanPath) return getFallbackIcon("win32");
 
   // If Electron's app.getFileIcon is provided
   if (typeof options.getFileIcon === "function") {
@@ -168,7 +171,7 @@ async function extractCatalogIcons(catalog, options = {}) {
   const existingIconMap = new Map();
   if (Array.isArray(options.existingCatalog)) {
     for (const item of options.existingCatalog) {
-      if (item && item.id && item.icon && typeof item.icon === "string" && !item.icon.includes("svg+xml")) {
+      if (item && item.id && item.icon && typeof item.icon === "string" && !item.icon.includes("svg+xml") && item.icon !== GENERIC_DRIVE_ICON) {
         existingIconMap.set(item.id, item.icon);
         if (item.launch) existingIconMap.set(item.launch, item.icon);
       }
@@ -182,12 +185,12 @@ async function extractCatalogIcons(catalog, options = {}) {
       const app = enriched[i];
       if (!app) continue;
 
-      // 1. Keep existing high-res icon if already cached
-      if (app.icon && typeof app.icon === "string" && !app.icon.includes("svg+xml")) {
+      // 1. Keep existing high-res icon if already cached (ignore bad drive icons)
+      if (app.icon && typeof app.icon === "string" && !app.icon.includes("svg+xml") && app.icon !== GENERIC_DRIVE_ICON) {
         continue;
       }
       const cached = existingIconMap.get(app.id) || (app.launch ? existingIconMap.get(app.launch) : null);
-      if (cached) {
+      if (cached && cached !== GENERIC_DRIVE_ICON) {
         app.icon = cached;
         continue;
       }
@@ -196,7 +199,16 @@ async function extractCatalogIcons(catalog, options = {}) {
       if (app.type === "uwp") {
         app.icon = extractUwpIconFromPackage(app.appId, app.installLocation);
       } else {
-        const iconSource = app.iconLocation || app.target || app.launch;
+        let iconSource = null;
+        if (app.iconLocation && typeof app.iconLocation === "string") {
+          const cleaned = app.iconLocation.replace(/,\s*-?\d+$/, "").replace(/^["']|["']$/g, "").trim();
+          if (cleaned && fs.existsSync(cleaned)) {
+            iconSource = app.iconLocation;
+          }
+        }
+        if (!iconSource) {
+          iconSource = app.target || app.launch;
+        }
         app.icon = await extractWin32Icon(iconSource, options);
       }
     }

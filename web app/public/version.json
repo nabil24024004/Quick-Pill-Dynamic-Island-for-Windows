@@ -17,8 +17,8 @@
   "platforms": {
     "win32-x64": {
       "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.0-Setup.exe",
-      "sha256": "679273e38f780e7a95d6e136282d8c09c634bc6f32f53de88aee40db9f110eda",
-      "size": 402995796,
+      "sha256": "06f010dfbc1be6125452d0c62b4fd95152df10cc96622d99f34e584c46289045",
+      "size": 403011569,
       "installerType": "nsis"
     }
   }

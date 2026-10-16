@@ -89,12 +89,20 @@ foreach ($dir in $dirs) {
       $target = $sc.TargetPath
       if ($target -and ($target.EndsWith('.exe') -or $target.EndsWith('.cmd') -or $target.EndsWith('.bat') -or $target.EndsWith('.ps1'))) {
         if ($target -notmatch '\\\\(?:unins(?:tall)?(?:000)?|update)\\.exe$' -and $_.BaseName -notmatch '(?i)uninstall|readme|help') {
+          $rawIconLoc = $sc.IconLocation
+          $validIconLoc = ''
+          if ($rawIconLoc) {
+            $cleaned = ($rawIconLoc -replace ',\s*-?\d+$', '').Trim(' "', "'")
+            if ($cleaned -and (Test-Path -LiteralPath $cleaned -PathType Leaf)) {
+              $validIconLoc = $rawIconLoc
+            }
+          }
           $results.Add([PSCustomObject]@{
             name = $_.BaseName
             lnkPath = $_.FullName
             target = $target
             args = $sc.Arguments
-            iconLocation = $sc.IconLocation
+            iconLocation = $validIconLoc
             type = 'win32'
             source = 'start-menu'
           })

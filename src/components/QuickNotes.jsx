@@ -15,7 +15,8 @@ import {
   AlertCircle,
   ExternalLink,
   RotateCcw,
-  CheckSquare
+  CheckSquare,
+  X
 } from "lucide-react";
 
 export default function QuickNotes({
@@ -62,11 +63,25 @@ export default function QuickNotes({
           window.electronAPI.notes.getTags().catch(() => [])
         ]);
 
-        if (Array.isArray(fetchedNotes)) setNotes(fetchedNotes);
+        if (Array.isArray(fetchedNotes)) {
+          setNotes(fetchedNotes);
+          try {
+            localStorage.setItem("quick_pill_notes_cache", JSON.stringify(fetchedNotes));
+          } catch (_) {}
+        }
         if (Array.isArray(fetchedTags)) setTags(fetchedTags);
+      } else {
+        try {
+          const cached = localStorage.getItem("quick_pill_notes_cache");
+          if (cached) setNotes(JSON.parse(cached));
+        } catch (_) {}
       }
     } catch (err) {
       console.error("Failed to fetch notes:", err);
+      try {
+        const cached = localStorage.getItem("quick_pill_notes_cache");
+        if (cached) setNotes(JSON.parse(cached));
+      } catch (_) {}
     } finally {
       setIsLoading(false);
     }
@@ -132,36 +147,83 @@ export default function QuickNotes({
 
   // Handle Save Note (Commit)
   const handleSaveNote = useCallback(async () => {
-    if (!draftContent.trim()) {
+    const trimmedContent = draftContent.trim();
+    if (!trimmedContent) {
       showStatus("Cannot save empty note");
       return;
     }
 
     try {
-      if (window.electronAPI?.notes?.saveNote) {
-        const payload = {
-          content: draftContent,
-          title: draftTitle.trim() || undefined
-        };
-        if (activeEditingNoteId) {
-          payload.id = activeEditingNoteId;
-        }
-
-        const saved = await window.electronAPI.notes.saveNote(payload);
-        if (saved) {
-          showStatus(activeEditingNoteId ? "✓ Note updated" : "✓ Note saved");
-          setDraftContent("");
-          setDraftTitle("");
-          setActiveEditingNoteId(null);
-          setDraftSaveStatus("saved");
-          if (window.electronAPI.notes.clearDraft) {
-            window.electronAPI.notes.clearDraft().catch(() => {});
-          }
-          loadNotes();
-        }
+      const payload = {
+        content: trimmedContent,
+        title: draftTitle.trim() || undefined
+      };
+      if (activeEditingNoteId) {
+        payload.id = activeEditingNoteId;
       }
+
+      let savedNote = null;
+      if (window.electronAPI?.notes?.saveNote) {
+        savedNote = await window.electronAPI.notes.saveNote(payload);
+      }
+
+      // If backend did not return or returned null, construct an optimistic note object
+      if (!savedNote) {
+        savedNote = {
+          id: activeEditingNoteId || ("note_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6)),
+          title: payload.title || (trimmedContent.split("\n")[0].slice(0, 50) || "Untitled Note"),
+          content: trimmedContent,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          tags: [],
+          isPinned: false,
+          isArchived: false
+        };
+      }
+
+      // 1. Optimistic state update so note appears instantly in the notes list
+      setNotes(prev => {
+        const list = Array.isArray(prev) ? [...prev] : [];
+        const idx = list.findIndex(n => n.id === savedNote.id);
+        if (idx >= 0) {
+          list[idx] = { ...list[idx], ...savedNote };
+          return list;
+        }
+        return [savedNote, ...list];
+      });
+
+      // 2. Persist to local cache
+      try {
+        const cached = localStorage.getItem("quick_pill_notes_cache");
+        const list = cached ? JSON.parse(cached) : [];
+        const idx = list.findIndex(n => n.id === savedNote.id);
+        if (idx >= 0) list[idx] = savedNote;
+        else list.unshift(savedNote);
+        localStorage.setItem("quick_pill_notes_cache", JSON.stringify(list));
+      } catch (_) {}
+
+      // 3. Clear draft and active editing state
+      setDraftContent("");
+      setDraftTitle("");
+      setActiveEditingNoteId(null);
+      setDraftSaveStatus("saved");
+      if (window.electronAPI?.notes?.clearDraft) {
+        window.electronAPI.notes.clearDraft().catch(() => {});
+      }
+
+      // 4. Switch view to inbox and reset filters so the newly saved note is front and center
+      setViewMode("inbox");
+      setFilter("all");
+      setSelectedTag(null);
+      setSearchQuery("");
+
+      showStatus(activeEditingNoteId ? "✓ Note updated" : "✓ Note added to inbox");
+
+      // 5. Sync from backend
+      loadNotes();
     } catch (err) {
-      showStatus("Error saving note: " + err.message, 4000);
+      console.error("Save note error:", err);
+      showStatus("Error saving note: " + (err.message || "Failed"), 4000);
     }
   }, [draftContent, draftTitle, activeEditingNoteId, showStatus, loadNotes]);
 
@@ -241,42 +303,73 @@ export default function QuickNotes({
 
   // Contextual Capture from Clipboard / Selection
   const handleContextualCapture = useCallback(async () => {
-    showStatus("Capturing from system clipboard...");
+    showStatus("Reading clipboard...");
     try {
-      if (window.electronAPI?.notes?.getContextualCapture) {
-        const res = await window.electronAPI.notes.getContextualCapture();
-        if (res?.success && res.content) {
-          // If large content (>300 chars / 1KB), show confirmation guard
-          if (res.guard?.isLarge) {
-            setContextGuardModal({
-              text: res.content,
-              charCount: res.guard.charCount,
-              byteCount: res.guard.byteCount,
-              preview: res.guard.preview,
-              source: res.source
-            });
-          } else {
-            // Append or replace into draft
-            setDraftContent(prev => prev ? `${prev}\n\n${res.content}` : res.content);
-            setViewMode("composer");
-            showStatus("✓ Captured into note composer");
-          }
-        } else {
-          showStatus(res?.error || "Clipboard is empty or contains no text");
-        }
+      let text = "";
+
+      // 1. Primary: Use window.electronAPI.getClipboardText (same rock-solid method as Clipboard tab)
+      if (window.electronAPI?.getClipboardText) {
+        try {
+          text = await window.electronAPI.getClipboardText();
+        } catch (_) {}
       }
+
+      // 2. Secondary fallback: Web Clipboard API
+      if (!text && navigator.clipboard?.readText) {
+        try {
+          text = await navigator.clipboard.readText();
+        } catch (_) {}
+      }
+
+      // 3. Tertiary fallback: Notes context adapter
+      if (!text && window.electronAPI?.notes?.getContextualCapture) {
+        try {
+          const res = await window.electronAPI.notes.getContextualCapture();
+          if (res?.success && res.content) {
+            text = res.content;
+          }
+        } catch (_) {}
+      }
+
+      if (!text || !text.trim()) {
+        showStatus("Clipboard is empty or contains no text");
+        return;
+      }
+
+      // If content is very large (>2500 chars), prompt guard modal
+      if (text.length > 2500) {
+        setContextGuardModal({
+          text,
+          charCount: text.length,
+          byteCount: new Blob([text]).size,
+          preview: text.slice(0, 160) + "...",
+          source: "Clipboard"
+        });
+        return;
+      }
+
+      // Append or replace into draft
+      setDraftContent(prev => (prev && prev.trim() ? `${prev}\n\n${text}` : text));
+      setViewMode("composer");
+      showStatus("✓ Pasted clipboard into note");
+      setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 50);
     } catch (err) {
-      showStatus("Context capture error: " + err.message, 3500);
+      showStatus("Clipboard error: " + (err.message || "Failed to read"), 3500);
     }
   }, [showStatus]);
 
   // Confirm large contextual capture
   const handleConfirmContextGuard = useCallback(() => {
     if (!contextGuardModal) return;
-    setDraftContent(prev => prev ? `${prev}\n\n${contextGuardModal.text}` : contextGuardModal.text);
+    setDraftContent(prev => (prev && prev.trim() ? `${prev}\n\n${contextGuardModal.text}` : contextGuardModal.text));
     setContextGuardModal(null);
     setViewMode("composer");
     showStatus("✓ Large payload pasted into composer");
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 50);
   }, [contextGuardModal, showStatus]);
 
   // Note-to-Task Conversion
@@ -299,16 +392,18 @@ export default function QuickNotes({
 
   // Filtered notes list based on search and tags
   const displayedNotes = useMemo(() => {
-    let list = notes;
+    let list = Array.isArray(notes) ? notes : [];
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(n =>
-        (n.title && n.title.toLowerCase().includes(q)) ||
-        (n.content && n.content.toLowerCase().includes(q)) ||
-        (n.tags && n.tags.some(t => t.toLowerCase().includes(q)))
+        n && (
+          (typeof n.title === "string" && n.title.toLowerCase().includes(q)) ||
+          (typeof n.content === "string" && n.content.toLowerCase().includes(q)) ||
+          (Array.isArray(n.tags) && n.tags.some(t => typeof t === "string" && t.toLowerCase().includes(q)))
+        )
       );
     }
-    return list;
+    return list.filter(Boolean);
   }, [notes, searchQuery]);
 
   return (
@@ -329,13 +424,19 @@ export default function QuickNotes({
     >
       {/* LEFT COLUMN: Sidebar summary, View Toggles & Tags */}
       <div
+        className="notes-scrollable"
         style={{
           width: 175,
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
-          flexShrink: 0
+          justifyContent: "flex-start",
+          gap: 6,
+          flexShrink: 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          paddingRight: 4,
+          boxSizing: "border-box"
         }}
       >
         {/* Top Header Card */}
@@ -347,7 +448,8 @@ export default function QuickNotes({
             padding: "8px 10px",
             display: "flex",
             flexDirection: "column",
-            gap: 6
+            gap: 6,
+            flexShrink: 0
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -423,20 +525,20 @@ export default function QuickNotes({
 
           {/* Stats Bar */}
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "rgba(255, 255, 255, 0.45)" }}>
-            <span>{notes.length} notes</span>
-            <span>{tags.length} tags</span>
+            <span>{Array.isArray(notes) ? notes.length : 0} notes</span>
+            <span>{Array.isArray(tags) ? tags.length : 0} tags</span>
           </div>
         </div>
 
         {/* Filter Navigation (All / Recent / Pinned / Archived) */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 2, flexShrink: 0 }}>
           {[
             { id: "all", label: "All Notes" },
             { id: "recent", label: "Recent" },
             { id: "pinned", label: "Pinned" },
             { id: "archived", label: "Archived" }
           ].map(btn => {
-            const isActive = filter === btn.id && viewMode === "inbox";
+            const isActive = filter === btn.id && viewMode === "inbox" && !selectedTag;
             return (
               <button
                 key={btn.id}
@@ -444,6 +546,7 @@ export default function QuickNotes({
                 onClick={(e) => {
                   e.stopPropagation();
                   setFilter(btn.id);
+                  setSelectedTag(null);
                   setViewMode("inbox");
                 }}
                 style={{
@@ -468,6 +571,67 @@ export default function QuickNotes({
             );
           })}
         </div>
+
+        {/* Tag Filters Section */}
+        {Array.isArray(tags) && tags.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4, paddingBottom: 6, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 4px" }}>
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255, 255, 255, 0.4)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                Tags
+              </span>
+              {selectedTag && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedTag(null);
+                  }}
+                  style={{ background: "transparent", border: "none", color: "#10b981", fontSize: 9, cursor: "pointer", padding: 0 }}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+              {tags.map(tagItem => {
+                const tagName = typeof tagItem === "string" ? tagItem : (tagItem.tag || tagItem.name);
+                const tagCount = typeof tagItem === "object" ? tagItem.count : null;
+                const isSelected = selectedTag === tagName;
+                return (
+                  <button
+                    key={tagName}
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedTag(isSelected ? null : tagName);
+                      setViewMode("inbox");
+                    }}
+                    style={{
+                      background: isSelected ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.05)",
+                      border: isSelected ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid rgba(255, 255, 255, 0.08)",
+                      borderRadius: 12,
+                      padding: "2px 6px",
+                      color: isSelected ? "#10b981" : "rgba(255, 255, 255, 0.6)",
+                      fontSize: 9.5,
+                      fontWeight: isSelected ? 700 : 500,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 3,
+                      transition: "all 0.15s ease"
+                    }}
+                  >
+                    <Tag size={9} />
+                    <span>#{tagName}</span>
+                    {tagCount !== null && (
+                      <span style={{ opacity: 0.6, fontSize: 8.5 }}>({tagCount})</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* RIGHT COLUMN: Composer OR Notes Inbox List */}
@@ -673,6 +837,7 @@ export default function QuickNotes({
 
             {/* Notes List */}
             <div
+              className="notes-scrollable"
               style={{
                 flex: 1,
                 overflowY: "auto",
@@ -794,10 +959,18 @@ export default function QuickNotes({
                     {/* Metadata Badges */}
                     <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "rgba(255, 255, 255, 0.4)", marginTop: 2 }}>
                       <Clock size={10} />
-                      <span>{new Date(note.updatedAt || note.createdAt || Date.now()).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
-                      {note.tags && note.tags.length > 0 && (
+                      <span>{(() => {
+                        try {
+                          const ts = note.updatedAt || note.createdAt;
+                          const d = ts ? new Date(ts) : new Date();
+                          return isNaN(d.getTime()) ? "Recent" : d.toLocaleDateString([], { month: "short", day: "numeric" });
+                        } catch {
+                          return "Recent";
+                        }
+                      })()}</span>
+                      {Array.isArray(note.tags) && note.tags.length > 0 && (
                         <span style={{ color: "#10b981", fontWeight: 600 }}>
-                          {note.tags.map(t => `#${t}`).join(" ")}
+                          {note.tags.filter(t => typeof t === "string").map(t => `#${t}`).join(" ")}
                         </span>
                       )}
                     </div>

@@ -17,6 +17,12 @@ import {
   ChevronRight
 } from "lucide-react";
 
+// Module-level caches to make tab switches and re-renders 0ms instant
+let _memoryCatalogCache = null;
+let _memoryFavoritesCache = null;
+let _memoryRunningWindowsCache = null;
+let _memoryWorkspacesCache = null;
+
 export default function AppLauncher({
   onClose,
   accentColor = "#0070f3",
@@ -24,13 +30,30 @@ export default function AppLauncher({
 }) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all"); // 'all' | 'favorites' | 'windows' | 'workspaces'
-  const [catalog, setCatalog] = useState([]);
+  const [catalog, setCatalog] = useState(() => {
+    if (Array.isArray(_memoryCatalogCache) && _memoryCatalogCache.length > 0) {
+      return _memoryCatalogCache;
+    }
+    try {
+      const stored = localStorage.getItem("qp_launcher_catalog_cache");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          _memoryCatalogCache = parsed;
+          return parsed;
+        }
+      }
+    } catch (_) {}
+    return [];
+  });
   const [searchResults, setSearchResults] = useState([]);
-  const [favorites, setFavorites] = useState([]);
-  const [runningWindows, setRunningWindows] = useState([]);
-  const [workspaces, setWorkspaces] = useState([]);
+  const [favorites, setFavorites] = useState(() => _memoryFavoritesCache || []);
+  const [runningWindows, setRunningWindows] = useState(() => _memoryRunningWindowsCache || []);
+  const [workspaces, setWorkspaces] = useState(() => _memoryWorkspacesCache || []);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(() => localStorage.getItem("active-workspace-id") || "dev");
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(() => {
+    return !(_memoryCatalogCache && _memoryCatalogCache.length > 0);
+  });
   const [isReindexing, setIsReindexing] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [statusMessage, setStatusMessage] = useState(null);
@@ -49,20 +72,42 @@ export default function AppLauncher({
 
   // Fetch initial data (catalog, favorites, running windows, workspaces)
   const loadData = useCallback(async () => {
-    setIsLoading(true);
+    const hasCached = Array.isArray(_memoryCatalogCache) && _memoryCatalogCache.length > 0;
+    if (!hasCached) {
+      setIsLoading(true);
+    }
     try {
       if (window.electronAPI?.launcher) {
-        const [cats, favs, wins, ws] = await Promise.all([
+        // Fast paths: getCatalog, getFavorites, getWorkspaces
+        const [cats, favs, ws] = await Promise.all([
           window.electronAPI.launcher.getCatalog().catch(() => []),
           window.electronAPI.launcher.getFavorites().catch(() => []),
-          window.electronAPI.launcher.getRunningWindows().catch(() => []),
           window.electronAPI.launcher.getWorkspaces().catch(() => [])
         ]);
 
-        if (Array.isArray(cats)) setCatalog(cats);
-        if (Array.isArray(favs)) setFavorites(favs);
-        if (Array.isArray(wins)) setRunningWindows(wins);
-        if (Array.isArray(ws)) setWorkspaces(ws);
+        if (Array.isArray(cats) && cats.length > 0) {
+          setCatalog(cats);
+          _memoryCatalogCache = cats;
+          try {
+            localStorage.setItem("qp_launcher_catalog_cache", JSON.stringify(cats));
+          } catch (_) {}
+        }
+        if (Array.isArray(favs)) {
+          setFavorites(favs);
+          _memoryFavoritesCache = favs;
+        }
+        if (Array.isArray(ws)) {
+          setWorkspaces(ws);
+          _memoryWorkspacesCache = ws;
+        }
+
+        // Running windows in background so slow PowerShell execution doesn't freeze launcher
+        window.electronAPI.launcher.getRunningWindows().then(wins => {
+          if (Array.isArray(wins)) {
+            setRunningWindows(wins);
+            _memoryRunningWindowsCache = wins;
+          }
+        }).catch(() => {});
       }
     } catch (err) {
       console.error("Failed to load launcher data:", err);
@@ -117,32 +162,39 @@ export default function AppLauncher({
 
   // Visible items based on active filter and query
   const displayedItems = useMemo(() => {
+    const safeSearchResults = Array.isArray(searchResults) ? searchResults : [];
+    const safeCatalog = Array.isArray(catalog) ? catalog : [];
+    const safeFavorites = Array.isArray(favorites) ? favorites : [];
+    const safeRunningWindows = Array.isArray(runningWindows) ? runningWindows : [];
+    const safeWorkspaces = Array.isArray(workspaces) ? workspaces : [];
+
     if (query.trim().length > 0) {
+      const q = query.toLowerCase();
       if (filter === "favorites") {
-        return searchResults.filter(item => favorites.includes(item.id || item.target));
+        return safeSearchResults.filter(item => item && safeFavorites.includes(item.id || item.target));
       }
       if (filter === "windows") {
-        return searchResults.filter(item => item.itemType === "window" || item.type === "window");
+        return safeSearchResults.filter(item => item && (item.itemType === "window" || item.type === "window" || item.hWnd));
       }
       if (filter === "workspaces") {
-        return workspaces.filter(w => w.name.toLowerCase().includes(query.toLowerCase()));
+        return safeWorkspaces.filter(w => w && typeof w.name === "string" && w.name.toLowerCase().includes(q));
       }
-      return searchResults;
+      return safeSearchResults.filter(Boolean);
     }
 
     if (filter === "favorites") {
-      return catalog.filter(app => favorites.includes(app.id || app.target));
+      return safeCatalog.filter(app => app && safeFavorites.includes(app.id || app.target));
     }
     if (filter === "windows") {
-      return runningWindows;
+      return safeRunningWindows.filter(Boolean);
     }
     if (filter === "workspaces") {
-      return workspaces;
+      return safeWorkspaces.filter(Boolean);
     }
 
     // Default 'all': favorites first, then all discovered apps
-    const favApps = catalog.filter(app => favorites.includes(app.id || app.target));
-    const otherApps = catalog.filter(app => !favorites.includes(app.id || app.target));
+    const favApps = safeCatalog.filter(app => app && safeFavorites.includes(app.id || app.target));
+    const otherApps = safeCatalog.filter(app => app && !safeFavorites.includes(app.id || app.target));
     return [...favApps, ...otherApps];
   }, [query, filter, searchResults, catalog, favorites, runningWindows, workspaces]);
 
@@ -297,7 +349,8 @@ export default function AppLauncher({
     }
   };
 
-  const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
+  const safeWorkspaces = Array.isArray(workspaces) ? workspaces : [];
+  const activeWorkspace = safeWorkspaces.find(w => w?.id === activeWorkspaceId) || safeWorkspaces[0] || null;
 
   return (
     <div
@@ -318,13 +371,19 @@ export default function AppLauncher({
     >
       {/* LEFT COLUMN: Sidebar summary, active workspace & filter tabs */}
       <div
+        className="launcher-scrollable"
         style={{
           width: 175,
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
-          flexShrink: 0
+          justifyContent: "flex-start",
+          gap: 6,
+          flexShrink: 0,
+          overflowY: "auto",
+          overflowX: "hidden",
+          paddingRight: 4,
+          boxSizing: "border-box"
         }}
       >
         {/* Top Header Card */}
@@ -333,10 +392,11 @@ export default function AppLauncher({
             background: "rgba(255, 255, 255, 0.05)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
             borderRadius: 12,
-            padding: "8px 10px",
+            padding: "6px 8px",
             display: "flex",
             flexDirection: "column",
-            gap: 6
+            gap: 4,
+            flexShrink: 0
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -395,18 +455,18 @@ export default function AppLauncher({
 
           {/* Catalog & Window Counts */}
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "rgba(255, 255, 255, 0.45)", marginTop: 2 }}>
-            <span>{catalog.length} apps</span>
-            <span>{runningWindows.length} windows</span>
+            <span>{Array.isArray(catalog) ? catalog.length : 0} apps</span>
+            <span>{Array.isArray(runningWindows) ? runningWindows.length : 0} windows</span>
           </div>
         </div>
 
         {/* Filter Navigation Buttons */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0 }}>
           {[
-            { id: "all", label: "All Apps", count: catalog.length },
-            { id: "favorites", label: "Favorites", count: favorites.length },
-            { id: "windows", label: "Windows", count: runningWindows.length },
-            { id: "workspaces", label: "Workspaces", count: workspaces.length }
+            { id: "all", label: "All Apps", count: Array.isArray(catalog) ? catalog.length : 0 },
+            { id: "favorites", label: "Favorites", count: Array.isArray(favorites) ? favorites.length : 0 },
+            { id: "windows", label: "Windows", count: Array.isArray(runningWindows) ? runningWindows.length : 0 },
+            { id: "workspaces", label: "Workspaces", count: Array.isArray(workspaces) ? workspaces.length : 0 }
           ].map(btn => {
             const isActive = filter === btn.id;
             return (
@@ -423,7 +483,7 @@ export default function AppLauncher({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "5px 8px",
+                  padding: "4px 8px",
                   borderRadius: 8,
                   background: isActive ? "rgba(56, 189, 248, 0.16)" : "transparent",
                   border: isActive ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid transparent",
@@ -505,6 +565,7 @@ export default function AppLauncher({
         {/* Results List */}
         <div
           ref={listContainerRef}
+          className="launcher-scrollable"
           style={{
             flex: 1,
             overflowY: "auto",
@@ -534,10 +595,11 @@ export default function AppLauncher({
             </div>
           ) : (
             displayedItems.map((item, idx) => {
+              if (!item) return null;
               const isSelected = idx === selectedIndex;
-              const isFav = favorites.includes(item.id || item.target);
-              const isWindowItem = filter === "windows" || item.itemType === "window" || item.hWnd;
-              const isWorkspaceItem = filter === "workspaces" || item.isWorkspace;
+              const isFav = Array.isArray(favorites) && favorites.includes(item.id || item.target);
+              const isWindowItem = filter === "windows" || item.itemType === "window" || Boolean(item.hWnd);
+              const isWorkspaceItem = filter === "workspaces" || Boolean(item.isWorkspace);
 
               return (
                 <div
