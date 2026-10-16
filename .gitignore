@@ -23,5 +23,17 @@ out/
 *.njsproj
 *.sln
 *.sw?
+*.pdb
 .claude/
 .vite/
+native/audio-helper/bin/
+native/audio-helper/obj/
+
+# Runtime local stores & test caches
+app-cache.json
+favorites.json
+notes.json
+notes.json.bak
+workspaces.json
+draft-recovery.json
+.agents/

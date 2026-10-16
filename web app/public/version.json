@@ -1,21 +1,24 @@
 {
-  "version": "5.4.0",
-  "name": "Quick Pill 5.4.0",
-  "releaseDate": "2026-10-13",
+  "version": "5.5.0",
+  "name": "Quick Pill 5.5.0",
+  "releaseDate": "2026-10-16",
   "mandatory": false,
   "minSupportedVersion": "4.0.0",
   "changelog": [
+    "Quick App Launcher & Workspace Switcher: Search and launch installed Windows applications, switch active application windows with native Win32 window restoration, pin favorites, and organize productivity workspaces with launch profiles and preview safety.",
+    "Quick Notes & Contextual Capture: Instant note capture with debounced autosave and crash recovery, searchable notes inbox with tags and filters, contextual clipboard capture with large-content guard, and non-destructive note-to-task conversion.",
+    "Smart Notification Actions: Intelligent notification interaction layer with WhatsApp/VoIP call cards, inline replies, local snooze presets (5m, 15m, 30m, 1h), grouped multi-message stacks, low-priority collapsing, privacy preview masking, and dismissal undo buffer.",
+    "Universal Progress Island: Centralized background progress tracking interface anchored at the top-center Dynamic Island, supporting file copy/hash operations, background auto-updater progress, and cancellable task workflows.",
+    "Per-App Audio Mixer: Native Windows Core Audio WASAPI mixer to adjust individual application volume levels, mute/unmute audio streams, monitor peak volume meters, and toggle audio output devices.",
     "Apple Dynamic Island Battery Hub: Redesigned with Apple HIG design, 60 FPS right-to-left fluid liquid wave canvas physics engine, buoyant micro-bubbles, and real-time battery duration forecasting.",
-    "Seamless Boundary Transitions: Replaced previous buggy animations with clean, minimal transition effects strictly bounded within the app boundary.",
-    "Persistent Always-On-Top: Upgraded to screen-saver level priority with proactive event re-assertion to guarantee the pill stays on top across all workflows.",
-    "Lock-Screen & Background Timers: Timers use wall-clock timestamp synchronization and background throttling is disabled, keeping countdowns running seamlessly across Windows lock or sleep.",
+    "Persistent Always-On-Top & Background Timers: Screen-saver topmost priority level, wall-clock synchronized timers that never pause on lock screen or sleep.",
     "Silent Background Auto-Updater: When a new release is detected, the app automatically downloads and silently installs the update via NSIS in the background, with user preferences in Settings."
   ],
   "platforms": {
     "win32-x64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.4.0-Setup.exe",
-      "sha256": "b0b5a46033ba172d67e2b216d5e556298d0c69197f0f68cee992e6850983552c",
-      "size": 215943590,
+      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.0-Setup.exe",
+      "sha256": "2dfb0d2a9fb496dc0428520f9a4e882a73e22f2b3efbfd8049e583535bd9be5e",
+      "size": 402061370,
       "installerType": "nsis"
     }
   }

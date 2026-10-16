@@ -5,6 +5,7 @@ const {
   screen,
   ipcMain,
   shell,
+  dialog,
   Tray,
   Menu,
   nativeImage,
@@ -24,6 +25,10 @@ const https = require("https");
 const http = require("http");
 const crypto = require("crypto");
 const { EventEmitter } = require("events");
+const { createProgressEngine } = require("./services/progress");
+const { createNotificationEngine, NOTIFICATION_ACTION_TYPES } = require("./services/notifications");
+const { createLauncherEngine } = require("./services/launcher");
+const { createNotesEngine } = require("./services/notes");
 
 
 let tray = null;
@@ -446,33 +451,314 @@ ipcMain.handle("open-external", async (event, url) => {
   await shell.openExternal(url);
 });
 
+// ==========================================
+// Quick Pill App Launcher & Workspaces Engine & IPC Handlers
+// ==========================================
+let launcherEngineInstance = null;
+function getLauncherEngine() {
+  if (!launcherEngineInstance) {
+    let userData = "";
+    try {
+      userData = app.getPath("userData");
+    } catch (_) {
+      userData = process.cwd();
+    }
+    launcherEngineInstance = createLauncherEngine({
+      userDataPath: userData,
+      shell,
+      getFileIcon: (p, opts) => app.getFileIcon(p, opts),
+    });
+  }
+  return launcherEngineInstance;
+}
+
+// Namespaced launcher:* channels
+ipcMain.handle("launcher:search-apps", async (event, query, options) => {
+  try {
+    return await getLauncherEngine().searchApps(query, options);
+  } catch (err) {
+    logToFile("Error in launcher:search-apps:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("launcher:get-catalog", async () => {
+  try {
+    return await getLauncherEngine().getCatalog();
+  } catch (err) {
+    logToFile("Error in launcher:get-catalog:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("launcher:reindex-catalog", async () => {
+  try {
+    return await getLauncherEngine().reindexCatalog();
+  } catch (err) {
+    logToFile("Error in launcher:reindex-catalog:", err);
+    return { success: false, count: 0 };
+  }
+});
+
+ipcMain.handle("launcher:launch-app", async (event, target) => {
+  try {
+    return await getLauncherEngine().launchApp(target);
+  } catch (err) {
+    logToFile("Error in launcher:launch-app:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("launcher:get-running-windows", async (event, options) => {
+  try {
+    return await getLauncherEngine().getRunningWindows(options);
+  } catch (err) {
+    logToFile("Error in launcher:get-running-windows:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("launcher:activate-window", async (event, hWnd) => {
+  try {
+    const result = await getLauncherEngine().activateWindow(hWnd);
+    if (result.success && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("launcher:window-activated", { hWnd });
+    }
+    return result;
+  } catch (err) {
+    logToFile("Error in launcher:activate-window:", err);
+    return { success: false, code: "FAILED", error: err.message };
+  }
+});
+
+ipcMain.handle("launcher:get-favorites", async () => {
+  try {
+    return await getLauncherEngine().getFavorites();
+  } catch (err) {
+    logToFile("Error in launcher:get-favorites:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("launcher:set-favorites", async (event, favorites) => {
+  try {
+    return await getLauncherEngine().setFavorites(favorites);
+  } catch (err) {
+    logToFile("Error in launcher:set-favorites:", err);
+    return { success: false };
+  }
+});
+
+// Namespaced workspaces:* channels
+ipcMain.handle("workspaces:get-workspaces", async () => {
+  try {
+    return await getLauncherEngine().getWorkspaces();
+  } catch (err) {
+    logToFile("Error in workspaces:get-workspaces:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("workspaces:save-workspace", async (event, workspace) => {
+  try {
+    return await getLauncherEngine().saveWorkspace(workspace);
+  } catch (err) {
+    logToFile("Error in workspaces:save-workspace:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("workspaces:delete-workspace", async (event, id) => {
+  try {
+    return await getLauncherEngine().deleteWorkspace(id);
+  } catch (err) {
+    logToFile("Error in workspaces:delete-workspace:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("workspaces:launch-workspace", async (event, id, options) => {
+  try {
+    return await getLauncherEngine().launchWorkspace(id, options);
+  } catch (err) {
+    logToFile("Error in workspaces:launch-workspace:", err);
+    return { success: false, results: [], error: err.message };
+  }
+});
+
+// ==========================================
+// Quick Pill Notes & Contextual Capture Engine & IPC Handlers
+// ==========================================
+let notesEngineInstance = null;
+function getNotesEngine() {
+  if (!notesEngineInstance) {
+    let userData = "";
+    try {
+      userData = app.getPath("userData");
+    } catch (_) {
+      userData = process.cwd();
+    }
+    notesEngineInstance = createNotesEngine({
+      userDataPath: userData,
+      clipboard,
+    });
+  }
+  return notesEngineInstance;
+}
+
+// Namespaced notes:* channels
+ipcMain.handle("notes:get-notes", async (event, filter, options) => {
+  try {
+    return await getNotesEngine().getNotes(filter, options);
+  } catch (err) {
+    logToFile("Error in notes:get-notes:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("notes:save-note", async (event, notePayload) => {
+  try {
+    const saved = await getNotesEngine().saveNote(notePayload);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("notes:updated", { action: "save", note: saved });
+    }
+    return saved;
+  } catch (err) {
+    logToFile("Error in notes:save-note:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("notes:delete-note", async (event, id) => {
+  try {
+    const result = await getNotesEngine().deleteNote(id);
+    if (result.success && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("notes:updated", { action: "delete", id });
+    }
+    return result;
+  } catch (err) {
+    logToFile("Error in notes:delete-note:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("notes:undo-delete", async () => {
+  try {
+    const result = await getNotesEngine().undoDelete();
+    if (result.success && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("notes:updated", { action: "restore", note: result.note });
+    }
+    return result;
+  } catch (err) {
+    logToFile("Error in notes:undo-delete:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("notes:toggle-pin", async (event, id) => {
+  try {
+    const result = await getNotesEngine().togglePin(id);
+    if (result.success && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("notes:updated", { action: "togglePin", id, isPinned: result.isPinned });
+    }
+    return result;
+  } catch (err) {
+    logToFile("Error in notes:toggle-pin:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("notes:toggle-archive", async (event, id) => {
+  try {
+    const result = await getNotesEngine().toggleArchive(id);
+    if (result.success && mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("notes:updated", { action: "toggleArchive", id, isArchived: result.isArchived });
+    }
+    return result;
+  } catch (err) {
+    logToFile("Error in notes:toggle-archive:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("notes:save-draft", async (event, draft) => {
+  try {
+    return await getNotesEngine().saveDraft(draft);
+  } catch (err) {
+    logToFile("Error in notes:save-draft:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("notes:get-draft", async () => {
+  try {
+    return await getNotesEngine().getDraft();
+  } catch (err) {
+    logToFile("Error in notes:get-draft:", err);
+    return null;
+  }
+});
+
+ipcMain.handle("notes:clear-draft", async () => {
+  try {
+    return await getNotesEngine().clearDraft();
+  } catch (err) {
+    logToFile("Error in notes:clear-draft:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.handle("notes:get-contextual-capture", async (event, options) => {
+  try {
+    return await getNotesEngine().getContextualCapture(options);
+  } catch (err) {
+    logToFile("Error in notes:get-contextual-capture:", err);
+    return {
+      success: false,
+      code: "CAPTURE_ERROR",
+      error: err.message,
+    };
+  }
+});
+
+ipcMain.handle("notes:search-notes", async (event, query, options) => {
+  try {
+    return await getNotesEngine().searchNotes(query, options);
+  } catch (err) {
+    logToFile("Error in notes:search-notes:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("notes:get-tags", async () => {
+  try {
+    return await getNotesEngine().getTags();
+  } catch (err) {
+    logToFile("Error in notes:get-tags:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("notes:convert-to-task", async (event, noteOrId) => {
+  try {
+    return await getNotesEngine().convertToTask(noteOrId);
+  } catch (err) {
+    logToFile("Error in notes:convert-to-task:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+// Legacy backward compatibility channels
 ipcMain.handle("launch-app", async (event, appName) => {
-  launchWindows(appName);
+  return await getLauncherEngine().launchApp(appName);
 });
 
 ipcMain.handle("build-app-cache", async () => {
-  const cacheFile = path.join(app.getPath("userData"), "app-cache.json");
-  try {
-    const entries = await buildCache();
-    fs.writeFileSync(cacheFile, JSON.stringify(entries));
-  } catch {
-    // Silently ignore cache build failures
-  }
+  return await getLauncherEngine().reindexCatalog();
 });
 
 ipcMain.handle("search-apps", async (event, query) => {
-  if (!query) return [];
-  const cacheFile = path.join(app.getPath("userData"), "app-cache.json");
-  try {
-    if (!fs.existsSync(cacheFile)) return [];
-    const data = JSON.parse(fs.readFileSync(cacheFile, "utf8"));
-    const q = query.toLowerCase();
-    return data
-      .filter((a) => a.name && a.name.toLowerCase().includes(q))
-      .slice(0, 8);
-  } catch {
-    return [];
-  }
+  return await getLauncherEngine().searchApps(query);
 });
 
 ipcMain.handle("get-displays", () => {
@@ -541,7 +827,7 @@ class AppUpdater extends EventEmitter {
   constructor() {
     super();
     this.manifestUrls = [...DEFAULT_MANIFEST_URLS];
-    this.currentVersion = app ? app.getVersion() : "5.4.0";
+    this.currentVersion = app ? app.getVersion() : "5.5.0";
     this.status = "idle";
     this.updateInfo = null;
     this.downloadedFilePath = null;
@@ -999,6 +1285,60 @@ ipcMain.handle("set-auto-download-install", (event, enable) => {
   return val;
 });
 
+// --- Universal Progress Island Engine ---
+const progressEngine = createProgressEngine({
+  autoUpdater,
+  openPath: async (targetPath) => {
+    try {
+      if (fs.existsSync(targetPath)) {
+        if (fs.statSync(targetPath).isDirectory()) {
+          await shell.openPath(targetPath);
+        } else {
+          shell.showItemInFolder(targetPath);
+        }
+      }
+    } catch (err) {
+      logToFile('[progress openPath error]', err);
+    }
+  }
+});
+
+progressEngine.coordinator.on("update", (snapshot) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("progress:update", snapshot);
+  }
+});
+
+ipcMain.handle("progress:get-snapshot", () => {
+  return progressEngine.coordinator.getSnapshot();
+});
+
+ipcMain.handle("progress:execute-action", async (event, operationId, action, params) => {
+  return await progressEngine.coordinator.executeAction(operationId, action, params);
+});
+
+ipcMain.handle("progress:start-file-op", async (event, params) => {
+  return await progressEngine.fileOpsProvider.startCopy(params);
+});
+
+ipcMain.handle("progress:start-hash-op", async (event, params) => {
+  return await progressEngine.fileOpsProvider.startHash(params);
+});
+
+ipcMain.handle("progress:clear-history", () => {
+  progressEngine.registry.clearHistory();
+  return true;
+});
+
+ipcMain.handle("progress:select-file", async () => {
+  if (!mainWindow) return null;
+  const res = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openFile"]
+  });
+  if (res.canceled || !res.filePaths.length) return null;
+  return res.filePaths[0];
+});
+
 const getIconPath = (forceExt = null) => {
   const ext = forceExt || "ico";
 
@@ -1174,6 +1514,7 @@ app.whenReady().then(() => {
   createWindow();
   startKeyLockPolling();
   startUSBPolling();
+  getLauncherEngine().getCatalog().catch((err) => logToFile("Failed to warm launcher catalog:", err));
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -1212,6 +1553,11 @@ app.whenReady().then(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("system-resume");
       }
+      try {
+        if (typeof notificationEngine !== "undefined" && notificationEngine?.registry) {
+          notificationEngine.registry.checkSnoozedDue();
+        }
+      } catch (_) {}
       setTimeout(ensureAlwaysOnTop, 500);
       setTimeout(ensureAlwaysOnTop, 2000);
     });
@@ -1219,6 +1565,11 @@ app.whenReady().then(() => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("system-resume");
       }
+      try {
+        if (typeof notificationEngine !== "undefined" && notificationEngine?.registry) {
+          notificationEngine.registry.checkSnoozedDue();
+        }
+      } catch (_) {}
       setTimeout(ensureAlwaysOnTop, 500);
       setTimeout(ensureAlwaysOnTop, 2000);
     });
@@ -1903,8 +2254,93 @@ try {
   logToFile("Failed to write get-notifications.ps1:", e);
 }
 
+// --- Feature: Smart Notification Actions Engine ---
+function loadPersistedNotifications() {
+  try {
+    const storePath = path.join(app.getPath("userData"), "notifications-store.json");
+    if (fs.existsSync(storePath)) {
+      return JSON.parse(fs.readFileSync(storePath, "utf8"));
+    }
+  } catch (e) {
+    logToFile("Failed to load notifications-store.json:", e);
+  }
+  return null;
+}
+
+function savePersistedNotifications(data) {
+  try {
+    const storePath = path.join(app.getPath("userData"), "notifications-store.json");
+    fs.writeFileSync(storePath, JSON.stringify(data, null, 2), "utf8");
+  } catch (e) {
+    logToFile("Failed to save notifications-store.json:", e);
+  }
+}
+
+async function removeNotificationFromWindows(sourceId) {
+  if (process.platform !== "win32" || !sourceId) return false;
+  return new Promise((resolve) => {
+    const script = `
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTaskGeneric = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetGenericArguments().Count -eq 1 -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name.StartsWith('IAsyncOperation')
+}[0]
+function Await-Op($asyncOp, $type) {
+    if (-not $asyncOp) { return $null }
+    try { $task = $asTaskGeneric.MakeGenericMethod($type).Invoke($null, @($asyncOp)); [void]$task.Wait(); return $task.Result } catch { return $null }
+}
+try {
+    $listener = [Windows.UI.Notifications.Management.UserNotificationListener, Windows.UI.Notifications, ContentType = WindowsRuntime]::Current
+    $listener.RemoveNotification(${sourceId})
+    Write-Output "true"
+} catch { Write-Output "false" }
+`;
+    const enc = getPowershellEncodedCommand(script);
+    exec(`powershell -NoProfile -EncodedCommand ${enc}`, (err, stdout) => {
+      resolve(stdout?.trim() === "true");
+    });
+  });
+}
+
+async function focusNotificationAppInternal(appIdOrName) {
+  if (process.platform !== "win32" || !appIdOrName) return false;
+  return new Promise((resolve) => {
+    const cleanName = appIdOrName.split("!")[0].split("_")[0].replace(/\./g, "");
+    const script = `
+$type = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);'
+$fw = Add-Type -MemberDefinition $type -Name "FW" -Namespace "WinAPI" -PassThru
+$procs = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and ($_.ProcessName -match '${cleanName}' -or $_.MainWindowTitle -match '${cleanName}') } | Select-Object -First 1
+if ($procs) { [void]$fw::SetForegroundWindow($procs.MainWindowHandle); Write-Output "true" } else { Write-Output "false" }
+`;
+    const enc = getPowershellEncodedCommand(script);
+    exec(`powershell -NoProfile -EncodedCommand ${enc}`, (err, stdout) => {
+      resolve(stdout?.trim() === "true");
+    });
+  });
+}
+
+const notificationEngine = createNotificationEngine({
+  savePersistence: savePersistedNotifications,
+  initialPersistedData: loadPersistedNotifications(),
+  removeNotificationSource: removeNotificationFromWindows,
+  focusApp: focusNotificationAppInternal,
+  openExternal: async (url) => shell.openExternal(url),
+});
+
+notificationEngine.registry.on("change", (snapshot) => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("notification:update", snapshot);
+  }
+});
+
+// Periodic heartbeat for checking due snoozes
+setInterval(() => {
+  try {
+    notificationEngine.registry.checkSnoozedDue();
+  } catch (_) {}
+}, 10000);
+
 let notificationsFetchInFlight = false;
-ipcMain.handle("get-notifications", async () => {
+async function fetchWindowsNotificationsInternal() {
   if (process.platform !== "win32") return [];
   if (notificationsFetchInFlight) return []; // skip if previous powershell script is still running
   notificationsFetchInFlight = true;
@@ -1918,53 +2354,335 @@ ipcMain.handle("get-notifications", async () => {
         if (error || !stdout) return resolve([]);
         try {
           const data = JSON.parse(stdout.trim());
-          resolve(Array.isArray(data) ? data : data ? [data] : []);
+          const list = Array.isArray(data) ? data : data ? [data] : [];
+          notificationEngine.syncNotifications(list, "windows-notification-listener");
+          resolve(list);
         } catch {
           resolve([]);
         }
       }
     );
   });
+}
+
+// Backwards-compatible IPC handlers
+ipcMain.handle("get-notifications", async () => {
+  return await fetchWindowsNotificationsInternal();
 });
 
 ipcMain.handle("dismiss-notification", async (event, notifId) => {
-  if (process.platform !== "win32") return false;
-  return new Promise((resolve) => {
-    const script = `
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$asTaskGeneric = [System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-    $_.Name -eq 'AsTask' -and $_.IsGenericMethodDefinition -and $_.GetGenericArguments().Count -eq 1 -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name.StartsWith('IAsyncOperation')
-}[0]
-function Await-Op($asyncOp, $type) {
-    if (-not $asyncOp) { return $null }
-    try { $task = $asTaskGeneric.MakeGenericMethod($type).Invoke($null, @($asyncOp)); [void]$task.Wait(); return $task.Result } catch { return $null }
-}
-try {
-    $listener = [Windows.UI.Notifications.Management.UserNotificationListener, Windows.UI.Notifications, ContentType = WindowsRuntime]::Current
-    $listener.RemoveNotification(${notifId})
-    Write-Output "true"
-} catch { Write-Output "false" }
-`;
-    const enc = getPowershellEncodedCommand(script);
-    exec(`powershell -NoProfile -EncodedCommand ${enc}`, (err, stdout) => {
-      resolve(stdout?.trim() === "true");
-    });
-  });
+  const res = await notificationEngine.dismiss(notifId);
+  return Boolean(res?.success);
 });
 
 ipcMain.handle("focus-notification-app", async (event, appId) => {
-  if (process.platform !== "win32" || !appId) return false;
-  return new Promise((resolve) => {
-    const cleanName = appId.split("!")[0].split("_")[0].replace(/\./g, "");
-    const script = `
-$type = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);'
-$fw = Add-Type -MemberDefinition $type -Name "FW" -Namespace "WinAPI" -PassThru
-$procs = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and ($_.ProcessName -match '${cleanName}' -or $_.MainWindowTitle -match '${cleanName}') } | Select-Object -First 1
-if ($procs) { [void]$fw::SetForegroundWindow($procs.MainWindowHandle); Write-Output "true" } else { Write-Output "false" }
-`;
-    const enc = getPowershellEncodedCommand(script);
-    exec(`powershell -NoProfile -EncodedCommand ${enc}`, (err, stdout) => {
-      resolve(stdout?.trim() === "true");
-    });
-  });
+  return await focusNotificationAppInternal(appId);
 });
+
+// Smart Notification Actions IPC handlers
+ipcMain.handle("notification:get-snapshot", () => {
+  return notificationEngine.getSnapshot();
+});
+
+ipcMain.handle("notification:sync-now", async () => {
+  await fetchWindowsNotificationsInternal();
+  return notificationEngine.getSnapshot();
+});
+
+ipcMain.handle("notification:execute-action", async (event, notificationId, actionType, params) => {
+  return await notificationEngine.executeAction(notificationId, actionType, params);
+});
+
+ipcMain.handle("notification:snooze", (event, notificationId, durationMs, untilTimestamp) => {
+  return notificationEngine.snooze(notificationId, durationMs, untilTimestamp);
+});
+
+ipcMain.handle("notification:cancel-snooze", (event, notificationId) => {
+  return notificationEngine.cancelSnooze(notificationId);
+});
+
+ipcMain.handle("notification:dismiss", async (event, notificationId) => {
+  return await notificationEngine.dismiss(notificationId);
+});
+
+ipcMain.handle("notification:dismiss-group", (event, groupId) => {
+  return notificationEngine.dismissGroup(groupId);
+});
+
+ipcMain.handle("notification:clear-all", () => {
+  return notificationEngine.clearAllActive();
+});
+
+ipcMain.handle("notification:undo-dismiss", (event, notificationId) => {
+  return notificationEngine.undoDismiss(notificationId);
+});
+
+ipcMain.handle("notification:mark-reviewed", (event, notificationId) => {
+  return notificationEngine.markReviewed(notificationId);
+});
+
+ipcMain.handle("notification:mark-all-reviewed", () => {
+  return notificationEngine.markAllReviewed();
+});
+
+ipcMain.handle("notification:set-hide-previews", (event, hide) => {
+  notificationEngine.setHidePreviews(hide);
+  return true;
+});
+
+ipcMain.handle("notification:set-app-excluded", (event, appName, excluded) => {
+  notificationEngine.setAppExcluded(appName, excluded);
+  return true;
+});
+
+ipcMain.handle("notification:clear-history", () => {
+  notificationEngine.clearHistory();
+  return true;
+});
+
+// ==========================================
+// Quick Pill Per-App Audio Mixer Native Integration
+// ==========================================
+
+function getAudioHelperPath() {
+  const possiblePaths = [
+    path.join(process.resourcesPath, 'audio-helper.exe'),
+    path.join(process.resourcesPath, 'native', 'bin', 'audio-helper.exe'),
+    path.join(process.resourcesPath, 'native', 'audio-helper.exe'),
+    path.join(app.getAppPath(), 'native', 'bin', 'audio-helper.exe'),
+    path.join(__dirname, '..', 'native', 'bin', 'audio-helper.exe'),
+    path.join(__dirname, 'native', 'bin', 'audio-helper.exe'),
+    path.join(process.cwd(), 'native', 'bin', 'audio-helper.exe')
+  ];
+
+  for (const p of possiblePaths) {
+    try {
+      if (fs.existsSync(p)) {
+        return p;
+      }
+    } catch (_) {}
+  }
+  return null;
+}
+
+class AudioMixerManager {
+  constructor() {
+    this.child = null;
+    this.reqId = 0;
+    this.pending = new Map();
+    this.buffer = '';
+    this.isStopping = false;
+    this.restartAttempts = 0;
+    this.maxRestartAttempts = 5;
+    this.restartTimer = null;
+  }
+
+  start() {
+    if (process.platform !== 'win32') return;
+    if (this.child && !this.child.killed) return;
+
+    const exePath = getAudioHelperPath();
+    if (!exePath) {
+      logToFile('[AudioMixer] audio-helper.exe not found in search paths.');
+      return;
+    }
+
+    try {
+      this.child = spawn(exePath, [], {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true
+      });
+
+      this.child.stdout.on('data', (chunk) => {
+        this.buffer += chunk.toString('utf8');
+        let newlineIndex;
+        while ((newlineIndex = this.buffer.indexOf('\n')) !== -1) {
+          const line = this.buffer.slice(0, newlineIndex).trim();
+          this.buffer = this.buffer.slice(newlineIndex + 1);
+          if (line) {
+            this.handleLine(line);
+          }
+        }
+      });
+
+      this.child.stderr.on('data', (chunk) => {
+        logToFile(`[AudioMixer stderr] ${chunk.toString('utf8').trim()}`);
+      });
+
+      this.child.on('error', (err) => {
+        logToFile('[AudioMixer process error]', err);
+      });
+
+      this.child.on('close', (code) => {
+        logToFile(`[AudioMixer] Process exited with code ${code}`);
+        this.child = null;
+        for (const [id, req] of this.pending.entries()) {
+          clearTimeout(req.timer);
+          req.reject(new Error('Audio helper process exited'));
+        }
+        this.pending.clear();
+
+        if (!this.isStopping && this.restartAttempts < this.maxRestartAttempts) {
+          this.restartAttempts++;
+          const delay = Math.min(1000 * Math.pow(2, this.restartAttempts), 10000);
+          this.restartTimer = setTimeout(() => {
+            logToFile(`[AudioMixer] Restarting audio-helper (attempt ${this.restartAttempts})...`);
+            this.start();
+          }, delay);
+        }
+      });
+
+      logToFile(`[AudioMixer] Successfully spawned audio-helper from ${exePath}`);
+      this.restartAttempts = 0;
+    } catch (err) {
+      logToFile('[AudioMixer] Failed to spawn audio-helper:', err);
+    }
+  }
+
+  handleLine(line) {
+    try {
+      const msg = JSON.parse(line);
+      if (typeof msg.id === 'number' && this.pending.has(msg.id)) {
+        const { resolve, reject, timer } = this.pending.get(msg.id);
+        clearTimeout(timer);
+        this.pending.delete(msg.id);
+        if (msg.success) {
+          resolve(msg.data);
+        } else {
+          reject(new Error(msg.error || 'Unknown audio helper error'));
+        }
+      }
+    } catch (e) {
+      logToFile(`[AudioMixer] Failed to parse stdout line: ${line}`, e);
+    }
+  }
+
+  send(cmd, params = {}, timeoutMs = 5000) {
+    return new Promise((resolve, reject) => {
+      if (!this.child || !this.child.stdin || this.child.killed) {
+        this.start();
+        if (!this.child || !this.child.stdin) {
+          return reject(new Error('Audio helper is not running'));
+        }
+      }
+
+      const id = ++this.reqId;
+      const payload = { id, cmd, ...params };
+
+      const timer = setTimeout(() => {
+        if (this.pending.has(id)) {
+          this.pending.delete(id);
+          reject(new Error(`Command '${cmd}' timed out after ${timeoutMs}ms`));
+        }
+      }, timeoutMs);
+
+      this.pending.set(id, { resolve, reject, timer });
+
+      try {
+        this.child.stdin.write(JSON.stringify(payload) + '\n');
+      } catch (err) {
+        clearTimeout(timer);
+        this.pending.delete(id);
+        reject(err);
+      }
+    });
+  }
+
+  stop() {
+    this.isStopping = true;
+    if (this.restartTimer) {
+      clearTimeout(this.restartTimer);
+      this.restartTimer = null;
+    }
+    if (this.child) {
+      try {
+        this.child.stdin.write(JSON.stringify({ id: 0, cmd: 'shutdown' }) + '\n');
+      } catch (_) {}
+      setTimeout(() => {
+        if (this.child) {
+          try { this.child.kill(); } catch (_) {}
+          this.child = null;
+        }
+      }, 400);
+    }
+  }
+}
+
+const audioMixerManager = new AudioMixerManager();
+app.whenReady().then(() => {
+  audioMixerManager.start();
+});
+
+app.on('will-quit', () => {
+  audioMixerManager.stop();
+  if (launcherEngineInstance) {
+    try { launcherEngineInstance.destroy(); } catch (_) {}
+  }
+});
+
+app.on('before-quit', () => {
+  audioMixerManager.stop();
+  if (launcherEngineInstance) {
+    try { launcherEngineInstance.destroy(); } catch (_) {}
+  }
+});
+
+ipcMain.handle('audio-mixer:get-devices', async () => {
+  if (process.platform !== 'win32') return { devices: [], defaultDeviceId: '' };
+  try {
+    return await audioMixerManager.send('listDevices');
+  } catch (err) {
+    logToFile('[audio-mixer:get-devices error]', err);
+    return { devices: [], defaultDeviceId: '', error: err.message };
+  }
+});
+
+ipcMain.handle('audio-mixer:get-sessions', async (event, deviceId) => {
+  if (process.platform !== 'win32') return { sessions: [] };
+  try {
+    return await audioMixerManager.send('listSessions', { deviceId });
+  } catch (err) {
+    logToFile('[audio-mixer:get-sessions error]', err);
+    return { sessions: [], error: err.message };
+  }
+});
+
+ipcMain.handle('audio-mixer:set-volume', async (event, payload = {}) => {
+  if (process.platform !== 'win32') return false;
+  try {
+    return await audioMixerManager.send('setSessionVolume', payload);
+  } catch (err) {
+    logToFile('[audio-mixer:set-volume error]', err);
+    return false;
+  }
+});
+
+ipcMain.handle('audio-mixer:set-mute', async (event, payload = {}) => {
+  if (process.platform !== 'win32') return false;
+  try {
+    return await audioMixerManager.send('setSessionMute', payload);
+  } catch (err) {
+    logToFile('[audio-mixer:set-mute error]', err);
+    return false;
+  }
+});
+
+ipcMain.handle('audio-mixer:set-master-volume', async (event, payload = {}) => {
+  if (process.platform !== 'win32') return false;
+  try {
+    return await audioMixerManager.send('setMasterVolume', payload);
+  } catch (err) {
+    logToFile('[audio-mixer:set-master-volume error]', err);
+    return false;
+  }
+});
+
+ipcMain.handle('audio-mixer:set-master-mute', async (event, payload = {}) => {
+  if (process.platform !== 'win32') return false;
+  try {
+    return await audioMixerManager.send('setMasterMute', payload);
+  } catch (err) {
+    logToFile('[audio-mixer:set-master-mute error]', err);
+    return false;
+  }
+});

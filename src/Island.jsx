@@ -1,7 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp } from "lucide-react";
+import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing } from "lucide-react";
 import "./App.css";
+import AppLauncher from "./components/AppLauncher";
+import QuickNotes from "./components/QuickNotes";
 
 // Helper format file sizes (Bytes -> KB -> MB)
 function formatBytes(bytes, decimals = 1) {
@@ -11,6 +13,20 @@ function formatBytes(bytes, decimals = 1) {
   const sizes = ['B', 'KB', 'MB', 'GB'];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
+// Helper format relative time for notifications
+function formatRelativeTime(timestamp) {
+  if (!timestamp) return "";
+  const now = Date.now();
+  const diffSec = Math.floor((now - timestamp) / 1000);
+  if (diffSec < 60) return "Just now";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour}h ago`;
+  const date = new Date(timestamp);
+  return date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 // Helper format timer MM:SS
@@ -86,6 +102,54 @@ const TimerCircleProgress = ({ progress = 1, size = 18, strokeWidth = 2.5 }) => 
         animate={{ strokeDashoffset: offset }}
         transition={{ duration: 0.4, ease: "linear" }}
         style={{ filter: `drop-shadow(0 0 ${glowRadius}px rgba(255, 149, 0, ${0.3 + safeProgress * 0.5}))` }}
+      />
+    </svg>
+  );
+};
+
+const ProgressMiniRing = ({ progress = null, size = 18, strokeWidth = 2.5, status = "running" }) => {
+  const isFailed = status === "failed";
+  const isCompleted = status === "completed";
+  const color = isFailed ? "#ef4444" : isCompleted ? "#22c55e" : "#38bdf8";
+
+  if (isFailed) return <AlertCircle size={size} color={color} />;
+  if (isCompleted) return <CheckCircle2 size={size} color={color} />;
+
+  const safeProgress = typeof progress === "number" ? Math.min(1, Math.max(0, progress / 100)) : null;
+
+  if (safeProgress === null) {
+    return (
+      <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <RefreshCw size={size - 4} color={color} className="spin-anim" />
+      </div>
+    );
+  }
+
+  const r = (size - strokeWidth) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ * (1 - safeProgress);
+
+  return (
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', overflow: 'visible', display: 'block' }}>
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke="rgba(255, 255, 255, 0.15)"
+        strokeWidth={strokeWidth}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={circ}
+        strokeDashoffset={offset}
+        strokeLinecap="round"
+        style={{ transition: 'stroke-dashoffset 0.3s linear' }}
       />
     </svg>
   );
@@ -421,6 +485,10 @@ const TABS = [
   { id: 1, name: "Weather", icon: (color) => <CloudSun size={16} color={color} /> },
   { id: 2, name: "Overview", icon: (color) => <Sun size={16} color={color} /> },
   { id: 11, name: "Battery Hub", icon: (color) => <BatteryCharging size={16} color={color} /> },
+  { id: 12, name: "Audio Mixer", icon: (color) => <SlidersHorizontal size={16} color={color} /> },
+  { id: 13, name: "Progress Island", icon: (color) => <Layers size={16} color={color} /> },
+  { id: 14, name: "App Launcher", icon: (color) => <Compass size={16} color={color} /> },
+  { id: 15, name: "Quick Notes", icon: (color) => <FileText size={16} color={color} /> },
   { id: 3, name: "Now Playing", icon: (color) => <Music size={16} color={color} /> },
   { id: 4, name: "Calendar", icon: (color) => <CalendarIcon size={16} color={color} /> },
   { id: 5, name: "Notifications", icon: (color) => <Bell size={16} color={color} /> },
@@ -1507,10 +1575,34 @@ export default function Island() {
           else saved.push(11);
           localStorage.setItem("tab-order", JSON.stringify(saved));
         }
+        if (!saved.includes(12)) {
+          const idx11 = saved.indexOf(11);
+          if (idx11 !== -1) saved.splice(idx11 + 1, 0, 12);
+          else saved.push(12);
+          localStorage.setItem("tab-order", JSON.stringify(saved));
+        }
+        if (!saved.includes(13)) {
+          const idx12 = saved.indexOf(12);
+          if (idx12 !== -1) saved.splice(idx12 + 1, 0, 13);
+          else saved.push(13);
+          localStorage.setItem("tab-order", JSON.stringify(saved));
+        }
+        if (!saved.includes(14)) {
+          const idx13 = saved.indexOf(13);
+          if (idx13 !== -1) saved.splice(idx13 + 1, 0, 14);
+          else saved.push(14);
+          localStorage.setItem("tab-order", JSON.stringify(saved));
+        }
+        if (!saved.includes(15)) {
+          const idx14 = saved.indexOf(14);
+          if (idx14 !== -1) saved.splice(idx14 + 1, 0, 15);
+          else saved.push(15);
+          localStorage.setItem("tab-order", JSON.stringify(saved));
+        }
         return saved;
       }
     } catch {}
-    return [2, 11, 4, 5, 6, 7, 8, 10, 0, 1, 3, 9];
+    return [2, 11, 12, 13, 14, 15, 4, 5, 6, 7, 8, 10, 0, 1, 3, 9];
   });
   const [hiddenTabs, setHiddenTabs] = useState(() => JSON.parse(localStorage.getItem("hidden-tabs") || "[6]"));
   const [defaultTabId, setDefaultTabId] = useState(() => Number(localStorage.getItem("default-tab") || 2));
@@ -1542,6 +1634,25 @@ export default function Island() {
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [systemStats, setSystemStats] = useState({ cpu: 0, ram: 0 });
   const [notificationsList, setNotificationsList] = useState([]);
+  const [notificationSnapshot, setNotificationSnapshot] = useState({
+    active: [],
+    standalone: [],
+    groups: [],
+    snoozed: [],
+    history: [],
+    recentDismissals: [],
+    lowPrioritySummary: { count: 0, items: [] },
+    incomingCall: null,
+    settings: { hidePreviews: false, excludedApps: [] },
+    stats: { totalActive: 0, unreviewedCount: 0, snoozedCount: 0, criticalCount: 0, historyCount: 0, hasUndo: false }
+  });
+  const [notificationFilter, setNotificationFilter] = useState("all");
+  const [expandedGroupIds, setExpandedGroupIds] = useState({});
+  const [lowPriorityExpanded, setLowPriorityExpanded] = useState(false);
+  const [replyInputs, setReplyInputs] = useState({});
+  const [actionStatuses, setActionStatuses] = useState({});
+  const [undoToast, setUndoToast] = useState(null);
+  const [snoozeMenuOpenId, setSnoozeMenuOpenId] = useState(null);
   const [percent, setPercent] = useState(null);
   const [alert, setAlert] = useState(null);
   const [batteryAlertsEnabled, setBatteryAlertsEnabled] = useState(localStorage.getItem("battery-alerts") !== "false");
@@ -1888,6 +1999,216 @@ export default function Island() {
   const currentTab = currentTabId;
   const totalTabs = visibleTabs.length;
 
+  // --- Audio Mixer State & Handlers ---
+  const [audioDevices, setAudioDevices] = useState([]);
+  const [activeAudioDeviceId, setActiveAudioDeviceId] = useState(() => localStorage.getItem("audio-mixer-device-id") || "");
+  const [audioSessions, setAudioSessions] = useState([]);
+  const [masterAudioVolume, setMasterAudioVolume] = useState(1);
+  const [masterAudioMuted, setMasterAudioMuted] = useState(false);
+  const [audioSearch, setAudioSearch] = useState("");
+  const [audioLoading, setAudioLoading] = useState(false);
+  const [deviceDropdownOpen, setDeviceDropdownOpen] = useState(false);
+  const isDraggingAudioVolumeRef = useRef({});
+  const audioVolumeThrottleTimerRef = useRef({});
+
+  const fetchAudioDevices = useCallback(async () => {
+    if (!window.electronAPI?.audioMixer?.getDevices) return;
+    try {
+      const data = await window.electronAPI.audioMixer.getDevices();
+      if (data && Array.isArray(data.devices)) {
+        setAudioDevices(data.devices);
+        if (!activeAudioDeviceId && data.defaultDeviceId) {
+          setActiveAudioDeviceId(data.defaultDeviceId);
+        }
+      }
+    } catch (_) {}
+  }, [activeAudioDeviceId]);
+
+  const fetchAudioSessions = useCallback(async (deviceId = activeAudioDeviceId, showLoading = false) => {
+    if (!window.electronAPI?.audioMixer?.getSessions) return;
+    if (showLoading) setAudioLoading(true);
+    try {
+      const data = await window.electronAPI.audioMixer.getSessions(deviceId || undefined);
+      if (data) {
+        if (typeof data.masterVolume === 'number') setMasterAudioVolume(data.masterVolume);
+        if (typeof data.isMuted === 'boolean') setMasterAudioMuted(data.isMuted);
+        if (Array.isArray(data.sessions)) {
+          setAudioSessions(prev => {
+            return data.sessions.map(newSession => {
+              if (isDraggingAudioVolumeRef.current[newSession.id]) {
+                const existing = prev.find(p => p.id === newSession.id);
+                if (existing) {
+                  return { ...newSession, volume: existing.volume, isMuted: existing.isMuted };
+                }
+              }
+              return newSession;
+            });
+          });
+        }
+      }
+    } catch (_) {}
+    finally {
+      if (showLoading) setAudioLoading(false);
+    }
+  }, [activeAudioDeviceId]);
+
+  useEffect(() => {
+    if (mode !== "large" || currentTab !== 12) return;
+    fetchAudioDevices();
+    fetchAudioSessions(activeAudioDeviceId, true);
+
+    const interval = setInterval(() => {
+      fetchAudioSessions(activeAudioDeviceId, false);
+    }, 600);
+
+    return () => clearInterval(interval);
+  }, [mode, currentTab, activeAudioDeviceId, fetchAudioDevices, fetchAudioSessions]);
+
+  const handleSetAppVolume = useCallback((session, newVol) => {
+    const clamped = Math.min(1, Math.max(0, newVol));
+    isDraggingAudioVolumeRef.current[session.id] = true;
+
+    setAudioSessions(prev => prev.map(s => {
+      if (s.id === session.id) {
+        return { ...s, volume: clamped, isMuted: false };
+      }
+      return s;
+    }));
+
+    if (audioVolumeThrottleTimerRef.current[session.id]) {
+      clearTimeout(audioVolumeThrottleTimerRef.current[session.id]);
+    }
+
+    audioVolumeThrottleTimerRef.current[session.id] = setTimeout(() => {
+      window.electronAPI?.audioMixer?.setVolume({
+        processId: session.processId,
+        sessionId: session.id,
+        volume: clamped,
+        deviceId: activeAudioDeviceId || undefined,
+        isSystemSounds: session.isSystemSounds
+      });
+      setTimeout(() => {
+        isDraggingAudioVolumeRef.current[session.id] = false;
+      }, 350);
+    }, 30);
+  }, [activeAudioDeviceId]);
+
+  const handleToggleAppMute = useCallback((session) => {
+    const newMute = !session.isMuted;
+    setAudioSessions(prev => prev.map(s => {
+      if (s.id === session.id) {
+        return { ...s, isMuted: newMute };
+      }
+      return s;
+    }));
+
+    window.electronAPI?.audioMixer?.setMute({
+      processId: session.processId,
+      sessionId: session.id,
+      isMuted: newMute,
+      deviceId: activeAudioDeviceId || undefined,
+      isSystemSounds: session.isSystemSounds
+    });
+  }, [activeAudioDeviceId]);
+
+  const handleSetMasterVolume = useCallback((newVol) => {
+    const clamped = Math.min(1, Math.max(0, newVol));
+    setMasterAudioVolume(clamped);
+    setMasterAudioMuted(false);
+
+    if (audioVolumeThrottleTimerRef.current['__master__']) {
+      clearTimeout(audioVolumeThrottleTimerRef.current['__master__']);
+    }
+
+    audioVolumeThrottleTimerRef.current['__master__'] = setTimeout(() => {
+      window.electronAPI?.audioMixer?.setMasterVolume({
+        volume: clamped,
+        deviceId: activeAudioDeviceId || undefined
+      });
+    }, 30);
+  }, [activeAudioDeviceId]);
+
+  const handleToggleMasterMute = useCallback(() => {
+    const newMute = !masterAudioMuted;
+    setMasterAudioMuted(newMute);
+
+    window.electronAPI?.audioMixer?.setMasterMute({
+      isMuted: newMute,
+      deviceId: activeAudioDeviceId || undefined
+    });
+  }, [masterAudioMuted, activeAudioDeviceId]);
+
+  // --- Universal Progress Island State & Handlers ---
+  const [progressSnapshot, setProgressSnapshot] = useState({
+    active: [],
+    history: [],
+    summary: {
+      activeCount: 0,
+      runningCount: 0,
+      pausedCount: 0,
+      failedCount: 0,
+      completedCount: 0,
+      totalBytesPerSecond: 0,
+      overallPercentage: null,
+      hasIndeterminate: false
+    },
+    compactDisplay: null
+  });
+  const [progressFilter, setProgressFilter] = useState("all"); // 'all' | 'active' | 'history'
+  const [isStartingProgressTest, setIsStartingProgressTest] = useState(false);
+
+  useEffect(() => {
+    if (window.electronAPI?.progress?.getSnapshot) {
+      window.electronAPI.progress.getSnapshot().then(snap => {
+        if (snap) setProgressSnapshot(snap);
+      }).catch(() => {});
+    }
+
+    if (window.electronAPI?.progress?.onUpdate) {
+      const unsub = window.electronAPI.progress.onUpdate((snap) => {
+        if (snap) setProgressSnapshot(snap);
+      });
+      return unsub;
+    }
+  }, []);
+
+  const handleProgressAction = useCallback(async (operationId, action, params = {}) => {
+    if (window.electronAPI?.progress?.executeAction) {
+      try {
+        await window.electronAPI.progress.executeAction(operationId, action, params);
+      } catch (err) {
+        console.error("Progress action error:", err);
+      }
+    }
+  }, []);
+
+  const handleClearProgressHistory = useCallback(async () => {
+    if (window.electronAPI?.progress?.clearHistory) {
+      try {
+        await window.electronAPI.progress.clearHistory();
+      } catch (err) {
+        console.error("Clear progress history error:", err);
+      }
+    }
+  }, []);
+
+  const handleStartFileHashTest = useCallback(async () => {
+    if (isStartingProgressTest) return;
+    setIsStartingProgressTest(true);
+    try {
+      if (window.electronAPI?.progress?.selectFile && window.electronAPI?.progress?.startHashOperation) {
+        const filePath = await window.electronAPI.progress.selectFile();
+        if (filePath) {
+          await window.electronAPI.progress.startHashOperation({ sourcePath: filePath });
+        }
+      }
+    } catch (err) {
+      console.error("Failed to start file hash test:", err);
+    } finally {
+      setIsStartingProgressTest(false);
+    }
+  }, [isStartingProgressTest]);
+
   // Daily Quote feature state & handlers
   const [dailyQuoteIndex, setDailyQuoteIndex] = useState(() => {
     try {
@@ -2019,7 +2340,7 @@ export default function Island() {
   const swipeStartY = useRef(0);
   const swipeMoved = useRef(false);
   const suppressClick = useRef(false);
-  const swipeThreshold = 60;
+  const swipeThreshold = 40;
   const moveTab = (direction) => {
     const currentIndex = visibleTabs.indexOf(currentTabId);
     if (currentIndex === -1 && visibleTabs.length > 0) {
@@ -2063,24 +2384,28 @@ export default function Island() {
   const handleWheelSwipe = (e) => {
     if (wheelLockout.current || isDragging) return;
 
-    // Allow natural wheel scrolling inside scrollable containers (Clipboard, Notifications, Tasks, Settings, Calendar)
-    const scrollableElem = e.target.closest("#clipboard, .notifications-container, #task-list, #settings-container, .calendar-container");
-    if (scrollableElem) {
-      const isScrollable = scrollableElem.scrollHeight > scrollableElem.clientHeight;
-      if (isScrollable) {
-        const atTop = scrollableElem.scrollTop <= 2;
-        const atBottom = scrollableElem.scrollTop + scrollableElem.clientHeight >= scrollableElem.scrollHeight - 2;
-        const delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    // Check if the gesture is a HORIZONTAL swipe (deltaX dominates deltaY)
+    const isHorizontalSwipe = Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) >= 3;
 
-        // If scrolling inside content (down when not at bottom, or up when not at top), allow content to scroll without switching tab
-        if ((delta > 0 && !atBottom) || (delta < 0 && !atTop)) {
-          return;
+    // For vertical wheel scrolling, check if pointer is inside a scrollable container
+    if (!isHorizontalSwipe) {
+      const scrollableElem = e.target.closest("#clipboard, .notifications-container, #task-list, .task-list-scrollable, #settings-container, .calendar-container, .audio-mixer-scrollable, .progress-island-scrollable, .launcher-scrollable, .notes-scrollable");
+      if (scrollableElem) {
+        const isScrollable = scrollableElem.scrollHeight > scrollableElem.clientHeight + 2;
+        if (isScrollable) {
+          const atTop = scrollableElem.scrollTop <= 2;
+          const atBottom = scrollableElem.scrollTop + scrollableElem.clientHeight >= scrollableElem.scrollHeight - 2;
+
+          // If scrolling vertically inside content (down when not at bottom, or up when not at top), allow content to scroll naturally
+          if ((e.deltaY > 0 && !atBottom) || (e.deltaY < 0 && !atTop)) {
+            return;
+          }
         }
       }
     }
 
     // Support both mouse wheel (deltaY) and touch/trackpad swipe (deltaX)
-    let delta = Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+    let delta = isHorizontalSwipe ? e.deltaX : (Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX);
     if (e.deltaMode === 1) delta *= 40;
     if (e.deltaMode === 2) delta *= 800;
 
@@ -2113,7 +2438,6 @@ export default function Island() {
       targetTag === "LABEL" ||
       target?.closest?.("button") ||
       target?.closest?.(".radio-label") ||
-      target?.closest?.(".task-row") ||
       target?.closest?.(".clipboard-row") ||
       target?.closest?.(".notification-card")
     );
@@ -2176,21 +2500,25 @@ export default function Island() {
 
   const isPlaying = spotifyTrack?.state === 'playing';
   const nowPlayingWidth = isHovered ? 135 : 110;
-  const width = notificationAlert
+  const isNotificationBanner = Boolean(notificationAlert && mode !== "large");
+  const hasActiveProgress = Boolean(progressSnapshot?.compactDisplay && mode !== "large" && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert);
+  const width = isNotificationBanner
     ? 300
     : mode === "large"
-      ? (currentTab === 9 ? 620 : (currentTab === 2 || currentTab === 11 ? 560 : 540))
-      : (mode === "quick" && isPlaying && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert)
-        ? nowPlayingWidth
-        : (mode === "quick" || alert || chargingAlert || bluetoothAlert || cameraAlert || microphoneAlert || volumeAlert || keyLockAlert || usbAlert || notificationAlert)
-          ? 260
-          : isPlaying
-            ? nowPlayingWidth
-            : 170;
-  const height = notificationAlert
+      ? (currentTab === 9 ? 620 : (currentTab === 12 || currentTab === 13 || currentTab === 14 || currentTab === 15 ? 590 : (currentTab === 2 || currentTab === 11 ? 560 : 540)))
+      : hasActiveProgress
+        ? 285
+        : (mode === "quick" && isPlaying && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert)
+          ? nowPlayingWidth
+          : (mode === "quick" || alert || chargingAlert || bluetoothAlert || cameraAlert || microphoneAlert || volumeAlert || keyLockAlert || usbAlert || notificationAlert)
+            ? 260
+            : isPlaying
+              ? nowPlayingWidth
+              : 170;
+  const height = isNotificationBanner
     ? 46
     : mode === "large"
-      ? (currentTab === 9 ? 220 : 145)
+      ? (currentTab === 9 ? 220 : (currentTab === 14 || currentTab === 15 ? 185 : (currentTab === 12 || currentTab === 13 ? 175 : 145)))
       : 40;
 
   useEffect(() => {
@@ -2993,55 +3321,212 @@ export default function Island() {
     };
   }, [isHovered, standbyBorderEnabled, largeStandbyEnabled]);
 
-  // Notification Center Polling
+  // Notification Center Polling & Smart Notification Actions
   useEffect(() => {
     if (window.electronAPI?.platform !== 'win32') return;
     let isFirstFetch = true;
-    const fetchNotifications = async () => {
-      if (window.electronAPI?.getNotifications) {
-        try {
-          const notifs = await window.electronAPI.getNotifications();
-          const mapped = notifs.map(n => ({
-            id: n.Id,
-            appName: n.AppName || '',
-            appId: n.AppId || '',
-            title: n.Title || '',
-            body: n.Body || '',
-            timestamp: n.Timestamp || '',
-            icon: n.Icon || ''   // base64 PNG from PowerShell Get-AppIconBase64
-          }));
-          if (isFirstFetch) {
-            mapped.forEach(n => { if (n.id) seenNotificationIds.current.add(n.id); });
-            isFirstFetch = false;
-          } else {
-            const newNotifs = mapped.filter(n => n.id && !seenNotificationIds.current.has(n.id));
-            mapped.forEach(n => { if (n.id) seenNotificationIds.current.add(n.id); });
-            if (newNotifs.length > 0) {
-              const latest = newNotifs[newNotifs.length - 1];
-              setNotificationAlert(latest);
-              setMode("quick");
-              clearTimeout(notificationAlertTimeout.current);
-              notificationAlertTimeout.current = setTimeout(() => {
-                setNotificationAlert(null);
-                setMode("still");
-              }, 4000);
-            }
-          }
-          setNotificationsList(mapped);
-        } catch (e) {
-          console.error(e);
+
+    const handleSnapshot = (snapshot) => {
+      if (!snapshot) return;
+      setNotificationSnapshot(snapshot);
+      const activeList = snapshot.active || [];
+      const mapped = activeList.map(n => ({
+        id: n.id || n.sourceNotificationId,
+        sourceNotificationId: n.sourceNotificationId,
+        appName: n.applicationName || '',
+        appId: n.applicationId || '',
+        title: n.title || '',
+        body: n.body || '',
+        timestamp: n.receivedAt ? new Date(n.receivedAt).toISOString() : '',
+        icon: n.applicationIcon || '',
+        priority: n.priority,
+        isCall: n.isCall,
+        callType: n.callType,
+        capabilities: n.capabilities || []
+      }));
+      setNotificationsList(mapped);
+
+      // Handle incoming voice or video call
+      if (snapshot.incomingCall) {
+        const callAlert = {
+          id: snapshot.incomingCall.id,
+          appName: snapshot.incomingCall.applicationName,
+          appId: snapshot.incomingCall.applicationId,
+          title: snapshot.incomingCall.title,
+          body: snapshot.incomingCall.body,
+          icon: snapshot.incomingCall.applicationIcon,
+          isCall: true,
+          callType: snapshot.incomingCall.callType
+        };
+        setNotificationAlert(callAlert);
+        setMode("quick");
+        return;
+      }
+
+      // Check for new notifications
+      if (isFirstFetch) {
+        activeList.forEach(n => { if (n.id) seenNotificationIds.current.add(n.id); });
+        isFirstFetch = false;
+      } else {
+        const newNotifs = activeList.filter(n => n.id && !seenNotificationIds.current.has(n.id));
+        activeList.forEach(n => { if (n.id) seenNotificationIds.current.add(n.id); });
+        if (newNotifs.length > 0) {
+          const latest = newNotifs[newNotifs.length - 1];
+          setNotificationAlert({
+            id: latest.id,
+            sourceNotificationId: latest.sourceNotificationId,
+            appName: latest.applicationName,
+            appId: latest.applicationId,
+            title: latest.title,
+            body: latest.body,
+            icon: latest.applicationIcon,
+            priority: latest.priority,
+            isCall: latest.isCall,
+            callType: latest.callType
+          });
+          setMode("quick");
+          clearTimeout(notificationAlertTimeout.current);
+          notificationAlertTimeout.current = setTimeout(() => {
+            setNotificationAlert(null);
+            setMode("still");
+          }, 4500);
         }
       }
     };
+
+    // Subscribe to push updates
+    let unsub = null;
+    if (window.electronAPI?.notifications?.onUpdate) {
+      unsub = window.electronAPI.notifications.onUpdate(handleSnapshot);
+    }
+
+    const fetchNotifications = async () => {
+      try {
+        if (window.electronAPI?.notifications?.syncNow) {
+          const snap = await window.electronAPI.notifications.syncNow();
+          handleSnapshot(snap);
+        } else if (window.electronAPI?.getNotifications) {
+          await window.electronAPI.getNotifications();
+        }
+      } catch (e) {
+        console.error("Failed to fetch notifications:", e);
+      }
+    };
+
     const initialDelay = setTimeout(() => {
       fetchNotifications();
-    }, 2500);
+    }, 1500);
+
     const interval = setInterval(fetchNotifications, 5000);
+
     return () => {
+      if (typeof unsub === "function") unsub();
       clearTimeout(initialDelay);
       clearInterval(interval);
       clearTimeout(notificationAlertTimeout.current);
     };
+  }, []);
+
+  // Smart Notification Action Handlers
+  const handleExecuteAction = useCallback(async (notificationId, actionType, params = {}) => {
+    if (!notificationId) return;
+    setActionStatuses(prev => ({
+      ...prev,
+      [notificationId]: { status: 'pending', message: 'Processing…' }
+    }));
+
+    try {
+      let res = null;
+      if (window.electronAPI?.notifications?.executeAction) {
+        res = await window.electronAPI.notifications.executeAction(notificationId, actionType, params);
+      } else if (actionType === 'dismiss' && window.electronAPI?.dismissNotification) {
+        const ok = await window.electronAPI.dismissNotification(notificationId);
+        res = { success: ok, actionType };
+      } else if (actionType === 'open' && window.electronAPI?.focusNotificationApp) {
+        const ok = await window.electronAPI.focusNotificationApp(params.appId || notificationId);
+        res = { success: ok, actionType };
+      }
+
+      const isSuccess = Boolean(res?.success);
+      setActionStatuses(prev => ({
+        ...prev,
+        [notificationId]: {
+          status: isSuccess ? 'success' : 'failed',
+          message: res?.message || (isSuccess ? 'Done' : 'Action failed')
+        }
+      }));
+
+      if (actionType === 'dismiss' && isSuccess) {
+        setUndoToast({
+          visible: true,
+          message: "Notification dismissed",
+          targetId: notificationId
+        });
+        setTimeout(() => setUndoToast(null), 5000);
+      }
+
+      setTimeout(() => {
+        setActionStatuses(prev => {
+          const next = { ...prev };
+          delete next[notificationId];
+          return next;
+        });
+      }, 3500);
+    } catch (err) {
+      setActionStatuses(prev => ({
+        ...prev,
+        [notificationId]: { status: 'failed', message: err.message || 'Action failed' }
+      }));
+    }
+  }, []);
+
+  const handleSnooze = useCallback(async (notificationId, minutes) => {
+    if (!window.electronAPI?.notifications?.snooze) return;
+    setSnoozeMenuOpenId(null);
+    await window.electronAPI.notifications.snooze(notificationId, minutes * 60000);
+  }, []);
+
+  const handleCancelSnooze = useCallback(async (notificationId) => {
+    if (!window.electronAPI?.notifications?.cancelSnooze) return;
+    await window.electronAPI.notifications.cancelSnooze(notificationId);
+  }, []);
+
+  const handleUndoDismiss = useCallback(async () => {
+    if (!window.electronAPI?.notifications?.undoDismiss) return;
+    const targetId = undoToast?.targetId;
+    await window.electronAPI.notifications.undoDismiss(targetId);
+    setUndoToast(null);
+  }, [undoToast]);
+
+  const handleSendReply = useCallback(async (notificationId) => {
+    const text = replyInputs[notificationId]?.trim();
+    if (!text) return;
+    await handleExecuteAction(notificationId, 'reply', { text });
+    setReplyInputs(prev => ({ ...prev, [notificationId]: '' }));
+  }, [replyInputs, handleExecuteAction]);
+
+  const handleTogglePrivacy = useCallback(async () => {
+    const nextVal = !notificationSnapshot?.settings?.hidePreviews;
+    if (window.electronAPI?.notifications?.setHidePreviews) {
+      await window.electronAPI.notifications.setHidePreviews(nextVal);
+    }
+  }, [notificationSnapshot]);
+
+  const handleClearAll = useCallback(async () => {
+    if (window.electronAPI?.notifications?.clearAll) {
+      await window.electronAPI.notifications.clearAll();
+      setUndoToast({
+        visible: true,
+        message: "All notifications dismissed",
+      });
+      setTimeout(() => setUndoToast(null), 5000);
+    }
+  }, []);
+
+  const handleDismissGroup = useCallback(async (groupId) => {
+    if (window.electronAPI?.notifications?.dismissGroup) {
+      await window.electronAPI.notifications.dismissGroup(groupId);
+    }
   }, []);
 
 
@@ -3430,6 +3915,16 @@ export default function Island() {
           updateMouseIgnore(true, true);
         } else {
           setCtrlState(false);
+          // If a temporary notification alert is currently active, DO NOT force large mode!
+          // Keep the notification banner visible and pause the auto-dismiss timer so user can read or click it.
+          if (notificationAlert) {
+            if (notificationAlertTimeout.current) {
+              clearTimeout(notificationAlertTimeout.current);
+              notificationAlertTimeout.current = null;
+            }
+            updateMouseIgnore(false, true);
+            return;
+          }
           setMode("large");
           updateMouseIgnore(false, true);
         }
@@ -3459,6 +3954,22 @@ export default function Island() {
           const activeTag = document.activeElement?.tagName;
           if (activeTag === "INPUT" || activeTag === "TEXTAREA") return;
 
+          // If a notification alert is still active, resume the auto-dismiss countdown
+          if (notificationAlert) {
+            if (notificationAlertTimeout.current) clearTimeout(notificationAlertTimeout.current);
+            notificationAlertTimeout.current = setTimeout(() => {
+              setNotificationAlert(null);
+              if (standbyBorderEnabled) {
+                setMode("quick");
+              } else if (largeStandbyEnabled) {
+                setMode("large");
+              } else {
+                setMode("still");
+              }
+            }, 3000);
+            return;
+          }
+
           if (standbyBorderEnabled) {
             setMode("quick");
           } else if (largeStandbyEnabled) {
@@ -3477,6 +3988,9 @@ export default function Island() {
           return;
         }
         if (isInteractiveTarget(e.target)) return;
+
+        // If a notification alert is showing, clicking the island outside interactive buttons shouldn't toggle mode
+        if (notificationAlert) return;
 
         const activeTag = document.activeElement?.tagName;
         if (activeTag === "INPUT" || activeTag === "TEXTAREA" || activeTag === "SELECT") {
@@ -3764,61 +4278,177 @@ export default function Island() {
                 transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
                 style={{
                   display: 'flex',
-                alignItems: 'center',
-                width: '100%',
-                padding: '0 14px',
-                gap: 8,
-                boxSizing: 'border-box',
-                overflow: 'hidden',
-                cursor: 'pointer'
-              }}
-              onClick={() => {
-                if (notificationAlert.appId && window.electronAPI?.focusNotificationApp) {
-                  window.electronAPI.focusNotificationApp(notificationAlert.appId);
-                }
-                setNotificationAlert(null);
-                clearTimeout(notificationAlertTimeout.current);
-              }}
-            >
-              {notificationAlert.icon ? (
-                <img
-                  src={notificationAlert.icon}
-                  alt=""
-                  style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                />
-              ) : (
-                <div style={{
-                  width: 24,
-                  height: 24,
-                  borderRadius: '50%',
-                  background: notificationAlert.appName?.toLowerCase().includes('whatsapp')
-                    ? 'linear-gradient(135deg, #25D366, #128C7E)'
-                    : notificationAlert.appName?.toLowerCase().includes('spotify')
-                      ? '#1db954'
-                      : notificationAlert.appName?.toLowerCase().includes('discord')
-                        ? '#5865F2'
-                        : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: '#ffffff',
-                  flexShrink: 0,
-                  boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
-                }}>
-                  {notificationAlert.appName?.[0]?.toUpperCase() || <Bell size={12} color="#fff" />}
+                  width: '100%',
+                  padding: '0 12px 0 14px',
+                  gap: 8,
+                  boxSizing: 'border-box',
+                  overflow: 'hidden',
+                  cursor: 'pointer'
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleExecuteAction(notificationAlert.id, 'open', { appId: notificationAlert.appId });
+                  setNotificationAlert(null);
+                  if (notificationAlertTimeout.current) {
+                    clearTimeout(notificationAlertTimeout.current);
+                  }
+                  if (standbyBorderEnabled) {
+                    setMode("quick");
+                  } else if (largeStandbyEnabled) {
+                    setMode("large");
+                  } else {
+                    setMode("still");
+                  }
+                }}
+              >
+                {notificationAlert.isCall ? (
+                  <div className="notification-call-pulsing-icon" style={{ width: 26, height: 26 }}>
+                    <PhoneIncoming size={14} color="#ffffff" />
+                  </div>
+                ) : notificationAlert.icon ? (
+                  <img
+                    src={notificationAlert.icon}
+                    alt=""
+                    style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: '50%',
+                    background: notificationAlert.appName?.toLowerCase().includes('whatsapp')
+                      ? 'linear-gradient(135deg, #25D366, #128C7E)'
+                      : notificationAlert.appName?.toLowerCase().includes('spotify')
+                        ? '#1db954'
+                        : notificationAlert.appName?.toLowerCase().includes('discord')
+                          ? '#5865F2'
+                          : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    color: '#ffffff',
+                    flexShrink: 0,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
+                  }}>
+                    {notificationAlert.appName?.[0]?.toUpperCase() || <Bell size={12} color="#fff" />}
+                  </div>
+                )}
+                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, gap: 1 }}>
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    opacity: notificationAlert.isCall ? 0.9 : 0.5,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    color: notificationAlert.isCall ? '#25d366' : textColor,
+                    lineHeight: 1
+                  }}>
+                    {notificationAlert.isCall ? `Incoming ${notificationAlert.callType || 'Voice'} Call` : notificationAlert.appName}
+                  </span>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: textColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>
+                    {notificationAlert.title || notificationAlert.body}
+                  </span>
                 </div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, gap: 1 }}>
-                <span style={{ fontSize: 9, fontWeight: 700, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em', color: textColor, lineHeight: 1 }}>
-                  {notificationAlert.appName}
-                </span>
-                <span style={{ fontSize: 12, fontWeight: 600, color: textColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>
-                  {notificationAlert.title || notificationAlert.body}
-                </span>
-              </div>
-            </motion.div>
+
+                {/* Quick Actions */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                  {notificationAlert.isCall ? (
+                    <motion.button
+                      whileHover={{ scale: 1.1 }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleExecuteAction(notificationAlert.id, 'open', { appId: notificationAlert.appId });
+                        setNotificationAlert(null);
+                      }}
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: 12,
+                        background: '#25d366',
+                        border: 'none',
+                        color: '#ffffff',
+                        fontSize: 10,
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        cursor: 'pointer'
+                      }}
+                      title="Open and Answer Call"
+                    >
+                      <Phone size={10} /> Answer
+                    </motion.button>
+                  ) : (
+                    <motion.button
+                      whileHover={{ scale: 1.1, backgroundColor: 'rgba(255, 255, 255, 0.16)' }}
+                      whileTap={{ scale: 0.9 }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSnooze(notificationAlert.id, 5);
+                        setNotificationAlert(null);
+                        if (notificationAlertTimeout.current) clearTimeout(notificationAlertTimeout.current);
+                      }}
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: 'none',
+                        color: textColor,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0,
+                        opacity: 0.7
+                      }}
+                      title="Snooze for 5 minutes"
+                    >
+                      <Clock size={11} strokeWidth={2} />
+                    </motion.button>
+                  )}
+                  <motion.button
+                    whileHover={{ scale: 1.1, backgroundColor: 'rgba(255, 255, 255, 0.16)' }}
+                    whileTap={{ scale: 0.9 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleExecuteAction(notificationAlert.id, 'dismiss');
+                      setNotificationAlert(null);
+                      if (notificationAlertTimeout.current) {
+                        clearTimeout(notificationAlertTimeout.current);
+                      }
+                      if (standbyBorderEnabled) {
+                        setMode("quick");
+                      } else if (largeStandbyEnabled) {
+                        setMode("large");
+                      } else {
+                        setMode("still");
+                      }
+                    }}
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: '50%',
+                      background: 'rgba(255, 255, 255, 0.08)',
+                      border: 'none',
+                      color: textColor,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer',
+                      flexShrink: 0,
+                      padding: 0,
+                      opacity: 0.7
+                    }}
+                    title="Dismiss notification"
+                  >
+                    <X size={11} strokeWidth={2.5} />
+                  </motion.button>
+                </div>
+              </motion.div>
           ) : (isPlaying || showPausedQuickView) && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !keyLockAlert && !usbAlert && !notificationAlert && !isTimerRunning && timerSeconds === 0 ? (
             <motion.div
               key={spotifyTrack?.name ? `playing-${spotifyTrack.name}-${spotifyTrack.artist}` : "playing"}
@@ -3952,6 +4582,80 @@ export default function Island() {
                     </motion.button>
                   )}
                 </AnimatePresence>
+              </div>
+            </motion.div>
+          ) : hasActiveProgress ? (
+            <motion.div
+              key="compact-progress"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setMode("large");
+                setTabState([13, 1]);
+              }}
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0 14px',
+                boxSizing: 'border-box',
+                cursor: 'pointer'
+              }}
+              title="Click to view Progress Island"
+            >
+              {/* Left: Mini Ring + Title */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: '65%' }}>
+                <ProgressMiniRing
+                  progress={progressSnapshot.compactDisplay.progress}
+                  status={progressSnapshot.compactDisplay.status}
+                  size={18}
+                  strokeWidth={2.5}
+                />
+                <span style={{
+                  fontSize: 12.5,
+                  fontWeight: 700,
+                  color: '#ffffff',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  lineHeight: 1
+                }}>
+                  {progressSnapshot.compactDisplay.title}
+                </span>
+              </div>
+
+              {/* Right: Percent/Status + Multi-badge + Speed */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                {progressSnapshot.compactDisplay.bytesPerSecond > 0 && (
+                  <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)' }}>
+                    {formatBytes(progressSnapshot.compactDisplay.bytesPerSecond)}/s
+                  </span>
+                )}
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 700,
+                  color: progressSnapshot.compactDisplay.status === "failed" ? "#ef4444" : progressSnapshot.compactDisplay.status === "completed" ? "#22c55e" : "#38bdf8",
+                  lineHeight: 1
+                }}>
+                  {progressSnapshot.compactDisplay.formattedProgress}
+                </span>
+                {progressSnapshot.compactDisplay.hasMultiple && (
+                  <span style={{
+                    fontSize: 9,
+                    fontWeight: 700,
+                    padding: '1px 5px',
+                    borderRadius: 6,
+                    background: 'rgba(255, 255, 255, 0.12)',
+                    color: 'rgba(255, 255, 255, 0.75)'
+                  }}>
+                    {progressSnapshot.compactDisplay.badgeText}
+                  </span>
+                )}
               </div>
             </motion.div>
           ) : (
@@ -4572,6 +5276,968 @@ export default function Island() {
               );
             })()}
 
+            {/* Quick Pill Per-App Audio Mixer */}
+            {currentTab === 12 && (() => {
+              const filteredSessions = audioSessions.filter(s => {
+                if (!audioSearch.trim()) return true;
+                const q = audioSearch.toLowerCase();
+                return (s.displayName && s.displayName.toLowerCase().includes(q)) ||
+                       (s.processName && s.processName.toLowerCase().includes(q));
+              });
+
+              const currentDev = audioDevices.find(d => d.id === activeAudioDeviceId) ||
+                                 audioDevices.find(d => d.isDefault) ||
+                                 audioDevices[0];
+
+              return (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 16px',
+                  boxSizing: 'border-box',
+                  gap: 14,
+                  userSelect: 'none',
+                  position: 'relative'
+                }}>
+                  {/* Left Column: Device Info + Master Volume + Search/Refresh */}
+                  <div style={{
+                    width: 175,
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    flexShrink: 0
+                  }}>
+                    {/* Top Device Card */}
+                    <div style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      borderRadius: 12,
+                      padding: '8px 10px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6
+                    }}>
+                      {/* Header Row */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <SlidersHorizontal size={13} color="#a855f7" />
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#ffffff', letterSpacing: '0.3px', textTransform: 'uppercase' }}>
+                            Audio Mixer
+                          </span>
+                        </div>
+                        <span style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          padding: '1px 5px',
+                          borderRadius: 8,
+                          background: audioSessions.length > 0 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                          color: audioSessions.length > 0 ? '#c084fc' : 'rgba(255, 255, 255, 0.5)'
+                        }}>
+                          {audioSessions.length} {audioSessions.length === 1 ? 'app' : 'apps'}
+                        </span>
+                      </div>
+
+                      {/* Device Selector Button */}
+                      <div style={{ position: 'relative' }}>
+                        <button
+                          type="button"
+                          onClick={() => setDeviceDropdownOpen(!deviceDropdownOpen)}
+                          style={{
+                            width: '100%',
+                            background: 'rgba(255, 255, 255, 0.06)',
+                            border: '1px solid rgba(255, 255, 255, 0.1)',
+                            borderRadius: 8,
+                            padding: '4px 6px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            color: '#ffffff',
+                            cursor: 'pointer',
+                            fontSize: 10,
+                            fontWeight: 600,
+                            overflow: 'hidden'
+                          }}
+                          title={currentDev?.name || "Select Output Device"}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflow: 'hidden' }}>
+                            <Headphones size={11} color="rgba(255,255,255,0.7)" style={{ flexShrink: 0 }} />
+                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {currentDev?.name ? currentDev.name.replace(/\s*\([^)]*\)$/, '') : "Speakers"}
+                            </span>
+                          </div>
+                          <ChevronLeft size={11} style={{ transform: deviceDropdownOpen ? 'rotate(-90deg)' : 'rotate(90deg)', flexShrink: 0, opacity: 0.6 }} />
+                        </button>
+
+                        {/* Device Dropdown Menu */}
+                        {deviceDropdownOpen && (
+                          <div
+                            className="audio-mixer-scrollable"
+                            style={{
+                              position: 'absolute',
+                              top: '100%',
+                              left: 0,
+                              right: 0,
+                              marginTop: 4,
+                              background: '#121217',
+                              border: '1px solid rgba(255, 255, 255, 0.15)',
+                              borderRadius: 8,
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.7)',
+                              zIndex: 100,
+                              maxHeight: 110,
+                              overflowY: 'auto',
+                              padding: 3
+                            }}
+                          >
+                            {audioDevices.map(d => (
+                              <button
+                                key={d.id}
+                                type="button"
+                                onClick={() => {
+                                  setActiveAudioDeviceId(d.id);
+                                  localStorage.setItem("audio-mixer-device-id", d.id);
+                                  fetchAudioSessions(d.id, true);
+                                  setDeviceDropdownOpen(false);
+                                }}
+                                style={{
+                                  width: '100%',
+                                  padding: '5px 6px',
+                                  borderRadius: 5,
+                                  background: (d.id === (currentDev?.id || activeAudioDeviceId)) ? 'rgba(168, 85, 247, 0.25)' : 'transparent',
+                                  border: 'none',
+                                  color: (d.id === (currentDev?.id || activeAudioDeviceId)) ? '#c084fc' : 'rgba(255, 255, 255, 0.85)',
+                                  fontSize: 10,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  textAlign: 'left'
+                                }}
+                              >
+                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {d.name.replace(/\s*\([^)]*\)$/, '')}
+                                </span>
+                                {d.id === (currentDev?.id || activeAudioDeviceId) && <Check size={10} color="#c084fc" />}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Device Master Volume Row */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleMasterMute()}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            opacity: masterAudioMuted ? 0.6 : 0.9
+                          }}
+                          title={masterAudioMuted ? "Unmute Master" : "Mute Master"}
+                        >
+                          {masterAudioMuted ? <VolumeX size={12} color="#f87171" /> : <Volume2 size={12} color="#a855f7" />}
+                        </button>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={masterAudioMuted ? 0 : Math.round(masterAudioVolume * 100)}
+                          onChange={(e) => handleSetMasterVolume(parseFloat(e.target.value) / 100)}
+                          style={{
+                            flex: 1,
+                            height: 3,
+                            accentColor: '#a855f7',
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <span style={{ fontSize: 9, fontWeight: 700, color: masterAudioMuted ? '#f87171' : 'rgba(255,255,255,0.7)', width: 24, textAlign: 'right' }}>
+                          {masterAudioMuted ? "M" : `${Math.round(masterAudioVolume * 100)}%`}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Bottom Search & Refresh Capsule */}
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      width: '100%',
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      borderRadius: 10,
+                      padding: '3px 6px',
+                      boxSizing: 'border-box'
+                    }}>
+                      <Search size={11} color="rgba(255, 255, 255, 0.4)" style={{ flexShrink: 0 }} />
+                      <input
+                        type="text"
+                        placeholder="Filter apps..."
+                        value={audioSearch}
+                        onChange={(e) => setAudioSearch(e.target.value)}
+                        style={{
+                          flex: 1,
+                          background: 'transparent',
+                          border: 'none',
+                          outline: 'none',
+                          color: '#ffffff',
+                          fontSize: 10,
+                          minWidth: 0
+                        }}
+                      />
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => {
+                          fetchAudioDevices();
+                          fetchAudioSessions(activeAudioDeviceId, true);
+                        }}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          padding: 2,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          color: 'rgba(255, 255, 255, 0.6)'
+                        }}
+                        title="Refresh sessions"
+                      >
+                        <RefreshCw size={11} className={audioLoading ? "spin-anim" : ""} />
+                      </motion.button>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Scrollable List of Applications */}
+                  <div
+                    className="audio-mixer-scrollable"
+                    style={{
+                      flex: 1,
+                      height: '100%',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                      minWidth: 0,
+                      paddingRight: 4,
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    {audioSessions.length === 0 ? (
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '100%',
+                        opacity: 0.5,
+                        gap: 6
+                      }}>
+                        <Volume2 size={24} color="rgba(255,255,255,0.4)" />
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>
+                          No active audio sessions
+                        </span>
+                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>
+                          Play sound in any app to control it here
+                        </span>
+                      </div>
+                    ) : filteredSessions.length === 0 ? (
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '100%',
+                        opacity: 0.5,
+                        gap: 4
+                      }}>
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>
+                          No apps match "{audioSearch}"
+                        </span>
+                      </div>
+                    ) : (
+                      filteredSessions.map((s) => {
+                        const isAppMuted = Boolean(s.isMuted);
+                        const appVol = typeof s.volume === 'number' ? s.volume : 1;
+                        const pct = isAppMuted ? 0 : Math.round(appVol * 100);
+                        const isAudioActive = s.peak > 0.01 || s.state === 'AudioSessionStateActive';
+
+                        return (
+                          <div
+                            key={s.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 9,
+                              padding: '5px 8px',
+                              background: 'rgba(255, 255, 255, 0.04)',
+                              border: '1px solid rgba(255, 255, 255, 0.07)',
+                              borderRadius: 10,
+                              boxSizing: 'border-box',
+                              userSelect: 'none'
+                            }}
+                          >
+                            {/* App Icon */}
+                            <div style={{
+                              width: 26,
+                              height: 26,
+                              borderRadius: 6,
+                              background: 'rgba(255, 255, 255, 0.06)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              overflow: 'hidden',
+                              flexShrink: 0,
+                              position: 'relative'
+                            }}>
+                              {s.icon ? (
+                                <img
+                                  src={s.icon}
+                                  alt=""
+                                  draggable={false}
+                                  style={{ width: 22, height: 22, objectFit: 'contain', pointerEvents: 'none' }}
+                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                />
+                              ) : (
+                                <SlidersHorizontal size={14} color="rgba(255,255,255,0.7)" />
+                              )}
+                              {/* Audio peak activity indicator */}
+                              {isAudioActive && (
+                                <span style={{
+                                  position: 'absolute',
+                                  bottom: 1,
+                                  right: 1,
+                                  width: 5,
+                                  height: 5,
+                                  borderRadius: '50%',
+                                  background: '#34d399',
+                                  boxShadow: '0 0 6px #34d399'
+                                }} />
+                              )}
+                            </div>
+
+                            {/* Center: App Name & Volume Slider */}
+                            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                                  <span style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    color: '#ffffff',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                  }}>
+                                    {s.displayName || s.processName}
+                                  </span>
+                                  {s.sessionsCount > 1 && (
+                                    <span style={{
+                                      fontSize: 8,
+                                      fontWeight: 600,
+                                      padding: '0 4px',
+                                      borderRadius: 4,
+                                      background: 'rgba(255,255,255,0.1)',
+                                      color: 'rgba(255,255,255,0.6)'
+                                    }}>
+                                      {s.sessionsCount} streams
+                                    </span>
+                                  )}
+                                </div>
+                                <span style={{
+                                  fontSize: 10,
+                                  fontWeight: 700,
+                                  color: isAppMuted ? '#f87171' : 'rgba(255, 255, 255, 0.75)',
+                                  width: 32,
+                                  textAlign: 'right'
+                                }}>
+                                  {isAppMuted ? "Muted" : `${pct}%`}
+                                </span>
+                              </div>
+
+                              {/* Volume Slider Track */}
+                              <input
+                                type="range"
+                                min="0"
+                                max="100"
+                                value={isAppMuted ? 0 : pct}
+                                onChange={(e) => handleSetAppVolume(s, parseFloat(e.target.value) / 100)}
+                                style={{
+                                  width: '100%',
+                                  height: 4,
+                                  accentColor: isAppMuted ? '#f87171' : '#38bdf8',
+                                  cursor: 'pointer'
+                                }}
+                              />
+                            </div>
+
+                            {/* Mute Button */}
+                            <motion.button
+                              whileHover={{ scale: 1.1 }}
+                              whileTap={{ scale: 0.9 }}
+                              type="button"
+                              onClick={() => handleToggleAppMute(s)}
+                              style={{
+                                width: 26,
+                                height: 26,
+                                borderRadius: 7,
+                                background: isAppMuted ? 'rgba(248, 113, 113, 0.15)' : 'rgba(255, 255, 255, 0.06)',
+                                border: `1px solid ${isAppMuted ? 'rgba(248, 113, 113, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                flexShrink: 0
+                              }}
+                              title={isAppMuted ? "Unmute" : "Mute"}
+                            >
+                              {isAppMuted ? (
+                                <VolumeX size={13} color="#f87171" />
+                              ) : (
+                                <Volume2 size={13} color="rgba(255, 255, 255, 0.85)" />
+                              )}
+                            </motion.button>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Universal Progress Island Tab (Tab 13) */}
+            {currentTab === 13 && (() => {
+              const activeOps = progressSnapshot?.active || [];
+              const historyOps = progressSnapshot?.history || [];
+              const summary = progressSnapshot?.summary || {};
+
+              const displayedOps = progressFilter === "active"
+                ? activeOps
+                : progressFilter === "history"
+                  ? historyOps
+                  : [...activeOps, ...historyOps];
+
+              const getCategoryIcon = (category, size = 15, color = "#38bdf8") => {
+                switch (category) {
+                  case "download": return <Download size={size} color={color} />;
+                  case "upload": return <Upload size={size} color={color} />;
+                  case "file-operation": return <FileText size={size} color={color} />;
+                  case "update": return <RefreshCw size={size} color={color} />;
+                  case "installation": return <Package size={size} color={color} />;
+                  case "render": return <Film size={size} color={color} />;
+                  default: return <Layers size={size} color={color} />;
+                }
+              };
+
+              const getStatusBadge = (status) => {
+                switch (status) {
+                  case "running":
+                    return { text: "Running", bg: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", border: "rgba(56, 189, 248, 0.25)" };
+                  case "paused":
+                    return { text: "Paused", bg: "rgba(251, 191, 36, 0.12)", color: "#fbbf24", border: "rgba(251, 191, 36, 0.25)" };
+                  case "completed":
+                    return { text: "Completed", bg: "rgba(34, 197, 94, 0.12)", color: "#22c55e", border: "rgba(34, 197, 94, 0.25)" };
+                  case "failed":
+                    return { text: "Failed", bg: "rgba(239, 68, 68, 0.12)", color: "#ef4444", border: "rgba(239, 68, 68, 0.25)" };
+                  case "cancelled":
+                    return { text: "Cancelled", bg: "rgba(156, 163, 175, 0.12)", color: "#9ca3af", border: "rgba(156, 163, 175, 0.25)" };
+                  default:
+                    return { text: status, bg: "rgba(255, 255, 255, 0.08)", color: "rgba(255, 255, 255, 0.7)", border: "rgba(255, 255, 255, 0.1)" };
+                }
+              };
+
+              return (
+                <div style={{
+                  width: '100%',
+                  height: '100%',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  padding: '8px 14px',
+                  boxSizing: 'border-box',
+                  gap: 7,
+                  userSelect: 'none'
+                }}>
+                  {/* Top Header Bar */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    paddingBottom: 2,
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
+                  }}>
+                    {/* Left: Title + Active summary badge */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div style={{
+                        width: 22,
+                        height: 22,
+                        borderRadius: 6,
+                        background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2))',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <Layers size={13} color="#38bdf8" />
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>
+                        Universal Progress Island
+                      </span>
+                      {activeOps.length > 0 && (
+                        <span style={{
+                          fontSize: 9.5,
+                          fontWeight: 700,
+                          padding: '1px 6px',
+                          borderRadius: 8,
+                          background: 'rgba(56, 189, 248, 0.15)',
+                          color: '#38bdf8',
+                          border: '1px solid rgba(56, 189, 248, 0.3)'
+                        }}>
+                          {activeOps.length} active
+                        </span>
+                      )}
+                      {summary.totalBytesPerSecond > 0 && (
+                        <span style={{
+                          fontSize: 9.5,
+                          fontWeight: 600,
+                          color: 'rgba(255, 255, 255, 0.6)'
+                        }}>
+                          · {formatBytes(summary.totalBytesPerSecond)}/s
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Right: Filters & Test Tool */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {/* Filter Pills */}
+                      <div style={{
+                        display: 'flex',
+                        background: 'rgba(255, 255, 255, 0.06)',
+                        borderRadius: 7,
+                        padding: 2,
+                        gap: 2
+                      }}>
+                        {[
+                          { id: "all", label: `All (${activeOps.length + historyOps.length})` },
+                          { id: "active", label: `Active (${activeOps.length})` },
+                          { id: "history", label: `Done (${historyOps.length})` },
+                        ].map(f => (
+                          <button
+                            key={f.id}
+                            onClick={() => setProgressFilter(f.id)}
+                            style={{
+                              background: progressFilter === f.id ? 'rgba(255, 255, 255, 0.16)' : 'transparent',
+                              border: 'none',
+                              borderRadius: 5,
+                              padding: '2px 6px',
+                              color: progressFilter === f.id ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
+                              fontSize: 9.5,
+                              fontWeight: 600,
+                              cursor: 'pointer'
+                            }}
+                          >
+                            {f.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Test Checksum Button */}
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={handleStartFileHashTest}
+                        disabled={isStartingProgressTest}
+                        title="Pick a file to test real streaming progress"
+                        style={{
+                          background: 'rgba(56, 189, 248, 0.12)',
+                          border: '1px solid rgba(56, 189, 248, 0.25)',
+                          borderRadius: 6,
+                          padding: '2px 7px',
+                          color: '#38bdf8',
+                          fontSize: 9.5,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 3
+                        }}
+                      >
+                        <Sparkles size={10} color="#38bdf8" />
+                        <span>Test File</span>
+                      </motion.button>
+
+                      {/* Clear History */}
+                      {historyOps.length > 0 && (
+                        <motion.button
+                          whileHover={{ scale: 1.1 }}
+                          whileTap={{ scale: 0.9 }}
+                          onClick={handleClearProgressHistory}
+                          title="Clear history"
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            padding: '2px 4px',
+                            color: 'rgba(255, 255, 255, 0.4)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                        >
+                          <Trash2 size={11} />
+                        </motion.button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Operations List Container */}
+                  <div
+                    className="progress-island-scrollable"
+                    style={{
+                      flex: 1,
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                      paddingRight: 3,
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    {displayedOps.length === 0 ? (
+                      <div style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '100%',
+                        opacity: 0.6,
+                        gap: 5
+                      }}>
+                        <Layers size={22} color="rgba(255, 255, 255, 0.35)" />
+                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>
+                          No {progressFilter === "active" ? "active" : progressFilter === "history" ? "past" : ""} operations
+                        </span>
+                        <span style={{ fontSize: 9.5, color: 'rgba(255, 255, 255, 0.45)' }}>
+                          Background downloads, file transfers, and system updates appear here
+                        </span>
+                      </div>
+                    ) : (
+                      displayedOps.map(op => {
+                        const statusBadge = getStatusBadge(op.status);
+                        const isIndeterminate = op.progress === null || op.status === "indeterminate";
+                        const percentVal = typeof op.progress === "number" ? Math.round(op.progress) : null;
+                        const caps = op.capabilities || {};
+
+                        return (
+                          <div
+                            key={op.id}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 10,
+                              padding: '6px 10px',
+                              background: 'rgba(255, 255, 255, 0.04)',
+                              border: '1px solid rgba(255, 255, 255, 0.08)',
+                              borderRadius: 10,
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            {/* Category Icon */}
+                            <div style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 8,
+                              background: 'rgba(255, 255, 255, 0.06)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0
+                            }}>
+                              {getCategoryIcon(op.category, 15, statusBadge.color)}
+                            </div>
+
+                            {/* Main Content: Info & Progress Bar */}
+                            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
+                              {/* Row 1: Title + Application + Status */}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+                                  <span style={{
+                                    fontSize: 11,
+                                    fontWeight: 700,
+                                    color: '#ffffff',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                  }}>
+                                    {op.title}
+                                  </span>
+                                  {op.applicationName && (
+                                    <span style={{
+                                      fontSize: 8.5,
+                                      fontWeight: 600,
+                                      padding: '1px 4px',
+                                      borderRadius: 4,
+                                      background: 'rgba(255, 255, 255, 0.08)',
+                                      color: 'rgba(255, 255, 255, 0.6)',
+                                      whiteSpace: 'nowrap'
+                                    }}>
+                                      {op.applicationName}
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                  {/* Percent or working label */}
+                                  <span style={{ fontSize: 10, fontWeight: 700, color: statusBadge.color }}>
+                                    {percentVal !== null ? `${percentVal}%` : statusBadge.text}
+                                  </span>
+                                  {/* Status Tag */}
+                                  <span style={{
+                                    fontSize: 8.5,
+                                    fontWeight: 700,
+                                    padding: '1px 5px',
+                                    borderRadius: 4,
+                                    background: statusBadge.bg,
+                                    color: statusBadge.color,
+                                    border: `1px solid ${statusBadge.border}`
+                                  }}>
+                                    {statusBadge.text}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {/* Progress Bar */}
+                              <div style={{
+                                width: '100%',
+                                height: 4,
+                                borderRadius: 2,
+                                background: 'rgba(255, 255, 255, 0.1)',
+                                overflow: 'hidden',
+                                position: 'relative'
+                              }}>
+                                {isIndeterminate ? (
+                                  <div className="progress-shimmer-bar" style={{
+                                    height: '100%',
+                                    width: '35%',
+                                    background: statusBadge.color,
+                                    borderRadius: 2
+                                  }} />
+                                ) : (
+                                  <div style={{
+                                    height: '100%',
+                                    width: `${percentVal}%`,
+                                    background: statusBadge.color,
+                                    borderRadius: 2,
+                                    transition: 'width 0.25s ease'
+                                  }} />
+                                )}
+                              </div>
+
+                              {/* Row 2: Subtitle / Transfer stats & ETA */}
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 9, color: 'rgba(255, 255, 255, 0.5)' }}>
+                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '65%' }}>
+                                  {op.errorMessage ? (
+                                    <span style={{ color: '#ef4444' }}>{op.errorMessage}</span>
+                                  ) : op.subtitle ? (
+                                    op.subtitle
+                                  ) : (
+                                    op.totalBytes ? `${formatBytes(op.bytesCompleted || 0)} / ${formatBytes(op.totalBytes)}` : ""
+                                  )}
+                                </span>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                                  {op.bytesPerSecond > 0 && (
+                                    <span>{formatBytes(op.bytesPerSecond)}/s</span>
+                                  )}
+                                  {op.estimatedRemainingSeconds > 0 && (
+                                    <span>{op.estimatedRemainingSeconds < 60 ? `${op.estimatedRemainingSeconds}s left` : `${Math.ceil(op.estimatedRemainingSeconds / 60)}m left`}</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Actions Button Group */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                              {caps.canPause && op.status === "running" && (
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleProgressAction(op.id, "pause")}
+                                  title="Pause"
+                                  style={{
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    width: 22,
+                                    height: 22,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#ffffff',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <Pause size={10} />
+                                </motion.button>
+                              )}
+
+                              {caps.canResume && op.status === "paused" && (
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleProgressAction(op.id, "resume")}
+                                  title="Resume"
+                                  style={{
+                                    background: 'rgba(56, 189, 248, 0.2)',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    width: 22,
+                                    height: 22,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#38bdf8',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <Play size={10} fill="#38bdf8" />
+                                </motion.button>
+                              )}
+
+                              {caps.canCancel && (op.status === "running" || op.status === "paused") && (
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleProgressAction(op.id, "cancel")}
+                                  title="Cancel"
+                                  style={{
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    width: 22,
+                                    height: 22,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'rgba(255, 255, 255, 0.6)',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <X size={11} />
+                                </motion.button>
+                              )}
+
+                              {caps.canRetry && (op.status === "failed" || op.status === "cancelled") && (
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleProgressAction(op.id, "retry")}
+                                  title="Retry"
+                                  style={{
+                                    background: 'rgba(56, 189, 248, 0.2)',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    width: 22,
+                                    height: 22,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#38bdf8',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <RotateCcw size={10} />
+                                </motion.button>
+                              )}
+
+                              {caps.canOpenDestination && op.destinationPath && (
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleProgressAction(op.id, "openDestination")}
+                                  title="Open destination folder"
+                                  style={{
+                                    background: 'rgba(255, 255, 255, 0.08)',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    width: 22,
+                                    height: 22,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: '#ffffff',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <FolderOpen size={11} />
+                                </motion.button>
+                              )}
+
+                              {caps.canDismiss && (op.status === "completed" || op.status === "failed" || op.status === "cancelled") && (
+                                <motion.button
+                                  whileHover={{ scale: 1.15 }}
+                                  whileTap={{ scale: 0.9 }}
+                                  onClick={() => handleProgressAction(op.id, "dismiss")}
+                                  title="Dismiss"
+                                  style={{
+                                    background: 'transparent',
+                                    border: 'none',
+                                    borderRadius: 6,
+                                    width: 20,
+                                    height: 20,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: 'rgba(255, 255, 255, 0.35)',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <X size={11} />
+                                </motion.button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Quick App Launcher & Workspace Switcher */}
+            {currentTab === 14 && (
+              <AppLauncher
+                textColor={textColor}
+                accentColor={accentColor}
+                onClose={() => setMode("still")}
+              />
+            )}
+
+            {/* Quick Notes & Contextual Capture */}
+            {currentTab === 15 && (
+              <QuickNotes
+                textColor={textColor}
+                accentColor={accentColor}
+                onTaskCreated={(task) => {
+                  setTasks(prev => {
+                    const updated = [task, ...prev];
+                    localStorage.setItem("tasks", JSON.stringify(updated));
+                    return updated;
+                  });
+                }}
+              />
+            )}
+
             {/* Now Playing*/}
             {currentTab === 3 && (
               <div style={{
@@ -5008,52 +6674,561 @@ export default function Island() {
 
             {/* Notifications Tab */}
             {currentTab === 5 && (
-              <div className="notifications-container">
-                {notificationsList.length === 0 ? (
-                  <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 40, fontSize: 13 }}>
-                    <Bell size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
-                    <p style={{ margin: 0 }}>No new notifications</p>
-                  </div>
-                ) : (
-                  notificationsList.map((notif, idx) => (
-                    <div
-                      key={notif.id || `notif-${idx}`}
-                      className="notification-card"
-                      onClick={() => {
-                        if (notif.appId && window.electronAPI?.focusNotificationApp) {
-                          window.electronAPI.focusNotificationApp(notif.appId);
-                        }
-                      }}
-                      style={{ cursor: notif.appId ? 'pointer' : 'default' }}
+              <div className="notifications-container" style={{ position: 'relative' }}>
+                {/* Header Controls: Filters & Actions */}
+                <div className="smart-notifications-header">
+                  <div className="notification-filter-pills">
+                    <button
+                      type="button"
+                      className={`notification-filter-pill ${notificationFilter === 'all' ? 'active' : ''}`}
+                      onClick={() => setNotificationFilter('all')}
                     >
-                      {notif.icon ? (
-                        <img src={notif.icon} className="notification-icon" alt="" />
-                      ) : (
-                        <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <Bell size={14} />
-                        </div>
-                      )}
-                      <div className="notification-content">
-                        {notif.appName && (
-                          <span className="notification-app-name">{notif.appName}</span>
-                        )}
-                        <span className="notification-title">{notif.title}</span>
-                        <span className="notification-body">{notif.body}</span>
-                      </div>
+                      All <span className="notification-badge-count">{notificationSnapshot.stats.totalActive}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`notification-filter-pill ${notificationFilter === 'unread' ? 'active' : ''}`}
+                      onClick={() => setNotificationFilter('unread')}
+                    >
+                      Unread <span className="notification-badge-count">{notificationSnapshot.stats.unreviewedCount}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`notification-filter-pill ${notificationFilter === 'snoozed' ? 'active' : ''}`}
+                      onClick={() => setNotificationFilter('snoozed')}
+                    >
+                      Snoozed <span className="notification-badge-count">{notificationSnapshot.stats.snoozedCount}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`notification-filter-pill ${notificationFilter === 'history' ? 'active' : ''}`}
+                      onClick={() => setNotificationFilter('history')}
+                    >
+                      History <span className="notification-badge-count">{notificationSnapshot.stats.historyCount}</span>
+                    </button>
+                  </div>
+
+                  <div className="notification-header-actions">
+                    <button
+                      type="button"
+                      className="notification-header-btn"
+                      onClick={handleTogglePrivacy}
+                      title={notificationSnapshot.settings.hidePreviews ? "Previews are hidden. Click to show." : "Hide notification previews"}
+                    >
+                      {notificationSnapshot.settings.hidePreviews ? <EyeOff size={13} color="#f59e0b" /> : <Eye size={13} />}
+                    </button>
+
+                    {(notificationSnapshot.stats.hasUndo || undoToast) && (
                       <button
-                        className="notification-dismiss"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (notif.id && window.electronAPI?.dismissNotification) {
-                            window.electronAPI.dismissNotification(notif.id);
-                          }
-                          setNotificationsList(prev => prev.filter((_, i) => i !== idx));
+                        type="button"
+                        className="notification-header-btn"
+                        onClick={handleUndoDismiss}
+                        title="Undo dismissal"
+                      >
+                        <Undo size={12} /> Undo
+                      </button>
+                    )}
+
+                    {notificationFilter === 'history' ? (
+                      notificationSnapshot.history.length > 0 && (
+                        <button
+                          type="button"
+                          className="notification-header-btn"
+                          onClick={() => window.electronAPI?.notifications?.clearHistory?.()}
+                          title="Clear history"
+                        >
+                          <Trash2 size={12} /> Clear
+                        </button>
+                      )
+                    ) : (
+                      notificationSnapshot.stats.totalActive > 0 && (
+                        <button
+                          type="button"
+                          className="notification-header-btn"
+                          onClick={handleClearAll}
+                          title="Dismiss all active notifications"
+                        >
+                          <Trash2 size={12} /> Clear All
+                        </button>
+                      )
+                    )}
+                  </div>
+                </div>
+
+                {/* Undo Notification Toast */}
+                {undoToast && (
+                  <div className="notification-undo-toast">
+                    <span style={{ color: '#ffffff', opacity: 0.9 }}>{undoToast.message}</span>
+                    <button
+                      type="button"
+                      onClick={handleUndoDismiss}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.15)',
+                        border: 'none',
+                        borderRadius: 4,
+                        color: '#38bdf8',
+                        padding: '2px 8px',
+                        fontSize: 11,
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Undo
+                    </button>
+                  </div>
+                )}
+
+                {/* Incoming Call Card (if active and not on history/snooze) */}
+                {notificationSnapshot.incomingCall && notificationFilter !== 'snoozed' && notificationFilter !== 'history' && (
+                  <div className="notification-call-card">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div className="notification-call-pulsing-icon">
+                        <PhoneIncoming size={15} />
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 700, color: '#25d366', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                          Incoming {notificationSnapshot.incomingCall.callType || 'Voice'} Call
+                        </span>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>
+                          {notificationSnapshot.incomingCall.title || notificationSnapshot.incomingCall.applicationName}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.7)' }}>
+                          {notificationSnapshot.incomingCall.body}
+                        </span>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleExecuteAction(notificationSnapshot.incomingCall.id, 'open', { appId: notificationSnapshot.incomingCall.applicationId })}
+                        style={{
+                          background: '#25d366',
+                          border: 'none',
+                          borderRadius: 8,
+                          color: '#ffffff',
+                          padding: '6px 12px',
+                          fontSize: 11,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4
                         }}
                       >
-                        <X size={14} />
+                        <Phone size={11} /> Answer
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleExecuteAction(notificationSnapshot.incomingCall.id, 'dismiss')}
+                        style={{
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          border: 'none',
+                          borderRadius: 8,
+                          color: '#ffffff',
+                          padding: '6px 9px',
+                          fontSize: 12,
+                          cursor: 'pointer'
+                        }}
+                        title="Dismiss"
+                      >
+                        <X size={13} />
                       </button>
                     </div>
-                  ))
+                  </div>
+                )}
+
+                {/* Main Content Area based on Filter */}
+                {notificationFilter === 'snoozed' ? (
+                  notificationSnapshot.snoozed.length === 0 ? (
+                    <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 35, fontSize: 13 }}>
+                      <Clock size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
+                      <p style={{ margin: 0 }}>No snoozed notifications</p>
+                    </div>
+                  ) : (
+                    notificationSnapshot.snoozed.map((notif) => (
+                      <div key={notif.id} className="notification-card">
+                        {notif.applicationIcon ? (
+                          <img src={notif.applicationIcon} className="notification-icon" alt="" />
+                        ) : (
+                          <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Bell size={14} />
+                          </div>
+                        )}
+                        <div className="notification-content">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span className="notification-app-name">{notif.applicationName}</span>
+                            <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600 }}>
+                              Snoozed until {notif.snoozedUntil ? new Date(notif.snoozedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'due'}
+                            </span>
+                          </div>
+                          <span className="notification-title">{notif.title}</span>
+                          <span className="notification-body">{notif.body}</span>
+                          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                            <button
+                              type="button"
+                              className="notification-action-btn"
+                              onClick={() => handleCancelSnooze(notif.id)}
+                            >
+                              <BellRing size={11} /> Wake Now
+                            </button>
+                            <button
+                              type="button"
+                              className="notification-action-btn"
+                              onClick={() => handleExecuteAction(notif.id, 'dismiss')}
+                            >
+                              <X size={11} /> Dismiss
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )
+                ) : notificationFilter === 'history' ? (
+                  notificationSnapshot.history.length === 0 ? (
+                    <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 35, fontSize: 13 }}>
+                      <List size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
+                      <p style={{ margin: 0 }}>No notification history</p>
+                    </div>
+                  ) : (
+                    notificationSnapshot.history.map((notif) => (
+                      <div key={notif.id} className="notification-card" style={{ opacity: 0.75 }}>
+                        {notif.applicationIcon ? (
+                          <img src={notif.applicationIcon} className="notification-icon" alt="" />
+                        ) : (
+                          <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <Bell size={14} />
+                          </div>
+                        )}
+                        <div className="notification-content">
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span className="notification-app-name">{notif.applicationName}</span>
+                            <span style={{ fontSize: 9, opacity: 0.5 }}>
+                              {notif.dismissedAt ? formatRelativeTime(notif.dismissedAt) : ''}
+                            </span>
+                          </div>
+                          <span className="notification-title">{notif.title}</span>
+                          <span className="notification-body">{notif.body}</span>
+                        </div>
+                        {notif.applicationId && (
+                          <button
+                            type="button"
+                            className="notification-action-btn"
+                            style={{ alignSelf: 'center' }}
+                            onClick={() => handleExecuteAction(notif.id, 'open', { appId: notif.applicationId })}
+                            title="Open App"
+                          >
+                            <ExternalLink size={12} />
+                          </button>
+                        )}
+                      </div>
+                    ))
+                  )
+                ) : (
+                  /* 'all' or 'unread' view */
+                  (() => {
+                    const standaloneItems = notificationSnapshot.standalone.filter(item => {
+                      if (notificationFilter === 'unread') return !item.localReviewed;
+                      return true;
+                    });
+                    const groupStacks = notificationSnapshot.groups.filter(group => {
+                      if (notificationFilter === 'unread') return group.unreviewedCount > 0;
+                      return true;
+                    });
+
+                    const hasAny = standaloneItems.length > 0 || groupStacks.length > 0;
+
+                    if (!hasAny && !notificationSnapshot.incomingCall) {
+                      return (
+                        <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 40, fontSize: 13 }}>
+                          <Bell size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
+                          <p style={{ margin: 0 }}>{notificationFilter === 'unread' ? 'All notifications reviewed' : 'No new notifications'}</p>
+                        </div>
+                      );
+                    }
+
+                    const renderCardItem = (notif) => {
+                      const isMessaging = (notif.applicationName || "").toLowerCase().match(/whatsapp|telegram|slack|discord|signal|teams/);
+                      const hasReply = notif.capabilities?.some(c => c.type === 'reply' && c.supported);
+                      const currentActionStatus = actionStatuses[notif.id];
+                      const isSnoozeOpen = snoozeMenuOpenId === notif.id;
+
+                      return (
+                        <div
+                          key={notif.id}
+                          className="notification-card"
+                          onClick={() => {
+                            if (notif.applicationId || notif.appId) {
+                              handleExecuteAction(notif.id, 'open', { appId: notif.applicationId || notif.appId });
+                            }
+                            if (!notif.localReviewed) {
+                              window.electronAPI?.notifications?.markReviewed?.(notif.id);
+                            }
+                          }}
+                          style={{ cursor: (notif.applicationId || notif.appId) ? 'pointer' : 'default' }}
+                        >
+                          {/* Priority indicator dot */}
+                          <span className={`notification-priority-dot ${notif.priority || 'normal'}`} />
+
+                          {/* Icon */}
+                          {notif.applicationIcon || notif.icon ? (
+                            <img src={notif.applicationIcon || notif.icon} className="notification-icon" alt="" />
+                          ) : (
+                            <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <Bell size={14} />
+                            </div>
+                          )}
+
+                          {/* Content */}
+                          <div className="notification-content">
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span className="notification-app-name">{notif.applicationName || notif.appName}</span>
+                              <span style={{ fontSize: 9, opacity: 0.5 }}>
+                                {formatRelativeTime(notif.receivedAt || notif.timestamp)}
+                              </span>
+                            </div>
+
+                            <span className="notification-title">{notif.title}</span>
+                            <span className="notification-body">{notif.body}</span>
+
+                            {/* Action Status feedback */}
+                            {currentActionStatus && (
+                              <div style={{
+                                fontSize: 10,
+                                fontWeight: 600,
+                                color: currentActionStatus.status === 'success' ? '#22c55e' : currentActionStatus.status === 'pending' ? '#38bdf8' : '#ef4444',
+                                marginTop: 4
+                              }}>
+                                {currentActionStatus.message}
+                              </div>
+                            )}
+
+                            {/* Inline Reply Row */}
+                            {(isMessaging || hasReply) && (
+                              <div
+                                className="notification-reply-container"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  type="text"
+                                  className="notification-reply-input"
+                                  placeholder={notif.senderName ? `Reply to ${notif.senderName}…` : "Type a reply…"}
+                                  value={replyInputs[notif.id] || ""}
+                                  onChange={(e) => setReplyInputs({ ...replyInputs, [notif.id]: e.target.value })}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      handleSendReply(notif.id);
+                                    }
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  className="notification-action-btn"
+                                  onClick={() => handleSendReply(notif.id)}
+                                  title="Send reply"
+                                  style={{ padding: '4px 8px' }}
+                                >
+                                  <Send size={11} />
+                                </button>
+                              </div>
+                            )}
+
+                            {/* Action Row */}
+                            <div
+                              style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {(notif.applicationId || notif.appId) && (
+                                <button
+                                  type="button"
+                                  className="notification-action-btn"
+                                  onClick={() => handleExecuteAction(notif.id, 'open', { appId: notif.applicationId || notif.appId })}
+                                >
+                                  <ExternalLink size={10} /> Open
+                                </button>
+                              )}
+
+                              {/* Snooze Presets */}
+                              <div style={{ position: 'relative' }}>
+                                <button
+                                  type="button"
+                                  className="notification-action-btn"
+                                  onClick={() => setSnoozeMenuOpenId(isSnoozeOpen ? null : notif.id)}
+                                >
+                                  <Clock size={10} /> Snooze <ChevronDown size={9} />
+                                </button>
+                                {isSnoozeOpen && (
+                                  <div style={{
+                                    position: 'absolute',
+                                    bottom: '100%',
+                                    left: 0,
+                                    marginBottom: 4,
+                                    background: 'rgba(23, 23, 26, 0.98)',
+                                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                                    borderRadius: 8,
+                                    padding: 4,
+                                    display: 'flex',
+                                    gap: 4,
+                                    zIndex: 999,
+                                    boxShadow: '0 4px 14px rgba(0,0,0,0.5)'
+                                  }}>
+                                    {[5, 15, 30, 60].map(mins => (
+                                      <button
+                                        type="button"
+                                        key={mins}
+                                        onClick={() => handleSnooze(notif.id, mins)}
+                                        style={{
+                                          background: 'rgba(255,255,255,0.08)',
+                                          border: 'none',
+                                          color: '#ffffff',
+                                          fontSize: 10,
+                                          fontWeight: 600,
+                                          padding: '3px 6px',
+                                          borderRadius: 4,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        {mins < 60 ? `${mins}m` : '1h'}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Dismiss Button */}
+                          <button
+                            type="button"
+                            className="notification-dismiss"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleExecuteAction(notif.id, 'dismiss');
+                            }}
+                            title="Dismiss notification"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <>
+                        {/* Low Priority Collapsible Summary */}
+                        {notificationSnapshot.lowPrioritySummary?.count > 0 && notificationFilter === 'all' && (
+                          <div style={{
+                            marginBottom: 8,
+                            padding: '6px 10px',
+                            background: 'rgba(255, 255, 255, 0.04)',
+                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            borderRadius: 10,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 4
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <div
+                                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1 }}
+                                onClick={() => setLowPriorityExpanded(prev => !prev)}
+                              >
+                                <SlidersHorizontal size={12} opacity={0.6} />
+                                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.8 }}>
+                                  {notificationSnapshot.lowPrioritySummary.count} low-priority {notificationSnapshot.lowPrioritySummary.count === 1 ? 'alert' : 'alerts'}
+                                </span>
+                                {lowPriorityExpanded ? <ChevronUp size={12} opacity={0.6} /> : <ChevronDown size={12} opacity={0.6} />}
+                              </div>
+                              <button
+                                type="button"
+                                className="notification-header-btn"
+                                onClick={() => {
+                                  notificationSnapshot.lowPrioritySummary.items.forEach(i => handleExecuteAction(i.id, 'dismiss'));
+                                }}
+                                title="Dismiss low-priority alerts"
+                              >
+                                Dismiss All
+                              </button>
+                            </div>
+
+                            {lowPriorityExpanded && (
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                                {notificationSnapshot.lowPrioritySummary.items.map(item => (
+                                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px', background: 'rgba(255,255,255,0.03)', borderRadius: 6 }}>
+                                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                      <span style={{ fontSize: 10, fontWeight: 600 }}>{item.applicationName}: {item.title}</span>
+                                      <span style={{ fontSize: 9, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.body}</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      className="notification-dismiss"
+                                      onClick={() => handleExecuteAction(item.id, 'dismiss')}
+                                    >
+                                      <X size={12} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Grouped Notification Stacks */}
+                        {groupStacks.map(group => {
+                          const isExpanded = Boolean(expandedGroupIds[group.groupId]);
+                          return (
+                            <div key={group.groupId} className="notification-group-stack">
+                              <div
+                                className="notification-group-header"
+                                onClick={() => setExpandedGroupIds(prev => ({ ...prev, [group.groupId]: !prev[group.groupId] }))}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
+                                  {group.applicationIcon ? (
+                                    <img src={group.applicationIcon} style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'cover' }} alt="" />
+                                  ) : (
+                                    <Bell size={14} opacity={0.7} />
+                                  )}
+                                  <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      <span style={{ fontSize: 11, fontWeight: 700 }}>{group.applicationName}</span>
+                                      <span className="notification-badge-count">{group.count} updates</span>
+                                    </div>
+                                    <span style={{ fontSize: 10, opacity: 0.65, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      {group.latestItem?.title || group.latestItem?.body}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                  {isExpanded ? <ChevronUp size={14} opacity={0.6} /> : <ChevronDown size={14} opacity={0.6} />}
+                                  <button
+                                    type="button"
+                                    className="notification-dismiss"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDismissGroup(group.groupId);
+                                    }}
+                                    title="Dismiss stack"
+                                  >
+                                    <X size={13} />
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Stack Items when expanded */}
+                              {isExpanded && (
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: '8px 10px', background: 'rgba(0,0,0,0.15)' }}>
+                                  {group.items.map(notif => renderCardItem(notif))}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Standalone Notifications */}
+                        {standaloneItems.map(notif => renderCardItem(notif))}
+                      </>
+                    );
+                  })()
                 )}
               </div>
             )}
@@ -5284,14 +7459,17 @@ export default function Island() {
                   <div
                     style={{
                       display: 'flex',
+                      flexDirection: 'row',
+                      flexWrap: 'nowrap',
                       alignItems: 'center',
                       gap: 6,
                       width: '100%',
                       background: 'rgba(255, 255, 255, 0.08)',
                       border: '1px solid rgba(255, 255, 255, 0.12)',
                       borderRadius: 10,
-                      padding: '2px 3px 2px 10px',
-                      boxSizing: 'border-box'
+                      padding: '2px 3px 2px 8px',
+                      boxSizing: 'border-box',
+                      minWidth: 0
                     }}
                   >
                     <input
@@ -5304,6 +7482,8 @@ export default function Island() {
                       }}
                       style={{
                         flex: 1,
+                        width: '100%',
+                        minWidth: 0,
                         height: 28,
                         background: 'none',
                         color: textColor,
@@ -5334,7 +7514,8 @@ export default function Island() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        flexShrink: 0
+                        flexShrink: 0,
+                        whiteSpace: 'nowrap'
                       }}
                     >
                       Add
@@ -5344,6 +7525,8 @@ export default function Island() {
 
                 {/* Right Column: Scrollable Task List or Clean Empty State */}
                 <div
+                  id="task-list"
+                  className="task-list-scrollable"
                   style={{
                     flex: 1,
                     height: '100%',
@@ -5351,9 +7534,11 @@ export default function Island() {
                     overflowX: 'hidden',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 4,
+                    gap: 5,
                     minWidth: 0,
-                    paddingRight: 2
+                    margin: 0,
+                    paddingRight: 4,
+                    boxSizing: 'border-box'
                   }}
                 >
                   <AnimatePresence mode="popLayout">
@@ -5394,7 +7579,9 @@ export default function Island() {
                             borderRadius: 10,
                             background: 'rgba(255, 255, 255, 0.05)',
                             border: '1px solid rgba(255, 255, 255, 0.07)',
-                            boxSizing: 'border-box'
+                            boxSizing: 'border-box',
+                            flexShrink: 0,
+                            userSelect: 'none'
                           }}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
@@ -6177,11 +8364,18 @@ export default function Island() {
                               onChange={(checked) => handleLargeStandbyChange({ target: { value: checked ? "true" : "false" } })}
                             />
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Show Info When Idle</span>
                             <AppleSwitch
                               checked={showInfoWhenIdleEnabled}
                               onChange={(checked) => handleShowInfoWhenIdleChange({ target: { value: checked ? "true" : "false" } })}
+                            />
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
+                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Hide Notification Previews</span>
+                            <AppleSwitch
+                              checked={Boolean(notificationSnapshot?.settings?.hidePreviews)}
+                              onChange={() => handleTogglePrivacy()}
                             />
                           </div>
                         </div>

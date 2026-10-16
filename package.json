@@ -1,25 +1,39 @@
 {
   "name": "quick-pill",
   "productName": "Quick Pill",
-  "version": "5.4.0",
+  "version": "5.5.0",
   "description": "A Dynamic Island for Windows",
   "main": ".vite/build/main.js",
   "scripts": {
     "start": "electron-forge start",
     "dev": "electron-forge start",
     "electron:dev": "electron-forge start",
+    "build:native": "dotnet publish native/audio-helper/audio-helper.csproj -c Release -r win-x64 --self-contained true -o native/bin",
     "build": "electron-builder --win",
     "electron:build": "electron-builder --win",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "build-win": "electron-builder --win",
     "publish": "electron-forge publish",
+    "test": "node --test tests/*.test.js",
     "update:manifest": "node scripts/generate-manifest.js",
     "lint": "echo \"No linting configured\""
   },
   "build": {
     "appId": "com.neosparkx.quickpill",
     "productName": "Quick Pill",
+    "extraResources": [
+      {
+        "from": "native/bin/audio-helper.exe",
+        "to": "audio-helper.exe"
+      }
+    ],
+    "files": [
+      "**/*",
+      "!web app/**",
+      "!tests/**",
+      "!.github/**"
+    ],
     "directories": {
       "output": "dist"
     },

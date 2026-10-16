@@ -3,18 +3,54 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import {
   Music, Bell, Timer, CheckSquare, Clipboard, Cloud,
-  Clock, Cpu, Rocket, Settings, Shield, Search, Calendar
+  Clock, Cpu, Rocket, Settings, Shield, Search, Calendar,
+  Sliders, Activity, BatteryCharging, Compass, FileText
 } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
 const FEATURES = [
   {
+    Icon: Compass,
+    name: 'Quick App Launcher & Workspaces',
+    desc: 'Instant search across installed applications with real icons, running-window switcher with Win32 activation, favorites, and configurable productivity workspaces with safe launch profiles.',
+    imgSrc: 'media-tab.jpg',
+    alt: 'Quick Pill App Launcher & Workspace Switcher on Windows',
+  },
+  {
+    Icon: FileText,
+    name: 'Quick Notes & Contextual Capture',
+    desc: 'High-speed note capture with dirty-state autosave and crash recovery, searchable inbox with tags, contextual clipboard capture with large-content guard, and direct task conversion.',
+    imgSrc: 'tasks-tab.jpg',
+    alt: 'Quick Pill Quick Notes and Contextual Capture',
+  },
+  {
     Icon: Bell,
-    name: 'Live Notification Center',
-    desc: 'Real app icons extracted via native PowerShell APIs. One-click focus on originating app, instant dismiss.',
+    name: 'Smart Notification Actions',
+    desc: 'Real application icons, WhatsApp/VoIP call cards with answer/dismiss, inline replies, local snooze presets, grouped stacks, and privacy masking.',
     imgSrc: 'notifications-tab.jpg',
-    alt: 'Quick Pill Live Notification Center Tab on Windows desktop',
+    alt: 'Quick Pill Smart Notification Actions Tab on Windows desktop',
+  },
+  {
+    Icon: Sliders,
+    name: 'Per-App Audio Mixer',
+    desc: 'Control individual application volume levels, mute/unmute audio streams, monitor live peak audio meters, and switch audio output devices via native Windows WASAPI.',
+    imgSrc: 'media-tab.jpg',
+    alt: 'Quick Pill Per-App Audio Mixer for Windows applications',
+  },
+  {
+    Icon: Activity,
+    name: 'Universal Progress Island',
+    desc: 'Consolidates background file operations, download tasks, and app update progress into an intelligent top-anchored Dynamic Island.',
+    imgSrc: 'quick-mode.jpg',
+    alt: 'Quick Pill Universal Progress Island on Windows desktop',
+  },
+  {
+    Icon: BatteryCharging,
+    name: 'Apple Battery Hub',
+    desc: 'Fluid 60 FPS liquid wave canvas physics engine, buoyant micro-bubbles, discharge drain diagnostics, and real-time duration forecasting.',
+    imgSrc: 'still-mode.jpg',
+    alt: 'Quick Pill Apple Dynamic Island Battery Hub',
   },
   {
     Icon: Timer,

@@ -12,6 +12,7 @@ module.exports = {
     extraResource: [
       path.join(__dirname, 'src/assets/icons/icon.ico'),
       path.join(__dirname, 'src/assets/icons/icon.png'),
+      path.join(__dirname, 'native/bin/audio-helper.exe'),
     ],
   },
   hooks: {
