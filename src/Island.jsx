@@ -2526,7 +2526,13 @@ export default function Island() {
 
     // For vertical wheel scrolling, check if pointer is inside a scrollable container
     if (!isHorizontalSwipe) {
-      const scrollableElem = e.target.closest("#clipboard, .notifications-container, #task-list, .task-list-scrollable, #settings-container, .calendar-container, .audio-mixer-scrollable, .progress-island-scrollable, .launcher-scrollable, .notes-scrollable");
+      let scrollableElem = e.target.closest("#clipboard, .notifications-container, #task-list, .task-list-scrollable, #settings-sidebar, .settings-sidebar, .settings-sidebar-scrollable, #settings-content, .settings-content, .settings-content-scrollable, #settings-container, .calendar-container, .audio-mixer-scrollable, .progress-island-scrollable, .launcher-scrollable, .notes-scrollable, [data-scrollable='true']");
+      if (scrollableElem && scrollableElem.scrollHeight <= scrollableElem.clientHeight + 2) {
+        const innerScrollable = e.target.closest("#settings-sidebar, #settings-content, .settings-sidebar-scrollable, .settings-content-scrollable, [data-scrollable='true']");
+        if (innerScrollable) {
+          scrollableElem = innerScrollable;
+        }
+      }
       if (scrollableElem) {
         const isScrollable = scrollableElem.scrollHeight > scrollableElem.clientHeight + 2;
         if (isScrollable) {
@@ -7994,18 +8000,27 @@ export default function Island() {
                   }}
                 >
                   {/* Left Sidebar: Apple-style Category Navigation */}
-                  <div style={{
-                    width: 130,
-                    height: '100%',
-                    borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-                    background: 'rgba(0, 0, 0, 0.22)',
-                    padding: '10px 6px',
-                    boxSizing: 'border-box',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 3,
-                    flexShrink: 0
-                  }}>
+                  <div
+                    id="settings-sidebar"
+                    className="settings-sidebar settings-sidebar-scrollable"
+                    data-scrollable="true"
+                    style={{
+                      width: 130,
+                      height: '100%',
+                      borderRight: '1px solid rgba(255, 255, 255, 0.08)',
+                      background: 'rgba(0, 0, 0, 0.22)',
+                      padding: '8px 6px',
+                      boxSizing: 'border-box',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 3,
+                      flexShrink: 0,
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: 'color-mix(in srgb, var(--island-text-color), transparent 80%) transparent'
+                    }}
+                  >
                     {categories.map((cat) => {
                       const IconComp = cat.icon;
                       const isActive = settingsTab === cat.id;
@@ -8031,6 +8046,7 @@ export default function Island() {
                             cursor: 'pointer',
                             textAlign: 'left',
                             width: '100%',
+                            flexShrink: 0,
                             transition: 'all 0.15s ease',
                             fontFamily: 'OpenRunde, system-ui, sans-serif'
                           }}
@@ -8052,17 +8068,24 @@ export default function Island() {
                   </div>
 
                   {/* Right Content Area: Inset Grouped Settings Panel */}
-                  <div style={{
-                    flex: 1,
-                    height: '100%',
-                    overflowY: 'auto',
-                    overflowX: 'hidden',
-                    padding: '10px 16px',
-                    boxSizing: 'border-box',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 10
-                  }}>
+                  <div
+                    id="settings-content"
+                    className="settings-content settings-content-scrollable"
+                    data-scrollable="true"
+                    style={{
+                      flex: 1,
+                      height: '100%',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      padding: '10px 16px',
+                      boxSizing: 'border-box',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 10,
+                      scrollbarWidth: 'thin',
+                      scrollbarColor: 'color-mix(in srgb, var(--island-text-color), transparent 80%) transparent'
+                    }}
+                  >
                     {/* CATEGORY: GENERAL */}
                     {settingsTab === 'general' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
