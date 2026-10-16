@@ -12,13 +12,14 @@
     "Per-App Audio Mixer: Native Windows Core Audio WASAPI mixer to adjust individual application volume levels, mute/unmute audio streams, monitor peak volume meters, and toggle audio output devices.",
     "Apple Dynamic Island Battery Hub: Redesigned with Apple HIG design, 60 FPS right-to-left fluid liquid wave canvas physics engine, buoyant micro-bubbles, and real-time battery duration forecasting.",
     "Persistent Always-On-Top & Background Timers: Screen-saver topmost priority level, wall-clock synchronized timers that never pause on lock screen or sleep.",
-    "Silent Background Auto-Updater: When a new release is detected, the app automatically downloads and silently installs the update via NSIS in the background, with user preferences in Settings."
+    "Silent Background Auto-Updater: When a new release is detected, the app automatically downloads and silently installs the update via NSIS in the background, with user preferences in Settings.",
+    "Customizable Instant Tab Shortcuts: System-wide and in-app instant Alt+key shortcuts to open all 16 tabs instantly without conflicting with the Click-Through feature, fully customizable with collision handling in the Settings tab."
   ],
   "platforms": {
     "win32-x64": {
       "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.0-Setup.exe",
-      "sha256": "06f010dfbc1be6125452d0c62b4fd95152df10cc96622d99f34e584c46289045",
-      "size": 403011569,
+      "sha256": "06f04d22573e00ba1ec4fa9d7cab2133318c6c9b1a4cd364b4c97af53db438a1",
+      "size": 403025158,
       "installerType": "nsis"
     }
   }
