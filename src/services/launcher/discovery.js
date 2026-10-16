@@ -56,6 +56,64 @@ function normalizeAppName(nameStr) {
 }
 
 /**
+ * Determines if an executable target or name is an internal background helper,
+ * daemon, uninstaller, updater, or private WindowsApps binary rather than a user application.
+ * @param {string} targetPath
+ * @param {string} [name]
+ * @param {string} [alias]
+ * @returns {boolean}
+ */
+function isInternalHelperExe(targetPath, name = "", alias = "") {
+  if (!targetPath || typeof targetPath !== "string") return false;
+
+  const lowerTarget = targetPath.toLowerCase();
+  const lowerName = (name || "").toLowerCase();
+  const lowerAlias = (alias || "").toLowerCase();
+  const baseExe = path.basename(lowerTarget);
+
+  // 1. Packaged WindowsApps raw binaries (UWP apps are handled separately via shell:AppsFolder)
+  if (lowerTarget.includes("\\program files\\windowsapps\\") || lowerTarget.includes("\\windows\\systemapps\\")) {
+    return true;
+  }
+
+  // 2. Known background helpers, updaters, daemons, and shell extensions
+  const helperPattern = /(?:^|[\\/_\.-])(?:ssh-askpass|ssh-proxy|helper|updater|daemon|worker|crashpad|crashhandler|shellext|diagnostics?|installer|unins(?:tall)?(?:000)?)\.exe$/i;
+  if (helperPattern.test(baseExe) || helperPattern.test(lowerAlias)) {
+    return true;
+  }
+
+  // 3. Known system/office/developer background exes
+  const blacklistedExes = new Set([
+    "iediagcmd.exe",
+    "licensemanagershellext.exe",
+    "msoadfsb.exe",
+    "msoasb.exe",
+    "msoxmled.exe",
+    "sdxhelper.exe",
+    "shellmcpservers.packaging.exe",
+    "skypeserver.exe",
+    "wabmig.exe",
+    "windowspackagemanagerserver.exe",
+    "xboxpcappadminserver.exe",
+    "xboxpcappce.exe",
+    "pymanager.exe",
+    "pywmanager.exe",
+    "elevate.exe"
+  ]);
+
+  if (blacklistedExes.has(baseExe)) {
+    return true;
+  }
+
+  // 4. Name indicates uninstaller or helper
+  if (/^(?:uninstall|unins\d+|readme|help|setup helper)$/i.test(lowerName.trim())) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Scans Windows Start Menu shortcut (.lnk) files.
  * @param {Object} [options]
  * @returns {Promise<Array<Object>>}
@@ -82,17 +140,18 @@ $dirs = @(${dirs.map(d => `"${d.replace(/"/g, '`"')}"`).join(",")})
 $results = [System.Collections.Generic.List[object]]::new()
 
 foreach ($dir in $dirs) {
-  if (-not (Test-Path $dir)) { continue }
+  if (-not (Test-Path -LiteralPath $dir)) { continue }
   Get-ChildItem -LiteralPath $dir -Recurse -Filter '*.lnk' -File -EA SilentlyContinue | ForEach-Object {
     try {
       $sc = $shell.CreateShortcut($_.FullName)
       $target = $sc.TargetPath
-      if ($target -and ($target.EndsWith('.exe') -or $target.EndsWith('.cmd') -or $target.EndsWith('.bat') -or $target.EndsWith('.ps1'))) {
-        if ($target -notmatch '\\\\(?:unins(?:tall)?(?:000)?|update)\\.exe$' -and $_.BaseName -notmatch '(?i)uninstall|readme|help') {
+      if ($target -and ($target.EndsWith('.exe', [System.StringComparison]::OrdinalIgnoreCase) -or $target.EndsWith('.cmd', [System.StringComparison]::OrdinalIgnoreCase) -or $target.EndsWith('.bat', [System.StringComparison]::OrdinalIgnoreCase) -or $target.EndsWith('.ps1', [System.StringComparison]::OrdinalIgnoreCase))) {
+        if ($target -notmatch '(?i)[\\\\/](?:unins(?:tall)?(?:000)?|update)\\.exe$' -and $_.BaseName -notmatch '(?i)uninstall|readme|help') {
           $rawIconLoc = $sc.IconLocation
           $validIconLoc = ''
           if ($rawIconLoc) {
-            $cleaned = ($rawIconLoc -replace ',\s*-?\d+$', '').Trim(' "', "'")
+            $cleaned = ($rawIconLoc -replace ',\\s*-?\\d+$', '').Trim()
+            $cleaned = $cleaned.Trim('"', "'")
             if ($cleaned -and (Test-Path -LiteralPath $cleaned -PathType Leaf)) {
               $validIconLoc = $rawIconLoc
             }
@@ -349,6 +408,9 @@ function deduplicateCatalog(rawApps = []) {
       } else {
         const baseExe = path.basename(targetPath);
         const appName = normalizeAppName(raw.alias ? raw.alias.replace(/\.exe$/i, "") : baseExe.replace(/\.exe$/i, ""));
+        if (isInternalHelperExe(targetPath, appName, raw.alias)) {
+          continue;
+        }
         win32Map.set(targetPath, {
           id: `win32-${appName.toLowerCase().replace(/[^a-z0-9_-]/g, "_")}`,
           name: appName,
@@ -379,6 +441,7 @@ function deduplicateCatalog(rawApps = []) {
         continue;
       }
       if (!targetPath || !targetPath.endsWith(".exe")) continue;
+      if (isInternalHelperExe(targetPath, raw.name)) continue;
 
       if (win32Map.has(targetPath)) {
         const existing = win32Map.get(targetPath);
@@ -410,6 +473,7 @@ function deduplicateCatalog(rawApps = []) {
     // Handle Start Menu entries
     const targetPath = normalizeExePath(raw.target || raw.path);
     if (!targetPath) continue;
+    if (isInternalHelperExe(targetPath, raw.name)) continue;
 
     const baseExe = path.basename(targetPath).toLowerCase();
     const appName = normalizeAppName(raw.name);
@@ -507,5 +571,6 @@ module.exports = {
   scanUWP,
   deduplicateCatalog,
   normalizeExePath,
-  normalizeAppName
+  normalizeAppName,
+  isInternalHelperExe
 };

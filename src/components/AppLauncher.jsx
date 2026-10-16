@@ -14,8 +14,22 @@ import {
   Plus,
   Sparkles,
   Trash2,
-  ChevronRight
+  ChevronRight,
+  Pencil,
+  Globe,
+  FolderPlus
 } from "lucide-react";
+
+const WORKSPACE_COLORS = [
+  "#3B82F6",
+  "#10B981",
+  "#8B5CF6",
+  "#F59E0B",
+  "#F43F5E",
+  "#06B6D4",
+  "#EC4899",
+  "#64748B"
+];
 
 // Module-level caches to make tab switches and re-renders 0ms instant
 let _memoryCatalogCache = null;
@@ -58,6 +72,8 @@ export default function AppLauncher({
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [statusMessage, setStatusMessage] = useState(null);
   const [launchPreviewModal, setLaunchPreviewModal] = useState(null); // workspace object to preview
+  const [workspaceModal, setWorkspaceModal] = useState(null); // { mode: 'create'|'edit', ws: {...}, appPickerOpen, ... }
+  const [quickAddMenu, setQuickAddMenu] = useState(null); // { item }
 
   const searchInputRef = useRef(null);
   const listContainerRef = useRef(null);
@@ -259,6 +275,140 @@ export default function AppLauncher({
     showStatus(`Active Workspace: ${ws.name}`);
   }, [showStatus]);
 
+  // Open workspace creator modal
+  const handleOpenCreateWorkspace = useCallback(() => {
+    setWorkspaceModal({
+      mode: "create",
+      ws: {
+        id: `ws-${Date.now()}`,
+        name: "",
+        color: "#3B82F6",
+        icon: "Layers",
+        pinnedApps: [],
+        launchProfile: []
+      },
+      appPickerOpen: false,
+      urlInputName: "",
+      urlInputTarget: "",
+      pickerQuery: ""
+    });
+  }, []);
+
+  // Open workspace editor modal
+  const handleOpenEditWorkspace = useCallback((ws, e) => {
+    if (e) e.stopPropagation();
+    setWorkspaceModal({
+      mode: "edit",
+      ws: JSON.parse(JSON.stringify(ws)),
+      appPickerOpen: false,
+      urlInputName: "",
+      urlInputTarget: "",
+      pickerQuery: ""
+    });
+  }, []);
+
+  // Save workspace from modal
+  const handleSaveWorkspaceModal = useCallback(async () => {
+    if (!workspaceModal?.ws) return;
+    const name = (workspaceModal.ws.name || "").trim();
+    if (!name) {
+      showStatus("⚠ Please enter a workspace name", 3000);
+      return;
+    }
+
+    const payload = {
+      ...workspaceModal.ws,
+      name,
+      launchProfile: (workspaceModal.ws.launchProfile || []).filter(t => t && t.target)
+    };
+
+    try {
+      if (window.electronAPI?.workspaces?.saveWorkspace) {
+        const res = await window.electronAPI.workspaces.saveWorkspace(payload);
+        const savedWs = res?.workspace || payload;
+        setWorkspaces(prev => {
+          const idx = prev.findIndex(w => w.id === savedWs.id);
+          let next;
+          if (idx >= 0) {
+            next = [...prev];
+            next[idx] = savedWs;
+          } else {
+            next = [...prev, savedWs];
+          }
+          _memoryWorkspacesCache = next;
+          return next;
+        });
+        showStatus(`✓ Workspace "${name}" saved`);
+      }
+    } catch (err) {
+      showStatus("Error saving workspace: " + err.message, 4000);
+    }
+    setWorkspaceModal(null);
+  }, [workspaceModal, showStatus]);
+
+  // Delete workspace
+  const handleDeleteWorkspaceModal = useCallback(async (wsId) => {
+    if (!wsId) return;
+    if (workspaces.length <= 1) {
+      showStatus("Cannot delete the only workspace", 3000);
+      return;
+    }
+
+    try {
+      if (window.electronAPI?.workspaces?.deleteWorkspace) {
+        await window.electronAPI.workspaces.deleteWorkspace(wsId);
+        setWorkspaces(prev => {
+          const next = prev.filter(w => w.id !== wsId);
+          _memoryWorkspacesCache = next;
+          if (activeWorkspaceId === wsId && next.length > 0) {
+            setActiveWorkspaceId(next[0].id);
+            localStorage.setItem("active-workspace-id", next[0].id);
+          }
+          return next;
+        });
+        showStatus("✓ Workspace deleted");
+      }
+    } catch (err) {
+      showStatus("Error deleting workspace: " + err.message, 4000);
+    }
+    setWorkspaceModal(null);
+  }, [workspaces.length, activeWorkspaceId, showStatus]);
+
+  // Quick add app to a workspace
+  const handleQuickAddToWorkspace = useCallback(async (app, wsId) => {
+    const targetWs = workspaces.find(w => w.id === wsId);
+    if (!targetWs) return;
+
+    const newTarget = {
+      id: `target-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: app.name,
+      type: "app",
+      target: app.target || app.launch || app.name,
+      args: [],
+      enabled: true
+    };
+
+    const updatedWs = {
+      ...targetWs,
+      launchProfile: [...(targetWs.launchProfile || []), newTarget]
+    };
+
+    try {
+      if (window.electronAPI?.workspaces?.saveWorkspace) {
+        await window.electronAPI.workspaces.saveWorkspace(updatedWs);
+        setWorkspaces(prev => {
+          const next = prev.map(w => w.id === wsId ? updatedWs : w);
+          _memoryWorkspacesCache = next;
+          return next;
+        });
+        showStatus(`✓ Added ${app.name} to ${targetWs.name}`);
+      }
+    } catch (err) {
+      showStatus("Failed to add: " + err.message, 4000);
+    }
+    setQuickAddMenu(null);
+  }, [workspaces, showStatus]);
+
   // Open launch profile confirmation modal
   const handlePromptLaunchWorkspace = useCallback((e, ws) => {
     e.stopPropagation();
@@ -368,6 +518,7 @@ export default function AppLauncher({
         position: "relative"
       }}
       onKeyDown={handleKeyDown}
+      onClick={() => setQuickAddMenu(null)}
     >
       {/* LEFT COLUMN: Sidebar summary, active workspace & filter tabs */}
       <div
@@ -560,6 +711,30 @@ export default function AppLauncher({
               <X size={13} />
             </button>
           )}
+          {filter === "workspaces" && (
+            <button
+              type="button"
+              onClick={handleOpenCreateWorkspace}
+              title="Create new workspace"
+              style={{
+                background: "rgba(56, 189, 248, 0.2)",
+                border: "1px solid rgba(56, 189, 248, 0.4)",
+                borderRadius: 6,
+                padding: "3px 8px",
+                color: "#38bdf8",
+                fontSize: 10.5,
+                fontWeight: 700,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                whiteSpace: "nowrap"
+              }}
+            >
+              <Plus size={11} />
+              New
+            </button>
+          )}
         </div>
 
         {/* Results List */}
@@ -680,7 +855,7 @@ export default function AppLauncher({
                         {isWindowItem
                           ? `${item.processName || "Window"} • Active`
                           : isWorkspaceItem
-                          ? `${item.apps?.length || 0} apps in profile`
+                          ? `${item.launchProfile?.length || item.apps?.length || 0} items in profile`
                           : (item.publisher || item.target || "Application")}
                       </span>
                     </div>
@@ -703,6 +878,20 @@ export default function AppLauncher({
                       </span>
                     ) : isWorkspaceItem ? (
                       <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                        {item.id === activeWorkspaceId && (
+                          <span
+                            style={{
+                              fontSize: 9,
+                              padding: "2px 5px",
+                              borderRadius: 4,
+                              background: "rgba(56, 189, 248, 0.2)",
+                              color: "#38bdf8",
+                              fontWeight: 700
+                            }}
+                          >
+                            Active
+                          </span>
+                        )}
                         <button
                           type="button"
                           onClick={(e) => handlePromptLaunchWorkspace(e, item)}
@@ -724,24 +913,133 @@ export default function AppLauncher({
                           <Play size={10} fill="currentColor" />
                           Launch
                         </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleOpenEditWorkspace(item, e)}
+                          title="Configure / Edit workspace"
+                          style={{
+                            background: "rgba(255, 255, 255, 0.08)",
+                            border: "none",
+                            borderRadius: 4,
+                            padding: "3px 5px",
+                            color: "rgba(255, 255, 255, 0.7)",
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center"
+                          }}
+                        >
+                          <Pencil size={11} />
+                        </button>
+                        {workspaces.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteWorkspaceModal(item.id);
+                            }}
+                            title="Delete workspace"
+                            style={{
+                              background: "transparent",
+                              border: "none",
+                              borderRadius: 4,
+                              padding: "3px 4px",
+                              color: "rgba(239, 68, 68, 0.6)",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center"
+                            }}
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
                       </div>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => handleToggleFavorite(e, item)}
-                        title={isFav ? "Unpin favorite" : "Pin to favorites"}
-                        style={{
-                          background: "transparent",
-                          border: "none",
-                          cursor: "pointer",
-                          padding: "3px",
-                          display: "flex",
-                          alignItems: "center",
-                          color: isFav ? "#eab308" : "rgba(255, 255, 255, 0.25)"
-                        }}
-                      >
-                        <Star size={13} fill={isFav ? "#eab308" : "none"} />
-                      </button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 3, position: "relative" }}>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setQuickAddMenu(prev => prev?.item?.id === item.id ? null : { item });
+                          }}
+                          title="Add to workspace..."
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "3px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: quickAddMenu?.item?.id === item.id ? "#38bdf8" : "rgba(255, 255, 255, 0.35)"
+                          }}
+                        >
+                          <FolderPlus size={13} />
+                        </button>
+                        {quickAddMenu?.item?.id === item.id && (
+                          <div
+                            onClick={(e) => e.stopPropagation()}
+                            style={{
+                              position: "absolute",
+                              top: 24,
+                              right: 0,
+                              background: "#0f172a",
+                              border: "1px solid rgba(255, 255, 255, 0.15)",
+                              borderRadius: 8,
+                              padding: 4,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 2,
+                              minWidth: 140,
+                              zIndex: 50,
+                              boxShadow: "0 8px 20px rgba(0,0,0,0.7)"
+                            }}
+                          >
+                            <span style={{ fontSize: 9, color: "rgba(255, 255, 255, 0.4)", padding: "3px 6px", fontWeight: 700, textTransform: "uppercase" }}>
+                              Add to Workspace
+                            </span>
+                            {workspaces.map(ws => (
+                              <button
+                                key={ws.id}
+                                type="button"
+                                onClick={() => handleQuickAddToWorkspace(item, ws.id)}
+                                style={{
+                                  background: "transparent",
+                                  border: "none",
+                                  borderRadius: 4,
+                                  padding: "4px 6px",
+                                  color: "#ffffff",
+                                  fontSize: 10.5,
+                                  cursor: "pointer",
+                                  textAlign: "left",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 6
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                              >
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: ws.color || "#38bdf8" }} />
+                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ws.name}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleFavorite(e, item)}
+                          title={isFav ? "Unpin favorite" : "Pin to favorites"}
+                          style={{
+                            background: "transparent",
+                            border: "none",
+                            cursor: "pointer",
+                            padding: "3px",
+                            display: "flex",
+                            alignItems: "center",
+                            color: isFav ? "#eab308" : "rgba(255, 255, 255, 0.25)"
+                          }}
+                        >
+                          <Star size={13} fill={isFav ? "#eab308" : "none"} />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -837,10 +1135,10 @@ export default function AppLauncher({
                 gap: 4
               }}
             >
-              {(launchPreviewModal.apps || launchPreviewModal.launchProfile || []).map((appId, i) => (
+              {(launchPreviewModal.launchProfile || launchPreviewModal.apps || []).map((targetItem, i) => (
                 <div key={i} style={{ fontSize: 10.5, color: "rgba(255, 255, 255, 0.9)", display: "flex", alignItems: "center", gap: 5 }}>
                   <ChevronRight size={10} color="#38bdf8" />
-                  <span>{appId}</span>
+                  <span>{typeof targetItem === "object" ? (targetItem.name || targetItem.target) : targetItem}</span>
                 </div>
               ))}
             </div>
@@ -882,6 +1180,444 @@ export default function AppLauncher({
                 <Play size={11} fill="currentColor" />
                 Launch All
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Workspace Editor & Creator Modal */}
+      {workspaceModal && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.78)",
+            backdropFilter: "blur(8px)",
+            borderRadius: 14,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 250,
+            padding: 10,
+            boxSizing: "border-box"
+          }}
+        >
+          <div
+            style={{
+              width: 350,
+              maxHeight: "94%",
+              background: "#0f172a",
+              border: "1px solid rgba(255, 255, 255, 0.16)",
+              borderRadius: 12,
+              padding: 12,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+              boxShadow: "0 12px 32px rgba(0, 0, 0, 0.7)",
+              overflow: "hidden"
+            }}
+          >
+            {/* Modal Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 8, height: 8, borderRadius: "50%", background: workspaceModal.ws.color || "#38bdf8" }} />
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#ffffff" }}>
+                  {workspaceModal.mode === "create" ? "Create Workspace" : "Edit Workspace"}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWorkspaceModal(null)}
+                style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.5)", cursor: "pointer", padding: 2 }}
+              >
+                <X size={14} />
+              </button>
+            </div>
+
+            {/* Modal Body - Scrollable */}
+            <div className="launcher-scrollable" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingRight: 2 }}>
+              {/* Workspace Name Input */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <label style={{ fontSize: 9.5, color: "rgba(255, 255, 255, 0.5)", fontWeight: 600, textTransform: "uppercase" }}>
+                  Workspace Name
+                </label>
+                <input
+                  type="text"
+                  value={workspaceModal.ws.name}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setWorkspaceModal(prev => ({
+                      ...prev,
+                      ws: { ...prev.ws, name: val }
+                    }));
+                  }}
+                  placeholder="e.g. Creative Studio, Gaming, Finance"
+                  style={{
+                    background: "rgba(255, 255, 255, 0.06)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    borderRadius: 6,
+                    padding: "5px 8px",
+                    color: "#ffffff",
+                    fontSize: 11.5,
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              {/* Accent Color Selection */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <label style={{ fontSize: 9.5, color: "rgba(255, 255, 255, 0.5)", fontWeight: 600, textTransform: "uppercase" }}>
+                  Accent Color
+                </label>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  {WORKSPACE_COLORS.map(col => {
+                    const isSelected = workspaceModal.ws.color === col;
+                    return (
+                      <button
+                        key={col}
+                        type="button"
+                        onClick={() => setWorkspaceModal(prev => ({ ...prev, ws: { ...prev.ws, color: col } }))}
+                        style={{
+                          width: 18,
+                          height: 18,
+                          borderRadius: "50%",
+                          background: col,
+                          border: isSelected ? "2px solid #ffffff" : "2px solid transparent",
+                          cursor: "pointer",
+                          transform: isSelected ? "scale(1.15)" : "scale(1)",
+                          transition: "transform 0.1s ease",
+                          boxShadow: isSelected ? `0 0 8px ${col}` : "none"
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Launch Profile Items */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <label style={{ fontSize: 9.5, color: "rgba(255, 255, 255, 0.5)", fontWeight: 600, textTransform: "uppercase" }}>
+                    Launch Profile ({workspaceModal.ws.launchProfile?.length || 0} items)
+                  </label>
+                  <span style={{ fontSize: 8.5, color: "rgba(255, 255, 255, 0.4)" }}>Auto-launched together</span>
+                </div>
+
+                <div
+                  style={{
+                    maxHeight: 70,
+                    overflowY: "auto",
+                    background: "rgba(0, 0, 0, 0.35)",
+                    borderRadius: 6,
+                    padding: "4px 6px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 3
+                  }}
+                >
+                  {(workspaceModal.ws.launchProfile || []).length === 0 ? (
+                    <span style={{ fontSize: 9.5, color: "rgba(255, 255, 255, 0.35)", textAlign: "center", padding: "6px 0" }}>
+                      No apps or links added yet. Add below!
+                    </span>
+                  ) : (
+                    workspaceModal.ws.launchProfile.map((target, idx) => (
+                      <div
+                        key={target.id || idx}
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          padding: "3px 6px",
+                          borderRadius: 4,
+                          background: "rgba(255, 255, 255, 0.04)"
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 5, overflow: "hidden", flex: 1 }}>
+                          {target.type === "url" ? (
+                            <Globe size={11} color="#38bdf8" style={{ flexShrink: 0 }} />
+                          ) : (
+                            <Monitor size={11} color="#a78bfa" style={{ flexShrink: 0 }} />
+                          )}
+                          <span style={{ fontSize: 10, color: "#ffffff", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {target.name}
+                          </span>
+                          <span style={{ fontSize: 8.5, color: "rgba(255, 255, 255, 0.35)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {target.target}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setWorkspaceModal(prev => ({
+                              ...prev,
+                              ws: {
+                                ...prev.ws,
+                                launchProfile: (prev.ws.launchProfile || []).filter((_, i) => i !== idx)
+                              }
+                            }));
+                          }}
+                          style={{ background: "transparent", border: "none", color: "rgba(239, 68, 68, 0.6)", cursor: "pointer", padding: "2px" }}
+                        >
+                          <Trash2 size={10} />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Add Target Controls */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 2 }}>
+                  <button
+                    type="button"
+                    onClick={() => setWorkspaceModal(prev => ({ ...prev, appPickerOpen: !prev.appPickerOpen }))}
+                    style={{
+                      background: workspaceModal.appPickerOpen ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.06)",
+                      border: "1px solid rgba(255, 255, 255, 0.12)",
+                      borderRadius: 5,
+                      padding: "4px 8px",
+                      color: "#38bdf8",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 4
+                    }}
+                  >
+                    <Plus size={10} />
+                    {workspaceModal.appPickerOpen ? "Close App Selector" : "Add App from Catalog"}
+                  </button>
+
+                  {/* App Picker Drawer */}
+                  {workspaceModal.appPickerOpen && (
+                    <div
+                      style={{
+                        background: "rgba(0, 0, 0, 0.45)",
+                        border: "1px solid rgba(255, 255, 255, 0.12)",
+                        borderRadius: 6,
+                        padding: 6,
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 4
+                      }}
+                    >
+                      <input
+                        type="text"
+                        value={workspaceModal.pickerQuery || ""}
+                        onChange={(e) => {
+                          const q = e.target.value;
+                          setWorkspaceModal(prev => ({ ...prev, pickerQuery: q }));
+                        }}
+                        placeholder="Search apps to add..."
+                        style={{
+                          background: "rgba(255, 255, 255, 0.08)",
+                          border: "none",
+                          borderRadius: 4,
+                          padding: "3px 6px",
+                          color: "#ffffff",
+                          fontSize: 10,
+                          outline: "none"
+                        }}
+                      />
+                      <div className="launcher-scrollable" style={{ maxHeight: 60, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
+                        {catalog
+                          .filter(app => {
+                            if (!workspaceModal.pickerQuery) return true;
+                            return (app.name || "").toLowerCase().includes(workspaceModal.pickerQuery.toLowerCase());
+                          })
+                          .slice(0, 20)
+                          .map(app => (
+                            <button
+                              key={app.id || app.target}
+                              type="button"
+                              onClick={() => {
+                                const newTarget = {
+                                  id: `target-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                                  name: app.name,
+                                  type: "app",
+                                  target: app.target || app.launch || app.name,
+                                  args: [],
+                                  enabled: true
+                                };
+                                setWorkspaceModal(prev => ({
+                                  ...prev,
+                                  ws: {
+                                    ...prev.ws,
+                                    launchProfile: [...(prev.ws.launchProfile || []), newTarget]
+                                  },
+                                  appPickerOpen: false,
+                                  pickerQuery: ""
+                                }));
+                              }}
+                              style={{
+                                background: "transparent",
+                                border: "none",
+                                borderRadius: 3,
+                                padding: "3px 6px",
+                                color: "#ffffff",
+                                fontSize: 9.5,
+                                textAlign: "left",
+                                cursor: "pointer",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 6
+                              }}
+                              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"; }}
+                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                            >
+                              <ChevronRight size={9} color="#38bdf8" />
+                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.name}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add Web URL inputs */}
+                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                    <input
+                      type="text"
+                      placeholder="Title (e.g. GitHub)"
+                      value={workspaceModal.urlInputName || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setWorkspaceModal(prev => ({ ...prev, urlInputName: val }));
+                      }}
+                      style={{
+                        width: "35%",
+                        background: "rgba(255, 255, 255, 0.06)",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                        borderRadius: 5,
+                        padding: "3px 6px",
+                        color: "#ffffff",
+                        fontSize: 10,
+                        outline: "none"
+                      }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="URL (e.g. github.com)"
+                      value={workspaceModal.urlInputTarget || ""}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setWorkspaceModal(prev => ({ ...prev, urlInputTarget: val }));
+                      }}
+                      style={{
+                        flex: 1,
+                        background: "rgba(255, 255, 255, 0.06)",
+                        border: "1px solid rgba(255, 255, 255, 0.1)",
+                        borderRadius: 5,
+                        padding: "3px 6px",
+                        color: "#ffffff",
+                        fontSize: 10,
+                        outline: "none"
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        let rawUrl = (workspaceModal.urlInputTarget || "").trim();
+                        if (!rawUrl) return;
+                        if (!/^https?:\/\//i.test(rawUrl)) {
+                          rawUrl = "https://" + rawUrl;
+                        }
+                        let linkTitle = (workspaceModal.urlInputName || "").trim();
+                        if (!linkTitle) {
+                          try { linkTitle = new URL(rawUrl).hostname.replace(/^www\./, ""); } catch (_) { linkTitle = rawUrl; }
+                        }
+                        const newTarget = {
+                          id: `target-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+                          name: linkTitle,
+                          type: "url",
+                          target: rawUrl,
+                          args: [],
+                          enabled: true
+                        };
+                        setWorkspaceModal(prev => ({
+                          ...prev,
+                          ws: {
+                            ...prev.ws,
+                            launchProfile: [...(prev.ws.launchProfile || []), newTarget]
+                          },
+                          urlInputName: "",
+                          urlInputTarget: ""
+                        }));
+                      }}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.08)",
+                        border: "none",
+                        borderRadius: 5,
+                        padding: "3px 8px",
+                        color: "#38bdf8",
+                        fontSize: 10,
+                        fontWeight: 600,
+                        cursor: "pointer"
+                      }}
+                    >
+                      + Link
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
+              {workspaceModal.mode === "edit" && workspaces.length > 1 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleDeleteWorkspaceModal(workspaceModal.ws.id);
+                  }}
+                  style={{
+                    background: "rgba(239, 68, 68, 0.15)",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "4px 8px",
+                    color: "#ef4444",
+                    fontSize: 10.5,
+                    fontWeight: 600,
+                    cursor: "pointer"
+                  }}
+                >
+                  Delete
+                </button>
+              ) : <div />}
+
+              <div style={{ display: "flex", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setWorkspaceModal(null)}
+                  style={{
+                    background: "rgba(255, 255, 255, 0.08)",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "4px 10px",
+                    color: "#ffffff",
+                    fontSize: 10.5,
+                    cursor: "pointer"
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveWorkspaceModal}
+                  style={{
+                    background: "#0284c7",
+                    border: "none",
+                    borderRadius: 6,
+                    padding: "4px 12px",
+                    color: "#ffffff",
+                    fontSize: 10.5,
+                    fontWeight: 700,
+                    cursor: "pointer"
+                  }}
+                >
+                  Save Workspace
+                </button>
+              </div>
             </div>
           </div>
         </div>
