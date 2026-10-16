@@ -25,10 +25,41 @@ const https = require("https");
 const http = require("http");
 const crypto = require("crypto");
 const { EventEmitter } = require("events");
-const { createProgressEngine } = require("./services/progress");
-const { createNotificationEngine, NOTIFICATION_ACTION_TYPES } = require("./services/notifications");
-const { createLauncherEngine } = require("./services/launcher");
-const { createNotesEngine } = require("./services/notes");
+function loadServiceModule(serviceRelPath) {
+  const candidatePaths = [
+    // 1. Direct relative to current file (__dirname = src in dev, or .vite/build in packaged)
+    path.join(__dirname, serviceRelPath),
+    // 2. Relative to .vite/build -> ../../src
+    path.join(__dirname, "../../src", serviceRelPath),
+    // 3. Relative to app root via app.getAppPath()
+    path.join(typeof app !== "undefined" && app.getAppPath ? app.getAppPath() : process.cwd(), "src", serviceRelPath),
+    // 4. Relative to .vite/build in app root
+    path.join(typeof app !== "undefined" && app.getAppPath ? app.getAppPath() : process.cwd(), ".vite/build", serviceRelPath),
+    // 5. Relative to process.cwd()
+    path.join(process.cwd(), "src", serviceRelPath)
+  ];
+
+  for (const candidate of candidatePaths) {
+    try {
+      if (
+        fs.existsSync(candidate) ||
+        fs.existsSync(candidate + ".js") ||
+        fs.existsSync(path.join(candidate, "index.js"))
+      ) {
+        return require(candidate);
+      }
+    } catch (_) {}
+  }
+
+  // Fallback to direct require
+  return require(serviceRelPath);
+}
+
+const { createProgressEngine } = loadServiceModule("services/progress");
+const { createNotificationEngine, NOTIFICATION_ACTION_TYPES } = loadServiceModule("services/notifications");
+const { createLauncherEngine } = loadServiceModule("services/launcher");
+const { createNotesEngine } = loadServiceModule("services/notes");
+
 
 
 let tray = null;

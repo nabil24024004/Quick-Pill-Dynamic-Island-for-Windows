@@ -16,6 +16,16 @@ module.exports = {
     ],
   },
   hooks: {
+    packageAfterCopy: async (forgeConfig, buildPath) => {
+      const fs = require('fs');
+      const path = require('path');
+      const srcServices = path.join(__dirname, 'src/services');
+      const destServices = path.join(buildPath, '.vite/build/services');
+      if (fs.existsSync(srcServices)) {
+        fs.cpSync(srcServices, destServices, { recursive: true });
+        console.log(`Copied services to: ${destServices}`);
+      }
+    },
     postMake: async (forgeConfig, makeResults) => {
       const fs = require('fs');
       const path = require('path');
