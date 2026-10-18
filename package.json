@@ -23,7 +23,6 @@
   "build": {
     "appId": "com.neosparkx.quickpill",
     "productName": "Quick Pill",
-    "compression": "maximum",
     "extraResources": [
       {
         "from": "native/bin/audio-helper.exe",
@@ -31,9 +30,7 @@
       }
     ],
     "files": [
-      ".vite/build/**/*",
-      "src/**/*",
-      "package.json",
+      "**/*",
       "!out/**",
       "!native/**",
       "!web app/**",
