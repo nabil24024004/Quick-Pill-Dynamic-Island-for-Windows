@@ -9,7 +9,7 @@ Welcome to the **Quick Pill** project codebase! This file serves as the definiti
 **Quick Pill** is a desktop application that recreates Apple's Dynamic Island experience on **Windows 10 & 11**. It acts as a non-intrusive notification hub, system monitor, media controller, and customizable widget panel that expands on hover or click while floating seamlessly above all desktop windows.
 
 - **Product Name**: Quick Pill
-- **Current Version**: 5.5.0
+- **Current Version**: 5.5.1
 - **License**: MIT
 - **Author**: Abrar Nabil
 

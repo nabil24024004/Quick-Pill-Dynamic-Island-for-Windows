@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 
 const DEFAULT_RELEASE = {
-  version: '5.5.0',
-  name: 'Quick Pill 5.5.0',
+  version: '5.5.1',
+  name: 'Quick Pill 5.5.1',
   releaseDate: '2026-10-18',
   changelog: [
     'Quick App Launcher 1.5x Enlargement: Expanded window size (885x278) for high-efficiency application switching, larger workspace profile editor, and instant catalog search.',
@@ -17,9 +17,9 @@ const DEFAULT_RELEASE = {
   ],
   platforms: {
     'win32-x64': {
-      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.0-Setup.exe',
-      sha256: 'f03a8cff4035d6235399024cbc3b8315d0532332f05c3cc699b86793191eb68a',
-      size: 135151370,
+      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.1-Setup.exe',
+      sha256: '14acfabffd3ddb68d78583f18685c5038bbe67355eabcc284d7760c2cd15548d',
+      size: 135151289,
       installerType: 'nsis'
     }
   }
@@ -57,7 +57,7 @@ export function useReleaseInfo() {
 
   return {
     releaseInfo,
-    version: releaseInfo.version || '5.5.0',
+    version: releaseInfo.version || '5.5.1',
     windowsUrl,
     changelog: releaseInfo.changelog || [],
     isLoading

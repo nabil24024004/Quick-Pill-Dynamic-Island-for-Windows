@@ -1,6 +1,6 @@
 # 💊 About Quick Pill — Complete Product Overview & Guide
 
-> **Quick Pill** (v5.5.0) is a non-intrusive desktop assistant and Dynamic Island companion engineered exclusively for **Windows 10 & 11**. Floating unobtrusively at the top of your screen, Quick Pill brings real-time system metrics, fluid battery diagnostics, per-app audio mixing, unified background progress tracking, actionable smart notifications, music controls, privacy alerts, and productivity widgets right to your fingertips without interrupting your active workspace.
+> **Quick Pill** (v5.5.1) is a non-intrusive desktop assistant and Dynamic Island companion engineered exclusively for **Windows 10 & 11**. Floating unobtrusively at the top of your screen, Quick Pill brings real-time system metrics, fluid battery diagnostics, per-app audio mixing, unified background progress tracking, actionable smart notifications, music controls, privacy alerts, and productivity widgets right to your fingertips without interrupting your active workspace.
 
 ---
 
@@ -184,7 +184,7 @@ Tabs Overview:
 ## 🔄 8. Distribution & Auto-Updates
 
 * **Platform Targeting**: Standalone, optimized builds exclusively for **Windows (x64)**.
-* **Installer Architecture**: Packaged via **NSIS** (`QuickPill-Windows-v5.5.0-Setup.exe`) with one-click installation and desktop/start menu shortcuts.
+* **Installer Architecture**: Packaged via **NSIS** (`QuickPill-Windows-v5.5.1-Setup.exe`) with one-click installation and desktop/start menu shortcuts.
 * **Update Verification**: Release binaries verify against remote manifest SHA-256 hashes hosted via Cloudflare R2 / GitHub releases.
 * **Silent Background Execution**: Automated silent installs run with `/S` flags so updates apply seamlessly without disrupting your work.
 

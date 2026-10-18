@@ -994,7 +994,7 @@ class AppUpdater extends EventEmitter {
   constructor() {
     super();
     this.manifestUrls = [...DEFAULT_MANIFEST_URLS];
-    this.currentVersion = app ? app.getVersion() : "5.5.0";
+    this.currentVersion = app ? app.getVersion() : "5.5.1";
     this.status = "idle";
     this.updateInfo = null;
     this.downloadedFilePath = null;
