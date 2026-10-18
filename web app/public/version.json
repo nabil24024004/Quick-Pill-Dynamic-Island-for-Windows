@@ -1,11 +1,12 @@
 {
   "version": "5.5.0",
   "name": "Quick Pill 5.5.0",
-  "releaseDate": "2026-10-16",
+  "releaseDate": "2026-10-18",
   "mandatory": false,
   "minSupportedVersion": "4.0.0",
   "changelog": [
-    "Quick App Launcher & Workspace Switcher: Search and launch installed Windows applications, switch active application windows with native Win32 window restoration, pin favorites, and organize productivity workspaces with launch profiles and preview safety.",
+    "Quick App Launcher 1.5x Enlargement: Expanded window size (885x278) for high-efficiency application switching, larger workspace profile editor, and instant catalog search.",
+    "Settings & Tab Navigation: Smooth vertical scrolling in sidebar categories, wheel swipe protection, and customizable Alt-based tab shortcuts.",
     "Quick Notes & Contextual Capture: Instant note capture with debounced autosave and crash recovery, searchable notes inbox with tags and filters, contextual clipboard capture with large-content guard, and non-destructive note-to-task conversion.",
     "Smart Notification Actions: Intelligent notification interaction layer with WhatsApp/VoIP call cards, inline replies, local snooze presets (5m, 15m, 30m, 1h), grouped multi-message stacks, low-priority collapsing, privacy preview masking, and dismissal undo buffer.",
     "Universal Progress Island: Centralized background progress tracking interface anchored at the top-center Dynamic Island, supporting file copy/hash operations, background auto-updater progress, and cancellable task workflows.",
@@ -18,8 +19,8 @@
   "platforms": {
     "win32-x64": {
       "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.0-Setup.exe",
-      "sha256": "06f04d22573e00ba1ec4fa9d7cab2133318c6c9b1a4cd364b4c97af53db438a1",
-      "size": 403025158,
+      "sha256": "404545e7e1ed7a6a5dfd070fbff2e3b6a70739b6fb07ae7543c9c8990e9e13ac",
+      "size": 403027106,
       "installerType": "nsis"
     }
   }

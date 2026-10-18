@@ -3,9 +3,10 @@ import { useState, useEffect } from 'react';
 const DEFAULT_RELEASE = {
   version: '5.5.0',
   name: 'Quick Pill 5.5.0',
-  releaseDate: '2026-10-15',
+  releaseDate: '2026-10-18',
   changelog: [
-    'Quick App Launcher & Workspace Switcher with native Win32 window switching, favorites, and safe workspace launch profiles.',
+    'Quick App Launcher 1.5x Enlargement: Expanded window size (885x278) for high-efficiency application switching, larger workspace profile editor, and instant catalog search.',
+    'Settings & Tab Navigation: Smooth vertical scrolling in sidebar categories, wheel swipe protection, and customizable Alt-based tab shortcuts.',
     'Quick Notes & Contextual Capture with debounced autosave, crash recovery, tags, and non-destructive note-to-task conversion.',
     'Smart Notification Actions with WhatsApp/VoIP call cards, inline replies, local snooze presets, grouped stacks, and privacy masking.',
     'Universal Progress Island consolidating background operations, file tasks, and updates into the top Dynamic Island.',
@@ -17,8 +18,8 @@ const DEFAULT_RELEASE = {
   platforms: {
     'win32-x64': {
       url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.0-Setup.exe',
-      sha256: '679273e38f780e7a95d6e136282d8c09c634bc6f32f53de88aee40db9f110eda',
-      size: 402995796,
+      sha256: '404545e7e1ed7a6a5dfd070fbff2e3b6a70739b6fb07ae7543c9c8990e9e13ac',
+      size: 403027106,
       installerType: 'nsis'
     }
   }
