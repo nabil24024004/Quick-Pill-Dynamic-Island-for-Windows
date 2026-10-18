@@ -524,7 +524,7 @@ export default function AppLauncher({
       <div
         className="launcher-scrollable"
         style={{
-          width: 175,
+          width: 195,
           height: "100%",
           display: "flex",
           flexDirection: "column",
@@ -1092,7 +1092,7 @@ export default function AppLauncher({
         >
           <div
             style={{
-              width: 320,
+              width: 360,
               background: "#111827",
               border: "1px solid rgba(255, 255, 255, 0.15)",
               borderRadius: 12,
@@ -1125,7 +1125,7 @@ export default function AppLauncher({
 
             <div
               style={{
-                maxHeight: 70,
+                maxHeight: 110,
                 overflowY: "auto",
                 background: "rgba(0, 0, 0, 0.3)",
                 borderRadius: 6,
@@ -1204,7 +1204,7 @@ export default function AppLauncher({
         >
           <div
             style={{
-              width: 350,
+              width: 400,
               maxHeight: "94%",
               background: "#0f172a",
               border: "1px solid rgba(255, 255, 255, 0.16)",
@@ -1305,7 +1305,7 @@ export default function AppLauncher({
 
                 <div
                   style={{
-                    maxHeight: 70,
+                    maxHeight: 110,
                     overflowY: "auto",
                     background: "rgba(0, 0, 0, 0.35)",
                     borderRadius: 6,

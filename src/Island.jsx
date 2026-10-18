@@ -2648,7 +2648,7 @@ export default function Island() {
   const width = isNotificationBanner
     ? 300
     : mode === "large"
-      ? (currentTab === 9 ? 620 : (currentTab === 12 || currentTab === 13 || currentTab === 14 || currentTab === 15 ? 590 : (currentTab === 2 || currentTab === 11 ? 560 : 540)))
+      ? (currentTab === 14 ? 885 : (currentTab === 9 ? 620 : (currentTab === 12 || currentTab === 13 || currentTab === 15 ? 590 : (currentTab === 2 || currentTab === 11 ? 560 : 540))))
       : hasActiveProgress
         ? 285
         : (mode === "quick" && isPlaying && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert)
@@ -2661,7 +2661,7 @@ export default function Island() {
   const height = isNotificationBanner
     ? 46
     : mode === "large"
-      ? (currentTab === 9 ? 220 : (currentTab === 14 || currentTab === 15 ? 185 : (currentTab === 12 || currentTab === 13 ? 175 : 145)))
+      ? (currentTab === 14 ? 278 : (currentTab === 9 ? 220 : (currentTab === 15 ? 185 : (currentTab === 12 || currentTab === 13 ? 175 : 145))))
       : 40;
 
   useEffect(() => {
