@@ -2274,80 +2274,6 @@ export default function Island() {
     localStorage.removeItem("shelf-files");
   }, []);
 
-  // Auto-Expand Notch on Dragging Files Near Top Screen & webUtils Path Resolution
-  useEffect(() => {
-    const handleDragEnter = (e) => {
-      if (isOutboundDragging.current) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-      setIsDragOverShelf(true);
-      updateMouseIgnore(false, true);
-    };
-
-    const handleDragOver = (e) => {
-      if (isOutboundDragging.current) return;
-      e.preventDefault();
-      e.stopPropagation();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
-      setIsDragOverShelf(true);
-      updateMouseIgnore(false, true);
-      if (e.clientY < 90) {
-        if (mode !== "large") {
-          setMode("large");
-          setTabState([13, 13 > currentTabId ? 1 : -1]); // Auto-navigate to Shelf tab
-        }
-      }
-    };
-
-    const handleDragLeave = (e) => {
-      if (e.clientY >= 120 || e.clientX <= 0 || e.clientX >= window.innerWidth) {
-        setIsDragOverShelf(false);
-      }
-    };
-
-    const handleDrop = (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      isOutboundDragging.current = false;
-      setIsDragOverShelf(false);
-      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
-        const newFiles = Array.from(e.dataTransfer.files).map(f => {
-          const resolvedPath = window.electronAPI?.getFilePath?.(f) || f.path || "";
-          return {
-            name: f.name,
-            size: formatBytes(f.size),
-            path: resolvedPath,
-            type: f.name.split('.').pop()?.toLowerCase() || 'file'
-          };
-        });
-        setShelfFiles(prev => {
-          const updated = [...newFiles, ...prev];
-          localStorage.setItem("shelf-files", JSON.stringify(updated.slice(0, 20)));
-          return updated.slice(0, 20);
-        });
-      }
-    };
-
-    const resetDragState = () => {
-      isOutboundDragging.current = false;
-      setIsDragOverShelf(false);
-    };
-
-    window.addEventListener("dragenter", handleDragEnter);
-    window.addEventListener("dragover", handleDragOver);
-    window.addEventListener("dragleave", handleDragLeave);
-    window.addEventListener("drop", handleDrop);
-    window.addEventListener("dragend", resetDragState);
-    return () => {
-      window.removeEventListener("dragenter", handleDragEnter);
-      window.removeEventListener("dragover", handleDragOver);
-      window.removeEventListener("dragleave", handleDragLeave);
-      window.removeEventListener("drop", handleDrop);
-      window.removeEventListener("dragend", resetDragState);
-    };
-  }, [mode, currentTabId, updateMouseIgnore]);
-
   // Sync Obstruction, Mascot, and Minimal Notch from Preload/Main
   useEffect(() => {
     if (!window.electronAPI?.onObstructionStatus) return;
@@ -2690,6 +2616,80 @@ export default function Island() {
 
   const currentTab = currentTabId;
   const totalTabs = visibleTabs.length;
+
+  // Auto-Expand Notch on Dragging Files Near Top Screen & webUtils Path Resolution
+  useEffect(() => {
+    const handleDragEnter = (e) => {
+      if (isOutboundDragging.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      setIsDragOverShelf(true);
+      updateMouseIgnore(false, true);
+    };
+
+    const handleDragOver = (e) => {
+      if (isOutboundDragging.current) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      setIsDragOverShelf(true);
+      updateMouseIgnore(false, true);
+      if (e.clientY < 90) {
+        if (mode !== "large") {
+          setMode("large");
+          setTabState([13, 13 > currentTabId ? 1 : -1]); // Auto-navigate to Shelf tab
+        }
+      }
+    };
+
+    const handleDragLeave = (e) => {
+      if (e.clientY >= 120 || e.clientX <= 0 || e.clientX >= window.innerWidth) {
+        setIsDragOverShelf(false);
+      }
+    };
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      isOutboundDragging.current = false;
+      setIsDragOverShelf(false);
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const newFiles = Array.from(e.dataTransfer.files).map(f => {
+          const resolvedPath = window.electronAPI?.getFilePath?.(f) || f.path || "";
+          return {
+            name: f.name,
+            size: formatBytes(f.size),
+            path: resolvedPath,
+            type: f.name.split('.').pop()?.toLowerCase() || 'file'
+          };
+        });
+        setShelfFiles(prev => {
+          const updated = [...newFiles, ...prev];
+          localStorage.setItem("shelf-files", JSON.stringify(updated.slice(0, 20)));
+          return updated.slice(0, 20);
+        });
+      }
+    };
+
+    const resetDragState = () => {
+      isOutboundDragging.current = false;
+      setIsDragOverShelf(false);
+    };
+
+    window.addEventListener("dragenter", handleDragEnter);
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("dragleave", handleDragLeave);
+    window.addEventListener("drop", handleDrop);
+    window.addEventListener("dragend", resetDragState);
+    return () => {
+      window.removeEventListener("dragenter", handleDragEnter);
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("dragleave", handleDragLeave);
+      window.removeEventListener("drop", handleDrop);
+      window.removeEventListener("dragend", resetDragState);
+    };
+  }, [mode, currentTabId, updateMouseIgnore]);
 
   // Load tab shortcuts from main process & synchronize
   useEffect(() => {
