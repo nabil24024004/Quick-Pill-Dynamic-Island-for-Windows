@@ -774,32 +774,57 @@ ipcMain.on("settings-window:close", () => {
   }
 });
 
-ipcMain.on("ondragstart", (event, filePath) => {
+async function executeStartDrag(sender, filePath) {
   try {
-    if (filePath && fs.existsSync(filePath)) {
-      event.sender.startDrag({
-        file: filePath,
-        icon: getIconPath("png")
-      });
+    if (!filePath || typeof filePath !== "string") return false;
+    const resolvedPath = path.resolve(filePath);
+    if (!fs.existsSync(resolvedPath)) return false;
+
+    let dragIcon = null;
+    try {
+      if (typeof nativeImage.createThumbnailFromPath === "function") {
+        dragIcon = await nativeImage.createThumbnailFromPath(resolvedPath, { width: 48, height: 48 });
+      }
+    } catch (_) {}
+
+    if (!dragIcon || (typeof dragIcon.isEmpty === "function" && dragIcon.isEmpty())) {
+      try {
+        if (typeof app.getFileIcon === "function") {
+          dragIcon = await app.getFileIcon(resolvedPath, { size: "normal" });
+        }
+      } catch (_) {}
     }
+
+    if (!dragIcon || (typeof dragIcon.isEmpty === "function" && dragIcon.isEmpty())) {
+      try {
+        const fallbackPath = getIconPath("png");
+        if (fs.existsSync(fallbackPath)) {
+          dragIcon = nativeImage.createFromPath(fallbackPath).resize({ width: 48, height: 48 });
+        }
+      } catch (_) {}
+    }
+
+    if (!dragIcon || (typeof dragIcon.isEmpty === "function" && dragIcon.isEmpty())) {
+      dragIcon = nativeImage.createEmpty();
+    }
+
+    sender.startDrag({
+      file: resolvedPath,
+      icon: dragIcon
+    });
+    return true;
   } catch (err) {
-    logToFile("ondragstart error:", err);
+    logToFile("executeStartDrag error:", err);
+    return false;
   }
+}
+
+ipcMain.on("ondragstart", (event, filePath) => {
+  executeStartDrag(event.sender, filePath);
 });
 
-ipcMain.handle("start-drag", (event, filePath) => {
-  try {
-    if (filePath && fs.existsSync(filePath)) {
-      event.sender.startDrag({
-        file: filePath,
-        icon: getIconPath("png")
-      });
-      return true;
-    }
-  } catch (err) {
-    logToFile("start-drag error:", err);
-  }
-  return false;
+ipcMain.handle("start-drag", async (event, filePath) => {
+  return await executeStartDrag(event.sender, filePath);
 });
 
 // ==========================================

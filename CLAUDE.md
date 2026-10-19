@@ -187,3 +187,57 @@ All interactions with native operating system APIs execute asynchronously via El
    - Use Framer Motion (`<motion.div>`) for layout state transitions between Still, Quick, and Large modes.
 5. **Mouse Passthrough Management**:
    - Ensure hover listeners accurately notify `electronAPI.setIgnoreMouseEvents` so the window non-interactive area remains click-through without blocking desktop interaction.
+
+# 2. TARGET GEOMETRY & VISUAL DESIGN ("TOP-FLUSH NOTCH")
+Transform the floating pill into a **Top-Flush Bezel Notch** docked at the exact top-center of the primary display (`top: 0px`, `margin-top: 0px`):
+
+- **Color & Shape:** Pure pitch black (`#000000`) background to blend seamlessly into the physical monitor bezel.
+- **Inverted Top Corners ("Notch Ears"):** Create smooth concave outer curves (`10px–12px` radius using SVG masks or pseudo-elements) at the top-left and top-right edges where the notch meets the top edge of the screen (`y = 0`), paired with smooth convex bottom corners (`border-bottom-left-radius: 22px`, `border-bottom-right-radius: 22px`).
+- **Four Strict Window/Container Size States:**
+  1. **Micro-Strip State (Retracted / Obstructed / Minimal Idle):** `width: 96px`, `height: 5px` flush at `top: 0px`.
+  2. **Normal Idle State (Closed):** `width: 130px`, `height: 28px` flush at `top: 0px`.
+     - **Left:** Mini circular progress ring (`#22c55e` green) or active status icon.
+     - **Center:** Crisp current time (`HH:mm`, `12px` semi-bold white).
+     - **Right:** Mini animated audio waveform bars.
+     - **Mascot Idle Option:** When no media or timer is active and "Mascot Mode" is enabled, display a pair of cute minimalist blinking eyes inside the idle notch.
+  3. **System HUD Toast State (Pop-up Notification):** `width: 280px`, `height: 46px` for `2000ms` on system events:
+     - **Caps Lock Toggle:** Icon on the left + `"Caps Lock"` label, `"On"` or `"Off"` status on the right.
+     - **Bluetooth / Audio Device Connected:** Device icon + name (e.g., `"Baseus Encok WM01"`) + `"Connected - 80%"` subtext, and headphone icon on the right.
+     - **Battery / Charging / Volume HUD:** Compact single-row indicator.
+  4. **Expanded Card State:** Strictly capped at `width: 350px`, `height: 118px` (maximum `125px`). Never allow any module to expand into a tall vertical window.
+
+- **Spring Animation Physics:**
+  - Morph smoothly between all 4 states using spring-like interpolation (`transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1), height 220ms cubic-bezier(0.22, 1, 0.36, 1), transform 220ms cubic-bezier(0.22, 1, 0.36, 1)`).
+  - Ensure click-through transparency outside the visible black notch shape (pixel-level hit-testing or dynamic window region resizing so transparent bounding boxes never block mouse clicks on underlying apps).
+
+---
+
+# 3. UNIFIED EXPANDED NOTCH LAYOUT & CURATED MODULES
+Inside the **Expanded State (`350px × 118px`)**, enforce a consistent shell across all tabs:
+
+- **Top Segmented Progress/Pagination Bar:** Subtle thin horizontal indicator segments at the very top edge showing the total number of tabs and the currently active tab.
+- **Unified Header Row (`height: 24px`):**
+  - **Left:** Active module title in bold (`11px`, e.g., `Pomodoro`, `Water Reminder`, `Shelf`, `ToDoList`).
+  - **Center:** Dark pill badge containing a green status dot (`#22c55e`) + formatted date and time (`Sat 17 Oct 2026 19:25`).
+  - **Right:** Mini audio waveform or battery indicator.
+- **Left & Right Edge Navigation:** Subtle `<` and `>` icon buttons vertically centered on the left and right edges of the card, plus mouse wheel horizontal/vertical scroll support to cycle through tabs seamlessly.
+
+### Curated Core Modules (Fit strictly inside the `350px × 118px` card):
+1. **Music & Synced Lyrics:**
+   - **Standard View:** Left rounded album art (`48px × 48px`), track title + artist name, elapsed/remaining time (`01:04` / `-01:39`) with a sleek progress scrubber, and bottom playback controls (`Lyrics toggle`, `Prev`, `Play/Pause`, `Next`).
+   - **Synced Lyrics Split View:** Clicking the lyrics icon shifts the compact album/title info to the left column and reveals real-time auto-scrolling synced lyrics on the right column with the active line highlighted in bright white and upcoming lines dimmed.
+2. **Pomodoro / Focus Timer:**
+   - **Left:** Circular countdown ring with timer icon.
+   - **Center/Right:** Large countdown readout (`25:00`), `Focus Time` subtitle, and compact pill buttons below: `Short Break`, `Play/Pause` (accent red/orange button), and `Focus Time` / `Reset`.
+3. **Water Reminder:**
+   - **Left:** Daily intake readout (`1.0 / 1.5 L`), progress bar (`Today: 66%`), `+ Drink` primary button, and `Settings` button.
+   - **Right:** Compact hourly hydration bar chart or circular percentage gauge (`66%`).
+4. **File Shelf (Temporary Drag-and-Drop Stash):**
+   - **Auto-Expand on Drag:** When the user drags a file from Windows Explorer near the top-center of the screen, automatically expand the notch to the `Shelf` module.
+   - **Empty/Drag State:** Dashed rounded border box with download/tray icon and `"Drop files here / Release to add"`.
+   - **Populated State:** Horizontal scrollable row of file/folder thumbnails with file names, sizes, individual remove (`×`) buttons, and a top-left `Clear` button. Users can drag files back out into any app.
+5. **To-Do List (Quick Tasks):**
+   - **Left Column:** Large task completion ratio (`1/3 Task Done Today`) with compact `+ Add Task` and `Edit Task` buttons.
+   - **Right Column:** Compact scrollable list of tasks with green checkable radio/checkboxes and strike-through styling for completed items.
+6. **Existing Utility Modules (Launcher / Audio Mixer / Notes / Search):**
+   - Refactor existing Quick Pill modules you wish to keep into this exact `350px × 118px` compact two-column card constraint (maximum 3 visible rows with smooth internal scrolling). Move full Settings to a standalone window launched from the System Tray menu instead of bloating the notch cycle.

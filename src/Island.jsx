@@ -642,40 +642,84 @@ const TopSegmentedBar = ({ totalTabs = 1, activeIndex = 0, onSelectTab }) => {
   );
 };
 
-// Unified Header Row (24px) for Expanded Notch Card
-const UnifiedHeader = ({ title = "", isPlaying = false, percent = null, charging = false, formattedTime = "" }) => {
+// Unified Header Row (26px) for Expanded Notch Card
+const UnifiedHeader = ({
+  title = "",
+  isPlaying = false,
+  percent = null,
+  currentTab = 0,
+  shelfFiles = [],
+  onClearShelf = null
+}) => {
   const fullDateTime = useMemo(() => {
     try {
       const now = new Date();
       const weekday = now.toLocaleDateString('en-US', { weekday: 'short' });
       const day = now.getDate();
       const month = now.toLocaleDateString('en-US', { month: 'short' });
+      const year = now.getFullYear();
       const hours = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
-      return `${weekday} ${day} ${month} ${hours}:${minutes}`;
+      return `${weekday} ${day} ${month} ${year} ${hours}:${minutes}`;
     } catch {
-      return formattedTime || "Quick Pill";
+      return "Mon 19 Oct 2026 20:58";
     }
-  }, [formattedTime]);
+  }, []);
+
+  const isShelf = currentTab === 13;
 
   return (
-    <div className="notch-header-row">
-      <div className="notch-header-title">
-        {title}
+    <div
+      className="notch-header-row"
+      style={{
+        height: 26,
+        padding: '4px 16px 0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        width: '100%',
+        boxSizing: 'border-box',
+        userSelect: 'none',
+        flexShrink: 0
+      }}
+    >
+      {/* Left: Active module title in bold white (12px) + contextual action badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
+          {title}
+        </span>
+        {isShelf && shelfFiles.length > 0 && onClearShelf && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onClearShelf();
+            }}
+            style={{
+              background: 'rgba(239, 68, 68, 0.18)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: 5,
+              padding: '1px 5px',
+              fontSize: 9.5,
+              fontWeight: 600,
+              color: '#f87171',
+              cursor: 'pointer'
+            }}
+            title="Clear stashed files"
+          >
+            Clear
+          </button>
+        )}
       </div>
-      <div className="notch-header-badge">
-        <span className="notch-header-dot" />
+
+      {/* Center: [Green Progress Ring (12px)] Mon 19 Oct 2026 20:58 (11px crisp white/grey) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
+        <MiniProgressRing progress={percent ? percent / 100 : 0.8} color="#22c55e" size={12} strokeWidth={2} />
         <span>{fullDateTime}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        {isPlaying ? (
-          <MiniWaveform isPlaying={true} />
-        ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>
-            {charging ? <Zap size={10} color="#22c55e" /> : <Battery size={10} />}
-            <span>{percent !== null ? `${percent}%` : '--'}</span>
-          </div>
-        )}
+
+      {/* Right: Animated 5-bar mini audio equalizer waveform */}
+      <div style={{ display: 'flex', alignItems: 'center', minWidth: 24, justifyContent: 'flex-end' }}>
+        <MiniWaveform isPlaying={isPlaying} />
       </div>
     </div>
   );
@@ -1775,6 +1819,20 @@ export default function Island() {
     return `${hours}:${minutes}`;
   });
   const [mode, setMode] = useState("still");
+  const prevModeRef = useRef(mode);
+  const [isCollapsing, setIsCollapsing] = useState(false);
+
+  useEffect(() => {
+    if (prevModeRef.current === "large" && mode !== "large") {
+      setIsCollapsing(true);
+      const timer = setTimeout(() => {
+        setIsCollapsing(false);
+      }, 260);
+      return () => clearTimeout(timer);
+    }
+    prevModeRef.current = mode;
+  }, [mode]);
+
   const [tabOrder, setTabOrder] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("tab-order") || "null");
@@ -2209,10 +2267,17 @@ export default function Island() {
     }
   });
   const [isDragOverShelf, setIsDragOverShelf] = useState(false);
+  const isOutboundDragging = useRef(false);
+
+  const clearShelf = useCallback(() => {
+    setShelfFiles([]);
+    localStorage.removeItem("shelf-files");
+  }, []);
 
   // Auto-Expand Notch on Dragging Files Near Top Screen & webUtils Path Resolution
   useEffect(() => {
     const handleDragEnter = (e) => {
+      if (isOutboundDragging.current) return;
       e.preventDefault();
       e.stopPropagation();
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
@@ -2221,6 +2286,7 @@ export default function Island() {
     };
 
     const handleDragOver = (e) => {
+      if (isOutboundDragging.current) return;
       e.preventDefault();
       e.stopPropagation();
       if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
@@ -2229,7 +2295,7 @@ export default function Island() {
       if (e.clientY < 90) {
         if (mode !== "large") {
           setMode("large");
-          setCurrentTab(13); // Auto-navigate to Shelf tab
+          setTabState([13, 13 > currentTabId ? 1 : -1]); // Auto-navigate to Shelf tab
         }
       }
     };
@@ -2243,6 +2309,7 @@ export default function Island() {
     const handleDrop = (e) => {
       e.preventDefault();
       e.stopPropagation();
+      isOutboundDragging.current = false;
       setIsDragOverShelf(false);
       if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
         const newFiles = Array.from(e.dataTransfer.files).map(f => {
@@ -2262,17 +2329,24 @@ export default function Island() {
       }
     };
 
+    const resetDragState = () => {
+      isOutboundDragging.current = false;
+      setIsDragOverShelf(false);
+    };
+
     window.addEventListener("dragenter", handleDragEnter);
     window.addEventListener("dragover", handleDragOver);
     window.addEventListener("dragleave", handleDragLeave);
     window.addEventListener("drop", handleDrop);
+    window.addEventListener("dragend", resetDragState);
     return () => {
       window.removeEventListener("dragenter", handleDragEnter);
       window.removeEventListener("dragover", handleDragOver);
       window.removeEventListener("dragleave", handleDragLeave);
       window.removeEventListener("drop", handleDrop);
+      window.removeEventListener("dragend", resetDragState);
     };
-  }, [mode, updateMouseIgnore]);
+  }, [mode, currentTabId, updateMouseIgnore]);
 
   // Sync Obstruction, Mascot, and Minimal Notch from Preload/Main
   useEffect(() => {
@@ -3051,7 +3125,7 @@ export default function Island() {
     },
     exit: () => ({
       opacity: 0,
-      scale: 0.88,
+      scale: 0.9,
       filter: "blur(6px)",
       x: "-50%",
       transition: {
@@ -4782,6 +4856,10 @@ export default function Island() {
         }
       }}
       onMouseMove={(e) => {
+        if (e.buttons === 0) {
+          if (isDragOverShelf) setIsDragOverShelf(false);
+          isOutboundDragging.current = false;
+        }
         const isCtrl = !!(e?.ctrlKey || e?.metaKey);
         if (isCtrl && !ctrlHeldRef.current) {
           setCtrlState(true);
@@ -4791,7 +4869,11 @@ export default function Island() {
           updateMouseIgnore(false, true);
         }
       }}
-      onMouseLeave={() => {
+      onMouseLeave={(e) => {
+        if (e.buttons === 0) {
+          setIsDragOverShelf(false);
+          isOutboundDragging.current = false;
+        }
         suppressClick.current = false;
         if (ctrlHeldRef.current) {
           setCtrlState(false);
@@ -4905,11 +4987,11 @@ export default function Island() {
         setIsTransitioning(false);
       }}
       transition={{
-        width: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
-        height: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
-        borderBottomLeftRadius: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
-        borderBottomRightRadius: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
-        boxShadow: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
+        width: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+        height: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+        borderBottomLeftRadius: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+        borderBottomRightRadius: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
+        boxShadow: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
         x: { duration: 0.15 }
       }}
       style={{
@@ -5058,7 +5140,7 @@ export default function Island() {
 
         {/* NON-LARGE SIZE STATES: Micro (96x5), HUD Toast (260x40), Normal Idle (128x26) */}
         {/* NON-LARGE SIZE STATES: Micro (96x5), HUD Toast (310x62), Mascot (140x32), Idle Clock (154x32) */}
-        {mode !== "large" && (
+        {mode !== "large" && !isCollapsing && (
           <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
             {isHudActive ? (() => {
               const toastTitle = activeHudToast?.title || notificationAlert?.title || notificationAlert?.appName || "System Alert";
@@ -5286,8 +5368,8 @@ export default function Island() {
             className={`notch-stage ${isLyricsWide ? "notch-stage-expanded-wide" : "notch-stage-expanded"}`}
             style={{
               display: "flex",
+              flexDirection: "column",
               alignItems: "center",
-              justifyContent: "center",
               position: "absolute",
               overflow: "hidden",
               borderRadius: "inherit",
@@ -5300,16 +5382,29 @@ export default function Island() {
               onNext={() => moveTab(1)}
             />
 
+            {/* Persistent Nusa Top Header Bar (hidden in Music Split-View Lyrics mode) */}
+            {!isLyricsWide && (
+              <UnifiedHeader
+                title={TABS.find(t => t.id === currentTab)?.name || "Overview"}
+                isPlaying={isPlaying}
+                percent={percent}
+                charging={charging}
+                currentTab={currentTab}
+                shelfFiles={shelfFiles}
+                onClearShelf={clearShelf}
+              />
+            )}
+
             {/* Module Body Container (Full-Bleed 100% Height, Center-Aligned) */}
             <div style={{
               width: '100%',
-              height: '100%',
+              flex: 1,
               position: 'relative',
               overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: '8px 18px',
+              padding: isLyricsWide ? '8px 16px' : '2px 18px 6px',
               boxSizing: 'border-box'
             }}>
               <AnimatePresence custom={direction} initial={false} mode="wait">
@@ -5431,7 +5526,10 @@ export default function Island() {
                             {/* Bottom playback controls */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 }}>
                               <button
-                                onClick={() => setLyricsOpen(true)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLyricsOpen(prev => !prev);
+                                }}
                                 title="Toggle Synced Lyrics"
                                 style={{
                                   background: 'none',
@@ -5440,7 +5538,8 @@ export default function Island() {
                                   cursor: 'pointer',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  color: 'rgba(255,255,255,0.6)'
+                                  color: lyricsOpen ? '#38bdf8' : 'rgba(255,255,255,0.6)',
+                                  transition: 'color 180ms ease'
                                 }}
                               >
                                 <MessageSquare size={13} />
@@ -5491,13 +5590,13 @@ export default function Island() {
                         </div>
                       ) : (
                         /* Synced Lyrics Split View (expanded-wide 510px) */
-                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', userSelect: 'none' }}>
-                          {/* Left Column (220px): Album cover, track info, scrubber, playback buttons */}
-                          <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', userSelect: 'none', boxSizing: 'border-box' }}>
+                          {/* Left Column (45%): Album cover, track info, scrubber, playback buttons */}
+                          <div style={{ width: '45%', flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6, boxSizing: 'border-box' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                               <div style={{
-                                width: 48,
-                                height: 48,
+                                width: 44,
+                                height: 44,
                                 borderRadius: 10,
                                 overflow: 'hidden',
                                 flexShrink: 0,
@@ -5508,14 +5607,14 @@ export default function Island() {
                                 {artwork ? (
                                   <img src={artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                                 ) : (
-                                  <Music size={20} color="#38bdf8" style={{ margin: 14 }} />
+                                  <Music size={18} color="#38bdf8" style={{ margin: 13 }} />
                                 )}
                               </div>
                               <div style={{ minWidth: 0, flex: 1 }}>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {title}
                                 </div>
-                                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.55)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {artist}
                                 </div>
                               </div>
@@ -5523,7 +5622,7 @@ export default function Island() {
 
                             {/* Scrubber row with elapsed / remaining */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', minWidth: 28 }}>
+                              <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', minWidth: 26 }}>
                                 {formatTimerMMSS(pos)}
                               </span>
                               <div
@@ -5538,7 +5637,7 @@ export default function Island() {
                                 }}
                                 style={{
                                   flex: 1,
-                                  height: 4,
+                                  height: 3,
                                   borderRadius: 2,
                                   background: 'rgba(255,255,255,0.15)',
                                   cursor: 'pointer',
@@ -5553,7 +5652,7 @@ export default function Island() {
                                   borderRadius: 2
                                 }} />
                               </div>
-                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', minWidth: 28, textAlign: 'right' }}>
+                              <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', minWidth: 26, textAlign: 'right' }}>
                                 -{formatTimerMMSS(remaining)}
                               </span>
                             </div>
@@ -5561,7 +5660,10 @@ export default function Island() {
                             {/* Compact controls with 💬 toggle */}
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 1 }}>
                               <button
-                                onClick={() => setLyricsOpen(false)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setLyricsOpen(false);
+                                }}
                                 title="Close Lyrics Split View"
                                 style={{
                                   background: 'rgba(34, 197, 94, 0.22)',
@@ -5580,7 +5682,7 @@ export default function Island() {
                                 <MessageSquare size={11} />
                                 <span>Lyrics</span>
                               </button>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                 <button
                                   onClick={() => {
                                     lastMediaActionRef.current = Date.now();
@@ -5588,7 +5690,7 @@ export default function Island() {
                                   }}
                                   style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', padding: 2, display: 'flex' }}
                                 >
-                                  <SkipBackIcon size={14} fill="#ffffff" />
+                                  <SkipBackIcon size={13} fill="#ffffff" />
                                 </button>
                                 <button
                                   onClick={() => {
@@ -5599,8 +5701,8 @@ export default function Island() {
                                     background: '#ffffff',
                                     border: 'none',
                                     borderRadius: '50%',
-                                    width: 22,
-                                    height: 22,
+                                    width: 24,
+                                    height: 24,
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
@@ -5617,61 +5719,88 @@ export default function Island() {
                                   }}
                                   style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', padding: 2, display: 'flex' }}
                                 >
-                                  <SkipForwardIcon size={14} fill="#ffffff" />
+                                  <SkipForwardIcon size={13} fill="#ffffff" />
                                 </button>
                               </div>
+                              <div style={{ width: 13 }} />
                             </div>
                           </div>
 
-                          {/* Right Column (250px): Vertical Scrolling Synced Lyrics Stage with Fade Masks */}
+                          {/* Right Column (55%): Vertical Scrolling Synced Lyrics Stage or Clean Dimmed Empty State */}
                           <div
                             style={{
-                              width: 250,
-                              height: 116,
+                              width: '55%',
+                              height: 118,
                               position: 'relative',
                               overflow: 'hidden',
                               display: 'flex',
                               flexDirection: 'column',
                               justifyContent: 'center',
-                              maskImage: 'linear-gradient(to bottom, transparent 0%, black 22%, black 78%, transparent 100%)',
-                              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 22%, black 78%, transparent 100%)'
+                              boxSizing: 'border-box',
+                              paddingLeft: 8
                             }}
                           >
-                            <div
-                              style={{
-                                transform: `translateY(${-(currentLyricIdx * 28) + 44}px)`,
-                                transition: 'transform 350ms cubic-bezier(0.22, 1, 0.36, 1)',
-                                willChange: 'transform'
-                              }}
-                            >
-                              {activeLyrics.map((l, idx) => {
-                                const isActive = idx === currentLyricIdx;
-                                return (
-                                  <div
-                                    key={l.time + l.text + idx}
-                                    style={{
-                                      height: 28,
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 6,
-                                      whiteSpace: 'nowrap',
-                                      overflow: 'hidden',
-                                      textOverflow: 'ellipsis',
-                                      color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.28)',
-                                      fontSize: isActive ? 13 : 11,
-                                      fontWeight: isActive ? 700 : 400,
-                                      filter: isActive ? 'blur(0px)' : 'blur(0.5px)',
-                                      transform: isActive ? 'scale(1)' : 'scale(0.96)',
-                                      transformOrigin: 'left center',
-                                      transition: 'all 300ms cubic-bezier(0.22, 1, 0.36, 1)'
-                                    }}
-                                  >
-                                    {isActive && <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />}
-                                    <span>{l.text}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
+                            {lyricsLoading ? (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.6 }}>
+                                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>Loading lyrics…</span>
+                              </div>
+                            ) : syncedLyrics && syncedLyrics.length > 0 ? (
+                              <div
+                                style={{
+                                  height: '100%',
+                                  position: 'relative',
+                                  overflow: 'hidden',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'center',
+                                  maskImage: 'linear-gradient(to bottom, transparent 0%, black 22%, black 78%, transparent 100%)',
+                                  WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 22%, black 78%, transparent 100%)'
+                                }}
+                              >
+                                <div
+                                  style={{
+                                    transform: `translateY(${-(currentLyricIdx * 28) + 44}px)`,
+                                    transition: 'transform 350ms cubic-bezier(0.22, 1, 0.36, 1)',
+                                    willChange: 'transform'
+                                  }}
+                                >
+                                  {syncedLyrics.map((l, idx) => {
+                                    const isActive = idx === currentLyricIdx;
+                                    return (
+                                      <div
+                                        key={l.time + l.text + idx}
+                                        style={{
+                                          height: 28,
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 6,
+                                          whiteSpace: 'nowrap',
+                                          overflow: 'hidden',
+                                          textOverflow: 'ellipsis',
+                                          color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.28)',
+                                          fontSize: isActive ? 13 : 11,
+                                          fontWeight: isActive ? 700 : 400,
+                                          filter: isActive ? 'blur(0px)' : 'blur(0.5px)',
+                                          transform: isActive ? 'scale(1)' : 'scale(0.96)',
+                                          transformOrigin: 'left center',
+                                          transition: 'all 300ms cubic-bezier(0.22, 1, 0.36, 1)'
+                                        }}
+                                      >
+                                        {isActive && <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />}
+                                        <span>{l.text}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 6, height: '100%', opacity: 0.55 }}>
+                                <Music size={18} color="rgba(255,255,255,0.4)" />
+                                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', fontWeight: 500 }}>
+                                  No synced lyrics available
+                                </span>
+                              </div>
+                            )}
                           </div>
                         </div>
                       )}
@@ -6011,9 +6140,15 @@ export default function Island() {
                                   key={file.name + idx}
                                   draggable
                                   onDragStart={() => {
+                                    isOutboundDragging.current = true;
+                                    setIsDragOverShelf(false);
                                     if (file.path && window.electronAPI?.startDrag) {
                                       window.electronAPI.startDrag(file.path);
                                     }
+                                    setTimeout(() => {
+                                      isOutboundDragging.current = false;
+                                      setIsDragOverShelf(false);
+                                    }, 400);
                                   }}
                                   onClick={() => {
                                     if (file.path && window.electronAPI?.openExternal) {
