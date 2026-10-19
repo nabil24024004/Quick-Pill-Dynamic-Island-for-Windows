@@ -642,7 +642,6 @@ const TopSegmentedBar = ({ totalTabs = 1, activeIndex = 0, onSelectTab }) => {
   );
 };
 
-
 // Left & Right Edge Navigation Arrows
 const EdgeNavigation = ({ onPrev, onNext }) => {
   return (
@@ -5309,7 +5308,7 @@ export default function Island() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: isLyricsWide ? '8px 16px' : '8px 18px',
+              padding: isLyricsWide ? '8px 16px' : '6px 18px',
               boxSizing: 'border-box'
             }}>
               <AnimatePresence custom={direction} initial={false} mode="wait">
