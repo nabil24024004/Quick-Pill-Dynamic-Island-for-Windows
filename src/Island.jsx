@@ -642,88 +642,6 @@ const TopSegmentedBar = ({ totalTabs = 1, activeIndex = 0, onSelectTab }) => {
   );
 };
 
-// Unified Header Row (26px) for Expanded Notch Card
-const UnifiedHeader = ({
-  title = "",
-  isPlaying = false,
-  percent = null,
-  currentTab = 0,
-  shelfFiles = [],
-  onClearShelf = null
-}) => {
-  const fullDateTime = useMemo(() => {
-    try {
-      const now = new Date();
-      const weekday = now.toLocaleDateString('en-US', { weekday: 'short' });
-      const day = now.getDate();
-      const month = now.toLocaleDateString('en-US', { month: 'short' });
-      const year = now.getFullYear();
-      const hours = String(now.getHours()).padStart(2, '0');
-      const minutes = String(now.getMinutes()).padStart(2, '0');
-      return `${weekday} ${day} ${month} ${year} ${hours}:${minutes}`;
-    } catch {
-      return "Mon 19 Oct 2026 20:58";
-    }
-  }, []);
-
-  const isShelf = currentTab === 13;
-
-  return (
-    <div
-      className="notch-header-row"
-      style={{
-        height: 26,
-        padding: '4px 16px 0',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        width: '100%',
-        boxSizing: 'border-box',
-        userSelect: 'none',
-        flexShrink: 0
-      }}
-    >
-      {/* Left: Active module title in bold white (12px) + contextual action badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.01em', whiteSpace: 'nowrap' }}>
-          {title}
-        </span>
-        {isShelf && shelfFiles.length > 0 && onClearShelf && (
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              onClearShelf();
-            }}
-            style={{
-              background: 'rgba(239, 68, 68, 0.18)',
-              border: '1px solid rgba(239, 68, 68, 0.3)',
-              borderRadius: 5,
-              padding: '1px 5px',
-              fontSize: 9.5,
-              fontWeight: 600,
-              color: '#f87171',
-              cursor: 'pointer'
-            }}
-            title="Clear stashed files"
-          >
-            Clear
-          </button>
-        )}
-      </div>
-
-      {/* Center: [Green Progress Ring (12px)] Mon 19 Oct 2026 20:58 (11px crisp white/grey) */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: 500, fontVariantNumeric: 'tabular-nums' }}>
-        <MiniProgressRing progress={percent ? percent / 100 : 0.8} color="#22c55e" size={12} strokeWidth={2} />
-        <span>{fullDateTime}</span>
-      </div>
-
-      {/* Right: Animated 5-bar mini audio equalizer waveform */}
-      <div style={{ display: 'flex', alignItems: 'center', minWidth: 24, justifyContent: 'flex-end' }}>
-        <MiniWaveform isPlaying={isPlaying} />
-      </div>
-    </div>
-  );
-};
 
 // Left & Right Edge Navigation Arrows
 const EdgeNavigation = ({ onPrev, onNext }) => {
@@ -5368,8 +5286,8 @@ export default function Island() {
             className={`notch-stage ${isLyricsWide ? "notch-stage-expanded-wide" : "notch-stage-expanded"}`}
             style={{
               display: "flex",
-              flexDirection: "column",
               alignItems: "center",
+              justifyContent: "center",
               position: "absolute",
               overflow: "hidden",
               borderRadius: "inherit",
@@ -5382,29 +5300,16 @@ export default function Island() {
               onNext={() => moveTab(1)}
             />
 
-            {/* Persistent Nusa Top Header Bar (hidden in Music Split-View Lyrics mode) */}
-            {!isLyricsWide && (
-              <UnifiedHeader
-                title={TABS.find(t => t.id === currentTab)?.name || "Overview"}
-                isPlaying={isPlaying}
-                percent={percent}
-                charging={charging}
-                currentTab={currentTab}
-                shelfFiles={shelfFiles}
-                onClearShelf={clearShelf}
-              />
-            )}
-
             {/* Module Body Container (Full-Bleed 100% Height, Center-Aligned) */}
             <div style={{
               width: '100%',
-              flex: 1,
+              height: '100%',
               position: 'relative',
               overflow: 'hidden',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              padding: isLyricsWide ? '8px 16px' : '2px 18px 6px',
+              padding: isLyricsWide ? '8px 16px' : '8px 18px',
               boxSizing: 'border-box'
             }}>
               <AnimatePresence custom={direction} initial={false} mode="wait">
