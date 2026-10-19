@@ -125,7 +125,104 @@ function saveUpdaterPreference(key, val) {
   } catch (_) {}
 }
 
+function loadMascotModePreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.mascotMode === "boolean") return data.mascotMode;
+    }
+  } catch (_) {}
+  return true;
+}
+
+function saveMascotModePreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.mascotMode = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+function loadMinimalNotchPreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.minimalNotch === "boolean") return data.minimalNotch;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function saveMinimalNotchPreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.minimalNotch = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+function loadPrivacyDotsPreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.privacyDots === "boolean") return data.privacyDots;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function savePrivacyDotsPreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.privacyDots = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+let mascotModeEnabled = loadMascotModePreference();
+let minimalNotchEnabled = loadMinimalNotchPreference();
+let privacyDotsEnabled = loadPrivacyDotsPreference();
 alwaysOnTopEnabled = loadAlwaysOnTopPreference();
+
+function loadHiddenTabsPreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (Array.isArray(data.hiddenTabs)) return data.hiddenTabs;
+    }
+  } catch (_) {}
+  return [6];
+}
+
+function saveHiddenTabsPreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.hiddenTabs = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+let hiddenTabsList = loadHiddenTabsPreference();
 
 function ensureAlwaysOnTop() {
   if (!alwaysOnTopEnabled) return;
@@ -212,8 +309,7 @@ const DEFAULT_TAB_SHORTCUTS = {
   6: "Alt+G",   // Game / Stats
   7: "Alt+V",   // Clipboard
   8: "Alt+T",   // Tasks
-  10: "Alt+R",  // Timer
-  9: "Alt+S"    // Settings
+  10: "Alt+R"   // Timer
 };
 
 let registeredTabShortcuts = [];
@@ -248,6 +344,10 @@ function saveTabShortcutsPreference(shortcuts) {
 }
 
 function openTabInstant(tabId) {
+  if (Number(tabId) === 9) {
+    openSettingsWindow();
+    return;
+  }
   if (!mainWindow || mainWindow.isDestroyed()) return;
   try {
     if (!mainWindow.isVisible()) {
@@ -291,6 +391,23 @@ function registerGlobalTabShortcuts(shortcutsMap) {
     } catch (err) {
       logToFile(`Error registering global shortcut ${accel}:`, err);
     }
+  }
+
+  // Global shortcut to toggle Minimal Notch (Alt+Shift+M)
+  try {
+    const ok = globalShortcut.register("Alt+Shift+M", () => {
+      minimalNotchEnabled = !minimalNotchEnabled;
+      saveMinimalNotchPreference(minimalNotchEnabled);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+      }
+      updateTrayMenu();
+    });
+    if (ok) {
+      registeredTabShortcuts.push("Alt+Shift+M");
+    }
+  } catch (err) {
+    logToFile("Error registering global shortcut Alt+Shift+M:", err);
   }
 }
 
@@ -547,9 +664,14 @@ ipcMain.handle("log-renderer-error", (event, errorData) => {
   logToFile(`[RENDERER ERROR] Unhandled Renderer Exception ${JSON.stringify(errorData)}`);
 });
 
+let lastIgnoreMouseState = null;
 ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
+      if (lastIgnoreMouseState === ignore) {
+        return;
+      }
+      lastIgnoreMouseState = ignore;
       if (ignore) {
         const useForward = forward !== undefined ? forward : true;
         mainWindow.setIgnoreMouseEvents(true, { forward: useForward });
@@ -557,9 +679,7 @@ ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
         mainWindow.setIgnoreMouseEvents(false);
         ensureAlwaysOnTop();
       }
-      logToFile(`setIgnoreMouseEvents(${ignore}, forward=${forward}) executed`);
     } catch (e) {
-      logToFile("Error in setIgnoreMouseEvents, falling back to forward=true", e);
       try {
         mainWindow.setIgnoreMouseEvents(true, { forward: true });
       } catch (_) {}
@@ -585,6 +705,101 @@ ipcMain.handle("focus-window", () => {
 
 ipcMain.handle("open-external", async (event, url) => {
   await shell.openExternal(url);
+});
+
+ipcMain.handle("get-mascot-mode", () => mascotModeEnabled);
+ipcMain.handle("set-mascot-mode", (event, val) => {
+  mascotModeEnabled = Boolean(val);
+  saveMascotModePreference(mascotModeEnabled);
+  updateTrayMenu();
+  return mascotModeEnabled;
+});
+
+ipcMain.handle("get-minimal-notch", () => minimalNotchEnabled);
+ipcMain.handle("set-minimal-notch", (event, val) => {
+  minimalNotchEnabled = Boolean(val);
+  saveMinimalNotchPreference(minimalNotchEnabled);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+  }
+  updateTrayMenu();
+  return minimalNotchEnabled;
+});
+ipcMain.handle("toggle-minimal-notch", () => {
+  minimalNotchEnabled = !minimalNotchEnabled;
+  saveMinimalNotchPreference(minimalNotchEnabled);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+  }
+  updateTrayMenu();
+  return minimalNotchEnabled;
+});
+
+ipcMain.handle("get-hidden-tabs", () => hiddenTabsList);
+ipcMain.handle("set-hidden-tabs", (event, val) => {
+  if (Array.isArray(val)) {
+    hiddenTabsList = val;
+    saveHiddenTabsPreference(hiddenTabsList);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("settings:hidden-tabs-changed", hiddenTabsList);
+    }
+  }
+  return hiddenTabsList;
+});
+
+ipcMain.handle("get-privacy-dots", () => privacyDotsEnabled);
+ipcMain.handle("set-privacy-dots", (event, val) => {
+  privacyDotsEnabled = Boolean(val);
+  savePrivacyDotsPreference(privacyDotsEnabled);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("settings:privacy-dots-changed", privacyDotsEnabled);
+  }
+  return privacyDotsEnabled;
+});
+
+ipcMain.handle("open-settings-window", () => {
+  openSettingsWindow();
+  return true;
+});
+
+ipcMain.on("settings-window:minimize", () => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.minimize();
+  }
+});
+
+ipcMain.on("settings-window:close", () => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close();
+  }
+});
+
+ipcMain.on("ondragstart", (event, filePath) => {
+  try {
+    if (filePath && fs.existsSync(filePath)) {
+      event.sender.startDrag({
+        file: filePath,
+        icon: getIconPath("png")
+      });
+    }
+  } catch (err) {
+    logToFile("ondragstart error:", err);
+  }
+});
+
+ipcMain.handle("start-drag", (event, filePath) => {
+  try {
+    if (filePath && fs.existsSync(filePath)) {
+      event.sender.startDrag({
+        file: filePath,
+        icon: getIconPath("png")
+      });
+      return true;
+    }
+  } catch (err) {
+    logToFile("start-drag error:", err);
+  }
+  return false;
 });
 
 // ==========================================
@@ -944,8 +1159,11 @@ ipcMain.handle("set-display", (event, displayId) => {
       displays.find((d) => d.id.toString() === displayId.toString()) ||
       screen.getPrimaryDisplay();
 
-    const { x, y, width, height } = targetDisplay.bounds;
-    mainWindow.setBounds({ x, y, width, height });
+    const winWidth = 560;
+    const winHeight = 180;
+    const winX = Math.round(targetDisplay.bounds.x + (targetDisplay.bounds.width - winWidth) / 2);
+    const winY = targetDisplay.bounds.y;
+    mainWindow.setBounds({ x: winX, y: winY, width: winWidth, height: winHeight });
     mainWindow.show();
     ensureAlwaysOnTop();
   }
@@ -1531,9 +1749,10 @@ const createWindow = () => {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { x, y, width, height } = primaryDisplay.bounds;
 
-  const winWidth = width;
-  const winHeight = height;
-  const winX = x;
+  // Fixed Transparent Overlay Window (560px x 180px): accommodates expanded-wide (510px) without clipping
+  const winWidth = 560;
+  const winHeight = 180;
+  const winX = Math.round(x + (width - winWidth) / 2);
   const winY = y;
 
   mainWindow = new BrowserWindow({
@@ -1655,33 +1874,108 @@ const createWindow = () => {
   }
 };
 
+let settingsWindow = null;
+function openSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+  settingsWindow = new BrowserWindow({
+    width: 680,
+    height: 560,
+    title: "Quick Pill Settings",
+    backgroundColor: "#121212",
+    autoHideMenuBar: true,
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    frame: false,
+    icon: getIconPath(),
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      devTools: !app.isPackaged,
+      backgroundThrottling: false,
+    },
+  });
+  if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== "undefined" && MAIN_WINDOW_VITE_DEV_SERVER_URL && !app.isPackaged) {
+    settingsWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#settings`);
+  } else if (!app.isPackaged && process.env.NODE_ENV === "development") {
+    settingsWindow.loadURL("http://localhost:5173#settings");
+  } else {
+    const candidatePaths = [
+      path.join(__dirname, "../renderer/main_window/index.html"),
+      path.join(app.getAppPath(), ".vite/renderer/main_window/index.html"),
+      path.join(app.getAppPath(), "dist/index.html"),
+      path.join(__dirname, "index.html"),
+      path.join(app.getAppPath(), "index.html")
+    ];
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        settingsWindow.loadFile(p, { hash: "settings" });
+        break;
+      }
+    }
+  }
+  settingsWindow.on("closed", () => {
+    settingsWindow = null;
+  });
+}
+
 function updateTrayMenu() {
   if (!tray || tray.isDestroyed()) return;
+  const isStartWithWindows = app.getLoginItemSettings().openAtLogin;
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: "Show/Hide Quick Pill",
-      click: () => {
-        if (mainWindow) {
-          if (mainWindow.isVisible()) {
-            mainWindow.hide();
-          } else {
-            mainWindow.show();
-            ensureAlwaysOnTop();
-          }
-        }
+      label: "Start with Windows",
+      type: "checkbox",
+      checked: isStartWithWindows,
+      click: (item) => {
+        try {
+          app.setLoginItemSettings({
+            openAtLogin: item.checked,
+            path: app.getPath("exe"),
+          });
+        } catch (_) {}
+        updateTrayMenu();
       },
     },
     {
-      label: "Always on Top",
+      label: "Mascot Mode",
       type: "checkbox",
-      checked: alwaysOnTopEnabled,
+      checked: mascotModeEnabled,
       click: (item) => {
-        setAlwaysOnTopState(item.checked);
+        mascotModeEnabled = item.checked;
+        saveMascotModePreference(mascotModeEnabled);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("settings:mascot-mode-changed", mascotModeEnabled);
+        }
+        updateTrayMenu();
+      },
+    },
+    {
+      label: "Minimal Notch",
+      type: "checkbox",
+      checked: minimalNotchEnabled,
+      click: (item) => {
+        minimalNotchEnabled = item.checked;
+        saveMinimalNotchPreference(minimalNotchEnabled);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+        }
+        updateTrayMenu();
       },
     },
     { type: "separator" },
     {
-      label: "Quit",
+      label: "Settings...",
+      click: () => {
+        openSettingsWindow();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Exit",
       click: () => {
         app.quit();
       },
@@ -1690,12 +1984,135 @@ function updateTrayMenu() {
   tray.setContextMenu(contextMenu);
 }
 
+// --- Smart Obstruction Detection (Lightweight Koffi Win32 Polling) ---
+let lastObstructedState = false;
+let user32Lib = null;
+let gdi32Lib = null;
+
+function initWin32Obstruction() {
+  if (process.platform !== "win32") return;
+  try {
+    const koffi = require("koffi");
+    const user32 = koffi.load("user32.dll");
+    const gdi32 = koffi.load("gdi32.dll");
+    const RECT = koffi.struct("RECT", {
+      left: "long",
+      top: "long",
+      right: "long",
+      bottom: "long",
+    });
+    user32Lib = {
+      GetForegroundWindow: user32.func("GetForegroundWindow", "intptr_t", []),
+      IsZoomed: user32.func("IsZoomed", "bool", ["intptr_t"]),
+      GetWindowRect: user32.func("GetWindowRect", "bool", ["intptr_t", koffi.out(koffi.pointer(RECT))]),
+      GetClassNameA: user32.func("GetClassNameA", "int", ["intptr_t", koffi.out(koffi.pointer("char")), "int"]),
+      GetWindowTextA: user32.func("GetWindowTextA", "int", ["intptr_t", koffi.out(koffi.pointer("char")), "int"]),
+      GetDC: user32.func("GetDC", "intptr_t", ["intptr_t"]),
+      ReleaseDC: user32.func("ReleaseDC", "int", ["intptr_t", "intptr_t"]),
+      GetKeyState: user32.func("GetKeyState", "int16_t", ["int"]),
+    };
+    gdi32Lib = {
+      GetPixel: gdi32.func("GetPixel", "uint32_t", ["intptr_t", "int", "int"]),
+    };
+  } catch (err) {
+    logToFile("[Obstruction] Koffi user32/gdi32 init failed, falling back:", err);
+  }
+}
+
+function startObstructionDetection() {
+  if (process.platform !== "win32") return;
+  initWin32Obstruction();
+
+  setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    let isObstructed = false;
+
+    if (minimalNotchEnabled) {
+      isObstructed = true;
+    } else if (user32Lib) {
+      try {
+        const fgHwnd = user32Lib.GetForegroundWindow();
+        if (fgHwnd && fgHwnd !== 0) {
+          const buf = Buffer.alloc(256);
+          user32Lib.GetClassNameA(fgHwnd, buf, 256);
+          const cls = buf.toString("utf8").replace(/\0.*$/, "").trim();
+
+          // Ignore Windows desktop and taskbar
+          const isDesktop = cls === "Progman" || cls === "WorkerW" || cls === "Shell_TrayWnd" || cls === "Shell_SecondaryTrayWnd";
+
+          // Ignore our own mainWindow
+          let isOwnWindow = false;
+          try {
+            const mainBuf = mainWindow.getNativeWindowHandle();
+            if (mainBuf.readBigInt64LE && mainBuf.readBigInt64LE(0) === BigInt(fgHwnd)) {
+              isOwnWindow = true;
+            }
+          } catch (_) {}
+
+          if (!isDesktop && !isOwnWindow) {
+            const rect = {};
+            user32Lib.GetWindowRect(fgHwnd, rect);
+            const isZoomed = user32Lib.IsZoomed(fgHwnd);
+
+            const primaryDisplay = screen.getPrimaryDisplay();
+            const screenW = primaryDisplay.bounds.width;
+            const screenH = primaryDisplay.bounds.height;
+
+            const winW = (rect.right || 0) - (rect.left || 0);
+            const winH = (rect.bottom || 0) - (rect.top || 0);
+
+            // Nusa Rule 1: Fullscreen Apps (Games / Fullscreen Video F11)
+            // Window covers entire monitor with no taskbar
+            if (rect.left <= 0 && rect.top <= 0 && rect.right >= screenW && rect.bottom >= screenH && !isZoomed) {
+              isObstructed = true;
+            }
+            // Nusa Rule 2: Maximized Browser / App Obstruction
+            else if (isZoomed || (rect.top <= 8 && winW >= screenW * 0.90 && winH >= screenH * 0.85)) {
+              const isBrowser = cls === "Chrome_WidgetWin_1" || cls === "MozillaWindowClass";
+              if (isBrowser) {
+                // Read title to see if user has 5+ tabs (e.g. Chrome format "and 5 more tabs")
+                const titleBuf = Buffer.alloc(512);
+                user32Lib.GetWindowTextA(fgHwnd, titleBuf, 512);
+                const title = titleBuf.toString("utf8").replace(/\0.*$/, "").trim();
+                const manyTabsMatch = title.match(/and\s+([5-9]|\d{2,})\s+more\s+tabs/i);
+
+                if (manyTabsMatch) {
+                  // Tabs have reached top-center zone (>= 5 tabs)
+                  isObstructed = true;
+                } else {
+                  // Browser with <= 4 tabs has empty titlebar at top-center (unobstructed)
+                  isObstructed = false;
+                }
+              } else {
+                // Non-browser maximized application occupies top titlebar/menu
+                isObstructed = true;
+              }
+            } else {
+              // Nusa Rule 3: Normal window with top-center clear
+              isObstructed = false;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (isObstructed !== lastObstructedState) {
+      lastObstructedState = isObstructed;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("desktop:obstruction-status", { isObstructed });
+      }
+    }
+  }, 300);
+}
+
 app.whenReady().then(() => {
   app.setAppUserModelId("com.neosparkx.quickpill");
   cleanLegacyStartupEntries();
   createWindow();
   startKeyLockPolling();
   startUSBPolling();
+  startObstructionDetection();
   registerGlobalTabShortcuts();
   getLauncherEngine().getCatalog().catch((err) => logToFile("Failed to warm launcher catalog:", err));
   app.on("activate", () => {
@@ -2250,37 +2667,23 @@ $MediaKey::keybd_event(${vkCode}, 0, 2, [UIntPtr]::Zero)
   return false;
 });
 
-// --- Feature: Key Lock Alerts (CapsLock / NumLock) ---
-let lastCapsLock = null;
+// --- Feature: Key Lock Alerts (NumLock) ---
 let lastNumLock = null;
 
 function startKeyLockPolling() {
   if (process.platform !== "win32") return;
-  let keyLockInFlight = false;
   setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (keyLockInFlight) return; // skip if previous call hasn't returned yet
-    keyLockInFlight = true;
-    exec('powershell -NoProfile -Command "[Console]::CapsLock; [Console]::NumberLock"', (err, stdout) => {
-      keyLockInFlight = false;
-      if (err || !stdout) return;
-      const lines = stdout.trim().split(/\r?\n/);
-      const capsLock = lines[0]?.trim().toLowerCase() === "true";
-      const numLock = lines[1]?.trim().toLowerCase() === "true";
-      if (lastCapsLock !== null && capsLock !== lastCapsLock) {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("key-lock-change", { key: "CapsLock", state: capsLock });
+    try {
+      if (user32Lib && user32Lib.GetKeyState) {
+        const num = (user32Lib.GetKeyState(0x90) & 1) !== 0;
+        if (lastNumLock !== null && num !== lastNumLock) {
+          mainWindow.webContents.send("key-lock-change", { key: "NumLock", state: num });
         }
+        lastNumLock = num;
       }
-      if (lastNumLock !== null && numLock !== lastNumLock) {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("key-lock-change", { key: "NumLock", state: numLock });
-        }
-      }
-      lastCapsLock = capsLock;
-      lastNumLock = numLock;
-    });
-  }, 2000); // 2s is plenty for key-lock detection; was 500ms which spawned 2 powershell/s
+    } catch (_) {}
+  }, 150);
 }
 
 // --- Feature: USB Drive Detection ---
@@ -2344,13 +2747,21 @@ function Await-Op($asyncOp, $type) {
     } catch { return $null }
 }
 
-function Get-AppIconBase64($appId) {
+function Get-AppIconBase64($appId, $appName) {
     try {
         $proc = $null
-        if ($appId) {
-            # Try to derive process name from AppId (e.g. "com.squirrel.Spotify.Spotify" -> "Spotify")
+        if ($appName) {
+            $proc = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and ($_.ProcessName -like "*$appName*" -or $_.MainWindowTitle -like "*$appName*") } | Select-Object -First 1
+        }
+        if (-not $proc -and $appId) {
             $cleanName = $appId.Split('!')[-1].Split('.')[-1].Replace('.exe','')
-            $proc = Get-Process | Where-Object { $_.ProcessName -eq $cleanName -or $_.ProcessName -like "*$cleanName*" } | Select-Object -First 1
+            if ($cleanName -and $cleanName -ne "App") {
+                $proc = Get-Process | Where-Object { $_.ProcessName -eq $cleanName -or $_.ProcessName -like "*$cleanName*" } | Select-Object -First 1
+            }
+        }
+        if (-not $proc -and $appId -match '\.([A-Za-z0-9]+)[_\!]') {
+            $extracted = $Matches[1]
+            $proc = Get-Process | Where-Object { $_.ProcessName -like "*$extracted*" } | Select-Object -First 1
         }
         if (-not $proc) { return "" }
         $exePath = $proc.MainModule.FileName
@@ -2413,7 +2824,7 @@ try {
                 $appName = $n.AppInfo.DisplayInfo.DisplayName
                 $appId = $n.AppInfo.AppUserModelId
             } catch {}
-            $icon = Get-AppIconBase64 $appId
+            $icon = Get-AppIconBase64 $appId $appName
             $results.Add([PSCustomObject]@{
                 Id = $n.Id
                 AppName = $appName
@@ -2503,15 +2914,157 @@ try {
   });
 }
 
-async function focusNotificationAppInternal(appIdOrName) {
-  if (process.platform !== "win32" || !appIdOrName) return false;
+async function focusNotificationAppInternal(appIdOrName, appNameHint) {
+  if (process.platform !== "win32" || (!appIdOrName && !appNameHint)) return false;
+
+  const rawAppId = (appIdOrName || "").trim();
+  const rawAppName = (appNameHint || "").trim();
+  logToFile(`focusNotificationApp: appId="${rawAppId}", appName="${rawAppName}"`);
+
+  // 1. Direct UWP AppUserModelId execution via Windows Shell (Instant & Native for Windows Store Apps like WhatsApp, Spotify, etc.)
+  if (rawAppId && (rawAppId.includes("!") || rawAppId.toLowerCase().startsWith("shell:appsfolder\\"))) {
+    try {
+      const target = rawAppId.toLowerCase().startsWith("shell:appsfolder\\")
+        ? rawAppId
+        : `shell:AppsFolder\\${rawAppId}`;
+      const child = spawn("explorer.exe", [target], { detached: true, stdio: "ignore" });
+      if (child && typeof child.unref === "function") child.unref();
+      return true;
+    } catch (e) {
+      logToFile("UWP explorer.exe launch failed:", e);
+    }
+  }
+
+  // 2. Resolve via LauncherEngine (matches Start Menu shortcuts, Windows catalog, and aliases)
+  try {
+    const launcher = typeof getLauncherEngine === "function" ? getLauncherEngine() : null;
+    if (launcher) {
+      if (rawAppName) {
+        const res = await launcher.launchApp(rawAppName);
+        if (res && res.success) return true;
+      }
+      if (rawAppId && rawAppId !== rawAppName) {
+        const res = await launcher.launchApp(rawAppId);
+        if (res && res.success) return true;
+      }
+
+      // Check running desktop windows and activate
+      if (typeof launcher.getRunningWindows === "function" && typeof launcher.activateWindow === "function") {
+        const windows = await launcher.getRunningWindows({ forceRefresh: true });
+        const queries = [rawAppName, rawAppId].filter(Boolean).map(q => q.toLowerCase());
+        const matched = windows.find(w => {
+          if (!w) return false;
+          const p = (w.processName || "").toLowerCase();
+          const t = (w.title || "").toLowerCase();
+          return queries.some(q => 
+            p === q || 
+            p.includes(q) || 
+            q.includes(p) || 
+            t.toLowerCase().includes(q)
+          );
+        });
+        if (matched && matched.hWnd) {
+          const actRes = await launcher.activateWindow(matched.hWnd);
+          if (actRes && actRes.success) return true;
+        }
+      }
+    }
+  } catch (err) {
+    logToFile("LauncherEngine resolution in focusNotificationApp failed:", err);
+  }
+
+  // 3. Known URI protocol fallbacks
+  const combined = `${rawAppName} ${rawAppId}`.toLowerCase();
+  try {
+    if (combined.includes("whatsapp")) {
+      await shell.openExternal("whatsapp://");
+      return true;
+    }
+    if (combined.includes("spotify")) {
+      await shell.openExternal("spotify://");
+      return true;
+    }
+    if (combined.includes("telegram")) {
+      await shell.openExternal("tg://");
+      return true;
+    }
+    if (combined.includes("discord")) {
+      await shell.openExternal("discord://");
+      return true;
+    }
+    if (combined.includes("slack")) {
+      await shell.openExternal("slack://");
+      return true;
+    }
+  } catch (e) {
+    logToFile("URI protocol fallback failed:", e);
+  }
+
+  // 4. Native Windows Shell fallback via PowerShell with simulated Alt unlock
   return new Promise((resolve) => {
-    const cleanName = appIdOrName.split("!")[0].split("_")[0].replace(/\./g, "");
+    const candidates = new Set();
+    [rawAppName, rawAppId].forEach(s => {
+      if (s) {
+        candidates.add(s);
+        s.split(/\s+/).forEach(w => { if (w.length > 2) candidates.add(w); });
+        const parts = s.split(/[._!\\\/]/).filter(p => p.length > 2 && !/^[0-9A-Fa-f]{8,}$/.test(p));
+        parts.forEach(p => candidates.add(p));
+      }
+    });
+
+    const tokenList = Array.from(candidates).filter(c => c && c.length >= 2);
+    const tokenRegex = tokenList.length > 0
+      ? tokenList.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
+      : (rawAppName || rawAppId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const safeAppId = rawAppId.replace(/'/g, "''");
+
     const script = `
-$type = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);'
-$fw = Add-Type -MemberDefinition $type -Name "FW" -Namespace "WinAPI" -PassThru
-$procs = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and ($_.ProcessName -match '${cleanName}' -or $_.MainWindowTitle -match '${cleanName}') } | Select-Object -First 1
-if ($procs) { [void]$fw::SetForegroundWindow($procs.MainWindowHandle); Write-Output "true" } else { Write-Output "false" }
+$type = @'
+using System;
+using System.Runtime.InteropServices;
+public class WinAPI {
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+}
+'@
+Add-Type -TypeDefinition $type -PassThru | Out-Null
+
+$matched = $false
+$pattern = '(?i)(${tokenRegex})'
+
+# Find by Process Name or Window Title
+$procs = Get-Process | Where-Object { 
+    $_.ProcessName -match $pattern -or $_.MainWindowTitle -match $pattern 
+} | Select-Object -First 1
+
+if ($procs -and $procs.MainWindowHandle -ne 0) {
+    $hwnd = $procs.MainWindowHandle
+    if ([WinAPI]::IsIconic($hwnd)) {
+        [void][WinAPI]::ShowWindow($hwnd, 9)
+    } else {
+        [void][WinAPI]::ShowWindow($hwnd, 5)
+    }
+    [WinAPI]::keybd_event(0x12, 0, 0, 0)
+    [WinAPI]::keybd_event(0x12, 0, 2, 0)
+    [void][WinAPI]::BringWindowToTop($hwnd)
+    [void][WinAPI]::SetForegroundWindow($hwnd)
+    [void][WinAPI]::SwitchToThisWindow($hwnd, $true)
+    $matched = $true
+}
+
+if (-not $matched -and '${safeAppId}') {
+    try {
+        Start-Process "explorer.exe" "shell:AppsFolder\\${safeAppId}"
+        $matched = $true
+    } catch {}
+}
+
+if ($matched) { Write-Output "true" } else { Write-Output "false" }
 `;
     const enc = getPowershellEncodedCommand(script);
     exec(`powershell -NoProfile -EncodedCommand ${enc}`, (err, stdout) => {
@@ -2531,6 +3084,9 @@ const notificationEngine = createNotificationEngine({
 notificationEngine.registry.on("change", (snapshot) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("notification:update", snapshot);
+    try {
+      mainWindow.webContents.invalidate();
+    } catch (_) {}
   }
 });
 
@@ -2577,8 +3133,8 @@ ipcMain.handle("dismiss-notification", async (event, notifId) => {
   return Boolean(res?.success);
 });
 
-ipcMain.handle("focus-notification-app", async (event, appId) => {
-  return await focusNotificationAppInternal(appId);
+ipcMain.handle("focus-notification-app", async (event, appId, appName) => {
+  return await focusNotificationAppInternal(appId, appName);
 });
 
 // Smart Notification Actions IPC handlers
@@ -2642,6 +3198,15 @@ ipcMain.handle("notification:set-app-excluded", (event, appName, excluded) => {
 
 ipcMain.handle("notification:clear-history", () => {
   notificationEngine.clearHistory();
+  return true;
+});
+
+ipcMain.handle("window:invalidate", () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.invalidate();
+    } catch (_) {}
+  }
   return true;
 });
 
@@ -2801,7 +3366,10 @@ class AudioMixerManager {
     }
     if (this.child) {
       try {
-        this.child.stdin.write(JSON.stringify({ id: 0, cmd: 'shutdown' }) + '\n');
+        if (this.child.stdin && !this.child.stdin.destroyed) {
+          this.child.stdin.on('error', () => {});
+          this.child.stdin.write(JSON.stringify({ id: 0, cmd: 'shutdown' }) + '\n');
+        }
       } catch (_) {}
       setTimeout(() => {
         if (this.child) {

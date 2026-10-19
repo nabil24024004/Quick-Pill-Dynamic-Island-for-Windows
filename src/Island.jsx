@@ -1,10 +1,29 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing, Keyboard } from "lucide-react";
+import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, ArrowLeft, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing, Keyboard, Droplet, Flame, Inbox, File, CheckSquare, Square, CornerDownLeft, Lock } from "lucide-react";
 import "./App.css";
 import AppLauncher from "./components/AppLauncher";
 import QuickNotes from "./components/QuickNotes";
 import ErrorBoundary from "./components/ErrorBoundary";
+
+// Helper parse synced LRC format lyrics
+function parseLrc(lrcText) {
+  if (!lrcText || typeof lrcText !== "string") return null;
+  const lines = lrcText.split(/\r?\n/);
+  const result = [];
+  for (const line of lines) {
+    const match = line.match(/^\[(\d{2}):(\d{2}(?:\.\d{2,3})?)\](.*)/);
+    if (match) {
+      const minutes = parseInt(match[1], 10);
+      const seconds = parseFloat(match[2]);
+      const text = match[3].trim();
+      if (text) {
+        result.push({ time: minutes * 60 + seconds, text });
+      }
+    }
+  }
+  return result.length > 0 ? result : null;
+}
 
 // Helper format file sizes (Bytes -> KB -> MB)
 function formatBytes(bytes, decimals = 1) {
@@ -482,22 +501,21 @@ function cleanBluetoothDeviceName(rawName) {
 }
 
 const TABS = [
-  { id: 0, name: "Browser Search", icon: (color) => <Search size={16} color={color} /> },
-  { id: 1, name: "Weather", icon: (color) => <CloudSun size={16} color={color} /> },
-  { id: 2, name: "Overview", icon: (color) => <Sun size={16} color={color} /> },
-  { id: 11, name: "Battery Hub", icon: (color) => <BatteryCharging size={16} color={color} /> },
-  { id: 12, name: "Audio Mixer", icon: (color) => <SlidersHorizontal size={16} color={color} /> },
-  { id: 13, name: "Progress Island", icon: (color) => <Layers size={16} color={color} /> },
-  { id: 14, name: "App Launcher", icon: (color) => <Compass size={16} color={color} /> },
-  { id: 15, name: "Quick Notes", icon: (color) => <FileText size={16} color={color} /> },
-  { id: 3, name: "Now Playing", icon: (color) => <Music size={16} color={color} /> },
-  { id: 4, name: "Calendar", icon: (color) => <CalendarIcon size={16} color={color} /> },
-  { id: 5, name: "Notifications", icon: (color) => <Bell size={16} color={color} /> },
-  { id: 6, name: "Game / Stats", icon: (color) => <Activity size={16} color={color} /> },
-  { id: 7, name: "Clipboard", icon: (color) => <List size={16} color={color} /> },
-  { id: 8, name: "Tasks", icon: (color) => <Check size={16} color={color} /> },
-  { id: 10, name: "Timer", icon: (color) => <Timer size={16} color={color} /> },
-  { id: 9, name: "Settings", icon: (color) => <Settings size={16} color={color} /> },
+  { id: 0, name: "Browser Search", icon: (color, size = 15) => <Search size={size} color={color} /> },
+  { id: 1, name: "Water Reminder", icon: (color, size = 15) => <Droplet size={size} color={color} /> },
+  { id: 2, name: "Overview", icon: (color, size = 15) => <Sun size={size} color={color} /> },
+  { id: 11, name: "Battery Hub", icon: (color, size = 15) => <BatteryCharging size={size} color={color} /> },
+  { id: 12, name: "Audio Mixer", icon: (color, size = 15) => <SlidersHorizontal size={size} color={color} /> },
+  { id: 13, name: "File Shelf", icon: (color, size = 15) => <Inbox size={size} color={color} /> },
+  { id: 14, name: "App Launcher", icon: (color, size = 15) => <Compass size={size} color={color} /> },
+  { id: 15, name: "Quick Notes", icon: (color, size = 15) => <FileText size={size} color={color} /> },
+  { id: 3, name: "Music", icon: (color, size = 15) => <Music size={size} color={color} /> },
+  { id: 4, name: "Calendar", icon: (color, size = 15) => <CalendarIcon size={size} color={color} /> },
+  { id: 5, name: "Notifications", icon: (color, size = 15) => <Bell size={size} color={color} /> },
+  { id: 6, name: "Game / Stats", icon: (color, size = 15) => <Activity size={size} color={color} /> },
+  { id: 7, name: "Clipboard", icon: (color, size = 15) => <List size={size} color={color} /> },
+  { id: 8, name: "To-Do List", icon: (color, size = 15) => <CheckSquare size={size} color={color} /> },
+  { id: 10, name: "Pomodoro", icon: (color, size = 15) => <Timer size={size} color={color} /> }
 ];
 
 const DEFAULT_TAB_SHORTCUTS = {
@@ -515,8 +533,180 @@ const DEFAULT_TAB_SHORTCUTS = {
   6: "Alt+G",   // Game / Stats
   7: "Alt+V",   // Clipboard
   8: "Alt+T",   // Tasks
-  10: "Alt+R",  // Timer
-  9: "Alt+S"    // Settings
+  10: "Alt+R"   // Timer
+};
+
+// 5-Bar Live Equalizer Waveform for Idle Notch Standby
+const MiniWaveform = ({ isPlaying = false }) => {
+  return (
+    <div className={`notch-live-eq-5 ${isPlaying ? "" : "paused"}`} title={isPlaying ? "Media Playing" : "Idle Standby"}>
+      <span className="eq-bar-5" />
+      <span className="eq-bar-5" />
+      <span className="eq-bar-5" />
+      <span className="eq-bar-5" />
+      <span className="eq-bar-5" />
+    </div>
+  );
+};
+
+// Mini Circular Progress Ring for Idle Notch Standby (14px)
+const MiniProgressRing = ({ progress = 1, color = "#22c55e", size = 14, strokeWidth = 2.2 }) => {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const strokeDashoffset = circumference - Math.min(1, Math.max(0, progress)) * circumference;
+  return (
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', display: 'block', flexShrink: 0 }}>
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="transparent"
+        stroke="rgba(255, 255, 255, 0.2)"
+        strokeWidth={strokeWidth}
+      />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="transparent"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeDasharray={circumference}
+        strokeDashoffset={strokeDashoffset}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+};
+
+// Mascot Eyes for Quiet Standby Notch Mode (Glowing Pill Eyes + Purple-Blue Ambient Glow)
+const MascotEyes = () => {
+  const [isBlink, setIsBlink] = useState(false);
+  const [lookOffset, setLookOffset] = useState(0);
+
+  useEffect(() => {
+    // Natural blinking interval
+    const blinkInterval = setInterval(() => {
+      setIsBlink(true);
+      setTimeout(() => setIsBlink(false), 140);
+    }, 3200 + Math.random() * 2500);
+
+    // Natural eye look left/right interval
+    const lookInterval = setInterval(() => {
+      const directions = [-3, 0, 3, 0];
+      const nextDir = directions[Math.floor(Math.random() * directions.length)];
+      setLookOffset(nextDir);
+    }, 2400);
+
+    return () => {
+      clearInterval(blinkInterval);
+      clearInterval(lookInterval);
+    };
+  }, []);
+
+  return (
+    <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      {/* Soft ambient purple-blue radial glow at bottom edge of the notch */}
+      <div className="mascot-ambient-glow" />
+      <div
+        className="mascot-pill-eyes"
+        style={{
+          transform: `translateX(${lookOffset}px)`,
+          transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)'
+        }}
+        title="Quiet Standby Mascot"
+      >
+        <div className={`mascot-eye-pill ${isBlink ? "blink" : ""}`} />
+        <div className={`mascot-eye-pill ${isBlink ? "blink" : ""}`} />
+      </div>
+    </div>
+  );
+};
+
+// Top Segmented Pagination Bar for Expanded Card
+const TopSegmentedBar = ({ totalTabs = 1, activeIndex = 0, onSelectTab }) => {
+  return (
+    <div className="notch-segmented-bar">
+      {Array.from({ length: totalTabs }).map((_, idx) => (
+        <div
+          key={idx}
+          className={`notch-segment ${idx === activeIndex ? "active" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelectTab?.(idx);
+          }}
+          style={{ cursor: 'pointer' }}
+        />
+      ))}
+    </div>
+  );
+};
+
+// Unified Header Row (24px) for Expanded Notch Card
+const UnifiedHeader = ({ title = "", isPlaying = false, percent = null, charging = false, formattedTime = "" }) => {
+  const fullDateTime = useMemo(() => {
+    try {
+      const now = new Date();
+      const weekday = now.toLocaleDateString('en-US', { weekday: 'short' });
+      const day = now.getDate();
+      const month = now.toLocaleDateString('en-US', { month: 'short' });
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      return `${weekday} ${day} ${month} ${hours}:${minutes}`;
+    } catch {
+      return formattedTime || "Quick Pill";
+    }
+  }, [formattedTime]);
+
+  return (
+    <div className="notch-header-row">
+      <div className="notch-header-title">
+        {title}
+      </div>
+      <div className="notch-header-badge">
+        <span className="notch-header-dot" />
+        <span>{fullDateTime}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        {isPlaying ? (
+          <MiniWaveform isPlaying={true} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 10, color: 'rgba(255,255,255,0.7)' }}>
+            {charging ? <Zap size={10} color="#22c55e" /> : <Battery size={10} />}
+            <span>{percent !== null ? `${percent}%` : '--'}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// Left & Right Edge Navigation Arrows
+const EdgeNavigation = ({ onPrev, onNext }) => {
+  return (
+    <>
+      <div
+        className="notch-nav-btn left"
+        onClick={(e) => {
+          e.stopPropagation();
+          onPrev?.();
+        }}
+        title="Previous Tab"
+      >
+        <ChevronLeft size={14} />
+      </div>
+      <div
+        className="notch-nav-btn right"
+        onClick={(e) => {
+          e.stopPropagation();
+          onNext?.();
+        }}
+        title="Next Tab"
+      >
+        <ChevronRight size={14} />
+      </div>
+    </>
+  );
 };
 
 const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSeek }) => {
@@ -1619,10 +1809,10 @@ export default function Island() {
           else saved.push(15);
           localStorage.setItem("tab-order", JSON.stringify(saved));
         }
-        return saved;
+        return saved.filter(id => id !== 9);
       }
     } catch {}
-    return [2, 11, 12, 13, 14, 15, 4, 5, 6, 7, 8, 10, 0, 1, 3, 9];
+    return [2, 11, 12, 13, 14, 15, 4, 5, 6, 7, 8, 10, 0, 1, 3];
   });
   const [hiddenTabs, setHiddenTabs] = useState(() => JSON.parse(localStorage.getItem("hidden-tabs") || "[6]"));
   const [defaultTabId, setDefaultTabId] = useState(() => Number(localStorage.getItem("default-tab") || 2));
@@ -1790,7 +1980,401 @@ export default function Island() {
   const [usbAlert, setUSBAlert] = useState(null);
   const usbAlertTimeout = useRef(null);
 
+  // Smart Obstruction Avoidance & System Tray Settings States
+  const [isObstructed, setIsObstructed] = useState(false);
+  const [mascotMode, setMascotMode] = useState(() => {
+    return localStorage.getItem("mascot-mode") !== "false";
+  });
+  const [minimalNotch, setMinimalNotch] = useState(() => {
+    return localStorage.getItem("minimal-notch") === "true";
+  });
+  const [privacyDotsEnabled, setPrivacyDotsEnabled] = useState(() => {
+    return localStorage.getItem("privacy-dots-enabled") === "true";
+  });
 
+  // System HUD Toast State (Caps Lock, Bluetooth, Battery, Volume)
+  const [activeHudToast, setActiveHudToast] = useState(null);
+  const hudToastTimer = useRef(null);
+
+  const triggerHudToast = useCallback((toastData) => {
+    if (!toastData || (!toastData.title && !toastData.type)) {
+      setActiveHudToast(null);
+      window.electronAPI?.invalidateWindow?.();
+      return;
+    }
+    setActiveHudToast(toastData);
+    window.electronAPI?.invalidateWindow?.();
+    if (hudToastTimer.current) clearTimeout(hudToastTimer.current);
+    hudToastTimer.current = setTimeout(() => {
+      setActiveHudToast(null);
+      window.electronAPI?.invalidateWindow?.();
+    }, 1800);
+  }, []);
+
+
+  // Audio / Bluetooth Device Connected HUD
+  useEffect(() => {
+    if (!navigator.mediaDevices?.addEventListener) return;
+    const handleDeviceChange = async () => {
+      try {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const outputs = devices.filter(d => d.kind === "audiooutput");
+        const defaultDev = outputs.find(d => d.deviceId === "default") || outputs[0];
+        const name = defaultDev?.label || "Audio Output";
+        triggerHudToast({
+          type: "bluetooth",
+          title: name,
+          subtext: "Connected • 100%"
+        });
+      } catch (_) {}
+    };
+    navigator.mediaDevices.addEventListener("devicechange", handleDeviceChange);
+    return () => navigator.mediaDevices.removeEventListener("devicechange", handleDeviceChange);
+  }, [triggerHudToast]);
+
+  // Charger Plugged / Unplugged HUD
+  const lastChargingRef = useRef(null);
+  useEffect(() => {
+    if (charging === null) return;
+    if (lastChargingRef.current !== null && lastChargingRef.current !== charging) {
+      triggerHudToast({
+        type: "battery",
+        title: charging ? "Charging" : "On Battery",
+        subtext: `${percent !== null ? percent : 80}%`,
+        state: charging ? "Charging" : "Unplugged"
+      });
+    }
+    lastChargingRef.current = charging;
+  }, [charging, percent, triggerHudToast]);
+
+  // Curated Modules States
+  // 1. Music & Synced Lyrics Toggle & LRCLIB fetching
+  const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [syncedLyrics, setSyncedLyrics] = useState(null);
+  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const lyricsCache = useRef(new Map());
+
+  useEffect(() => {
+    const title = spotifyTrack?.name;
+    const artist = spotifyTrack?.artist;
+    if (!title || !artist || title === "Unknown Title") {
+      setSyncedLyrics(null);
+      return;
+    }
+
+    const cacheKey = `${title}-${artist}`.toLowerCase();
+    if (lyricsCache.current.has(cacheKey)) {
+      setSyncedLyrics(lyricsCache.current.get(cacheKey));
+      return;
+    }
+
+    let active = true;
+    setLyricsLoading(true);
+
+    const cleanTitle = title.replace(/\(.*?\)|\[.*?\]/g, '').trim();
+    const cleanArtist = artist.split('•')[0].split(',')[0].trim();
+
+    fetch(`https://lrclib.net/api/get?track_name=${encodeURIComponent(cleanTitle)}&artist_name=${encodeURIComponent(cleanArtist)}`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (!active) return;
+        if (data?.syncedLyrics) {
+          const parsed = parseLrc(data.syncedLyrics);
+          lyricsCache.current.set(cacheKey, parsed);
+          setSyncedLyrics(parsed);
+        } else {
+          return fetch(`https://lrclib.net/api/search?track_name=${encodeURIComponent(cleanTitle)}&artist_name=${encodeURIComponent(cleanArtist)}`)
+            .then(sRes => sRes.ok ? sRes.json() : null)
+            .then(sData => {
+              if (!active) return;
+              const match = sData?.find?.(i => i.syncedLyrics);
+              if (match?.syncedLyrics) {
+                const parsed = parseLrc(match.syncedLyrics);
+                lyricsCache.current.set(cacheKey, parsed);
+                setSyncedLyrics(parsed);
+              } else {
+                setSyncedLyrics(null);
+              }
+            });
+        }
+      })
+      .catch(() => {
+        if (active) setSyncedLyrics(null);
+      })
+      .finally(() => {
+        if (active) setLyricsLoading(false);
+      });
+
+    return () => { active = false; };
+  }, [spotifyTrack?.name, spotifyTrack?.artist]);
+
+  // Notifications List View Toggle
+  const [notificationListView, setNotificationListView] = useState(false);
+
+  // 2. Pomodoro Focus Timer State
+  const [pomodoroState, setPomodoroState] = useState({
+    isRunning: false,
+    secondsLeft: 1500, // 25:00
+    totalSeconds: 1500,
+    mode: 'focus'
+  });
+
+  useEffect(() => {
+    let timer;
+    if (pomodoroState.isRunning) {
+      timer = setInterval(() => {
+        setPomodoroState(prev => {
+          if (prev.secondsLeft <= 1) {
+            playTimerAlarmSound();
+            const nextMode = prev.mode === 'focus' ? 'break' : 'focus';
+            const nextSecs = nextMode === 'focus' ? 1500 : 300;
+            return {
+              ...prev,
+              isRunning: false,
+              secondsLeft: nextSecs,
+              totalSeconds: nextSecs,
+              mode: nextMode
+            };
+          }
+          return { ...prev, secondsLeft: prev.secondsLeft - 1 };
+        });
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [pomodoroState.isRunning]);
+
+  // 3. Water Reminder (Hydration Tracker) State with Hourly Bar Chart
+  const [waterIntake, setWaterIntake] = useState(() => {
+    const saved = localStorage.getItem("water-intake");
+    return saved !== null ? Number(saved) : 1000;
+  });
+
+  const [hourlyWater, setHourlyWater] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("hourly-water") || "null");
+      if (Array.isArray(saved) && saved.length === 5) return saved;
+    } catch (_) {}
+    return [
+      { hour: "9", amount: 250 },
+      { hour: "12", amount: 300 },
+      { hour: "15", amount: 250 },
+      { hour: "18", amount: 200 },
+      { hour: "21", amount: 0 }
+    ];
+  });
+
+  const addWaterDrink = () => {
+    setWaterIntake(prev => {
+      const updated = Math.min(3000, prev + 250);
+      localStorage.setItem("water-intake", String(updated));
+      return updated;
+    });
+    setHourlyWater(prev => {
+      const nowH = new Date().getHours();
+      let slotIdx = 4;
+      if (nowH < 11) slotIdx = 0;
+      else if (nowH < 14) slotIdx = 1;
+      else if (nowH < 17) slotIdx = 2;
+      else if (nowH < 20) slotIdx = 3;
+      const updated = prev.map((item, idx) => idx === slotIdx ? { ...item, amount: Math.min(600, item.amount + 250) } : item);
+      localStorage.setItem("hourly-water", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const resetWaterDrink = () => {
+    setWaterIntake(0);
+    localStorage.setItem("water-intake", "0");
+    const fresh = [
+      { hour: "9", amount: 0 },
+      { hour: "12", amount: 0 },
+      { hour: "15", amount: 0 },
+      { hour: "18", amount: 0 },
+      { hour: "21", amount: 0 }
+    ];
+    setHourlyWater(fresh);
+    localStorage.setItem("hourly-water", JSON.stringify(fresh));
+  };
+
+  // 4. File Shelf (Temporary Drag-and-Drop Stash) State
+  const [shelfFiles, setShelfFiles] = useState(() => {
+    try {
+      const saved = localStorage.getItem("shelf-files");
+      return saved ? JSON.parse(saved) : [
+        { name: "Project-Brief.pdf", size: "1.4 MB", type: "pdf" },
+        { name: "Screenshot-Design.png", size: "820 KB", type: "img" }
+      ];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [isDragOverShelf, setIsDragOverShelf] = useState(false);
+
+  // Auto-Expand Notch on Dragging Files Near Top Screen & webUtils Path Resolution
+  useEffect(() => {
+    const handleDragEnter = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      setIsDragOverShelf(true);
+      updateMouseIgnore(false, true);
+    };
+
+    const handleDragOver = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+      setIsDragOverShelf(true);
+      updateMouseIgnore(false, true);
+      if (e.clientY < 90) {
+        if (mode !== "large") {
+          setMode("large");
+          setCurrentTab(13); // Auto-navigate to Shelf tab
+        }
+      }
+    };
+
+    const handleDragLeave = (e) => {
+      if (e.clientY >= 120 || e.clientX <= 0 || e.clientX >= window.innerWidth) {
+        setIsDragOverShelf(false);
+      }
+    };
+
+    const handleDrop = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setIsDragOverShelf(false);
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        const newFiles = Array.from(e.dataTransfer.files).map(f => {
+          const resolvedPath = window.electronAPI?.getFilePath?.(f) || f.path || "";
+          return {
+            name: f.name,
+            size: formatBytes(f.size),
+            path: resolvedPath,
+            type: f.name.split('.').pop()?.toLowerCase() || 'file'
+          };
+        });
+        setShelfFiles(prev => {
+          const updated = [...newFiles, ...prev];
+          localStorage.setItem("shelf-files", JSON.stringify(updated.slice(0, 20)));
+          return updated.slice(0, 20);
+        });
+      }
+    };
+
+    window.addEventListener("dragenter", handleDragEnter);
+    window.addEventListener("dragover", handleDragOver);
+    window.addEventListener("dragleave", handleDragLeave);
+    window.addEventListener("drop", handleDrop);
+    return () => {
+      window.removeEventListener("dragenter", handleDragEnter);
+      window.removeEventListener("dragover", handleDragOver);
+      window.removeEventListener("dragleave", handleDragLeave);
+      window.removeEventListener("drop", handleDrop);
+    };
+  }, [mode, updateMouseIgnore]);
+
+  // Sync Obstruction, Mascot, and Minimal Notch from Preload/Main
+  useEffect(() => {
+    if (!window.electronAPI?.onObstructionStatus) return;
+    const unsub = window.electronAPI.onObstructionStatus((data) => {
+      setIsObstructed(Boolean(data?.isObstructed));
+    });
+    return () => unsub?.();
+  }, []);
+
+  useEffect(() => {
+    if (window.electronAPI?.getMascotMode) {
+      window.electronAPI.getMascotMode().then(val => {
+        if (typeof val === "boolean") setMascotMode(val);
+      }).catch(() => {});
+    }
+    if (window.electronAPI?.onMascotModeChange) {
+      const unsub = window.electronAPI.onMascotModeChange((val) => {
+        setMascotMode(val);
+        localStorage.setItem("mascot-mode", String(val));
+      });
+      return () => unsub?.();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (window.electronAPI?.getMinimalNotch) {
+      window.electronAPI.getMinimalNotch().then(val => {
+        if (typeof val === "boolean") setMinimalNotch(val);
+      }).catch(() => {});
+    }
+    if (window.electronAPI?.onMinimalNotchChange) {
+      const unsub = window.electronAPI.onMinimalNotchChange((val) => {
+        setMinimalNotch(val);
+        localStorage.setItem("minimal-notch", String(val));
+      });
+      return () => unsub?.();
+    }
+  }, []);
+
+  // Synchronize Hidden Tabs from Settings Window / Main Process
+  useEffect(() => {
+    if (window.electronAPI?.getHiddenTabs) {
+      window.electronAPI.getHiddenTabs().then(val => {
+        if (Array.isArray(val)) setHiddenTabs(val);
+      }).catch(() => {});
+    }
+    if (window.electronAPI?.onHiddenTabsChange) {
+      const unsub = window.electronAPI.onHiddenTabsChange((val) => {
+        if (Array.isArray(val)) {
+          setHiddenTabs(val);
+          localStorage.setItem("hidden-tabs", JSON.stringify(val));
+        }
+      });
+      return () => unsub?.();
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (e.key === "hidden-tabs" && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) setHiddenTabs(parsed);
+        } catch (_) {}
+      }
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
+
+  // Synchronize Privacy Dots preference
+  useEffect(() => {
+    if (window.electronAPI?.getPrivacyDots) {
+      window.electronAPI.getPrivacyDots().then(val => {
+        if (typeof val === "boolean") setPrivacyDotsEnabled(val);
+      }).catch(() => {});
+    }
+    const unsubs = [];
+    if (window.electronAPI?.onPrivacyDotsChange) {
+      const unsub = window.electronAPI.onPrivacyDotsChange((val) => {
+        setPrivacyDotsEnabled(Boolean(val));
+        localStorage.setItem("privacy-dots-enabled", String(val));
+      });
+      unsubs.push(unsub);
+    }
+    const handleStorage = (e) => {
+      if (e.key === "privacy-dots-enabled") {
+        setPrivacyDotsEnabled(e.newValue === "true");
+      }
+    };
+    const handleCustom = () => {
+      setPrivacyDotsEnabled(localStorage.getItem("privacy-dots-enabled") === "true");
+    };
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("privacy-dots-changed", handleCustom);
+    return () => {
+      unsubs.forEach(u => u?.());
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("privacy-dots-changed", handleCustom);
+    };
+  }, []);
 
   // Live Notification Alert State
   const [notificationAlert, setNotificationAlert] = useState(null);
@@ -2416,6 +3000,7 @@ export default function Island() {
   const albumRef = useRef(null);
   const isDraggingRef = useRef(false);
   const mouseLeaveTimer = useRef(null);
+  const hoverIntentTimer = useRef(null);
 
   const updateDragging = (val) => {
     isDraggingRef.current = val;
@@ -2444,27 +3029,34 @@ export default function Island() {
   });
 
   const tabVariants = {
-    enter: (direction) => ({
+    enter: () => ({
       opacity: 0,
-      x: direction > 0 ? 10 : direction < 0 ? -10 : 0,
-      scale: 0.985
+      scale: 0.92,
+      filter: "blur(8px)",
+      x: "-50%",
+      transition: {
+        duration: 0.26,
+        ease: [0.22, 1, 0.36, 1]
+      }
     }),
     center: {
       opacity: 1,
-      x: 0,
       scale: 1,
+      filter: "blur(0px)",
+      x: "-50%",
       transition: {
-        duration: 0.16,
-        ease: [0.16, 1, 0.3, 1]
+        duration: 0.26,
+        ease: [0.22, 1, 0.36, 1]
       }
     },
-    exit: (direction) => ({
+    exit: () => ({
       opacity: 0,
-      x: direction < 0 ? 10 : direction > 0 ? -10 : 0,
-      scale: 0.985,
+      scale: 0.88,
+      filter: "blur(6px)",
+      x: "-50%",
       transition: {
-        duration: 0.10,
-        ease: [0.16, 1, 0.3, 1]
+        duration: 0.14,
+        ease: "easeOut"
       }
     })
   };
@@ -2582,7 +3174,10 @@ export default function Island() {
       target?.closest?.("button") ||
       target?.closest?.(".radio-label") ||
       target?.closest?.(".clipboard-row") ||
-      target?.closest?.(".notification-card")
+      target?.closest?.(".notification-card") ||
+      target?.closest?.(".notification-item") ||
+      target?.closest?.(".notification-summary") ||
+      target?.closest?.("[data-no-toggle]")
     );
   };
 
@@ -2642,27 +3237,45 @@ export default function Island() {
   };
 
   const isPlaying = spotifyTrack?.state === 'playing';
-  const nowPlayingWidth = isHovered ? 135 : 110;
-  const isNotificationBanner = Boolean(notificationAlert && mode !== "large");
-  const hasActiveProgress = Boolean(progressSnapshot?.compactDisplay && mode !== "large" && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert);
-  const width = isNotificationBanner
-    ? 300
+  const isHudActive = Boolean(
+    (activeHudToast && (activeHudToast.title || activeHudToast.type || activeHudToast.subtext)) ||
+    (notificationAlert && mode !== "large" && (notificationAlert.title || notificationAlert.message || notificationAlert.appName || notificationAlert.body))
+  );
+  const isMicroMode = !isHovered && mode !== "large" && !isHudActive && (isObstructed || minimalNotch);
+
+  // Multi-Stage Spring Shell Dimensions (Nusa Motion Reference Engine)
+  // 1. micro-strip: 96px x 5px (radius 6px)
+  // 2. idle-clock: 154px x 32px (radius 16px)
+  // 3. idle-mascot: 140px x 32px (radius 16px)
+  // 4. toast-hud: 310px x 62px (radius 24px)
+  // 5. expanded-standard: 430px x 150px (radius 28px)
+  // 6. expanded-wide: 510px x 150px (radius 28px)
+  const isLyricsWide = mode === "large" && currentTab === 3 && lyricsOpen;
+  const isIdleMascot = mode !== "large" && !isHudActive && !isMicroMode && Boolean(mascotMode && !isPlaying && timerSeconds === 0 && !pomodoroState.isRunning);
+
+  const width = isHudActive
+    ? 310
     : mode === "large"
-      ? (currentTab === 14 ? 885 : (currentTab === 9 ? 620 : (currentTab === 12 || currentTab === 13 || currentTab === 15 ? 590 : (currentTab === 2 || currentTab === 11 ? 560 : 540))))
-      : hasActiveProgress
-        ? 285
-        : (mode === "quick" && isPlaying && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert)
-          ? nowPlayingWidth
-          : (mode === "quick" || alert || chargingAlert || bluetoothAlert || cameraAlert || microphoneAlert || volumeAlert || keyLockAlert || usbAlert || notificationAlert)
-            ? 260
-            : isPlaying
-              ? nowPlayingWidth
-              : 170;
-  const height = isNotificationBanner
-    ? 46
+      ? (isLyricsWide ? 510 : 430)
+      : isMicroMode
+        ? 96
+        : (isIdleMascot ? 140 : 154);
+
+  const height = isHudActive
+    ? 62
     : mode === "large"
-      ? (currentTab === 14 ? 278 : (currentTab === 9 ? 220 : (currentTab === 15 ? 185 : (currentTab === 12 || currentTab === 13 ? 175 : 145))))
-      : 40;
+      ? 150
+      : isMicroMode
+        ? 5
+        : 32;
+
+  const cornerRadius = isMicroMode
+    ? 6
+    : isHudActive
+      ? 24
+      : mode === "large"
+        ? 28
+        : 16;
 
   useEffect(() => {
     if (window.electronAPI?.platform === 'win32') {
@@ -3420,27 +4033,28 @@ export default function Island() {
     return () => clearInterval(interval);
   }, [mode, currentTab]);
 
-  // Key Lock Alert Listener (push events from main process)
+  // Key Lock Alert Listener (NumLock only, CapsLock completely disabled)
   useEffect(() => {
     if (!window.electronAPI?.onKeyLockChange) return;
     const cleanup = window.electronAPI.onKeyLockChange((data) => {
+      if (!data || data.key === 'CapsLock') return;
       setKeyLockAlert(data);
-      setMode("quick");
+      triggerHudToast({
+        type: 'caps',
+        title: 'Num Lock',
+        state: data.state ? 'On' : 'Off',
+        icon: '#'
+      });
       clearTimeout(keyLockAlertTimeout.current);
       keyLockAlertTimeout.current = setTimeout(() => {
         setKeyLockAlert(null);
-        if (!isHovered) {
-          if (standbyBorderEnabled) setMode("quick");
-          else if (largeStandbyEnabled) setMode("large");
-          else setMode("still");
-        }
-      }, 1500);
+      }, 2000);
     });
     return () => {
       cleanup?.();
       clearTimeout(keyLockAlertTimeout.current);
     };
-  }, [isHovered, standbyBorderEnabled, largeStandbyEnabled]);
+  }, [triggerHudToast]);
 
   // USB Device Alert Listener (push events from main process)
   useEffect(() => {
@@ -3503,6 +4117,7 @@ export default function Island() {
         };
         setNotificationAlert(callAlert);
         setMode("quick");
+        window.electronAPI?.invalidateWindow?.();
         return;
       }
 
@@ -3528,10 +4143,12 @@ export default function Island() {
             callType: latest.callType
           });
           setMode("quick");
+          window.electronAPI?.invalidateWindow?.();
           clearTimeout(notificationAlertTimeout.current);
           notificationAlertTimeout.current = setTimeout(() => {
             setNotificationAlert(null);
             setMode("still");
+            window.electronAPI?.invalidateWindow?.();
           }, 4500);
         }
       }
@@ -3586,7 +4203,7 @@ export default function Island() {
         const ok = await window.electronAPI.dismissNotification(notificationId);
         res = { success: ok, actionType };
       } else if (actionType === 'open' && window.electronAPI?.focusNotificationApp) {
-        const ok = await window.electronAPI.focusNotificationApp(params.appId || notificationId);
+        const ok = await window.electronAPI.focusNotificationApp(params.appId || '', params.appName || '');
         res = { success: ok, actionType };
       }
 
@@ -3712,32 +4329,32 @@ export default function Island() {
       }, 3000);
     };
 
-    if (cameraInUse && !captureAlertDisplayed.current.camera) {
+    if (privacyDotsEnabled && cameraInUse && !captureAlertDisplayed.current.camera) {
       captureAlertQueue.current.push("camera");
       captureAlertDisplayed.current.camera = true;
     }
-    if (!cameraInUse) {
+    if (!cameraInUse || !privacyDotsEnabled) {
       captureAlertDisplayed.current.camera = false;
     }
 
-    if (microphoneInUse && !captureAlertDisplayed.current.microphone) {
+    if (privacyDotsEnabled && microphoneInUse && !captureAlertDisplayed.current.microphone) {
       captureAlertQueue.current.push("microphone");
       captureAlertDisplayed.current.microphone = true;
     }
-    if (!microphoneInUse) {
+    if (!microphoneInUse || !privacyDotsEnabled) {
       captureAlertDisplayed.current.microphone = false;
     }
 
     captureAlertQueue.current = captureAlertQueue.current.filter((item) => {
-      if (item === "camera" && !cameraInUse) return false;
-      if (item === "microphone" && !microphoneInUse) return false;
+      if (item === "camera" && (!cameraInUse || !privacyDotsEnabled)) return false;
+      if (item === "microphone" && (!microphoneInUse || !privacyDotsEnabled)) return false;
       return true;
     });
 
     processCaptureQueue();
 
     return () => {
-      if (!cameraInUse && !microphoneInUse) {
+      if ((!cameraInUse && !microphoneInUse) || !privacyDotsEnabled) {
         if (captureAlertTimer.current) {
           clearTimeout(captureAlertTimer.current);
           captureAlertTimer.current = null;
@@ -3745,7 +4362,7 @@ export default function Island() {
         captureAlertQueue.current = [];
       }
     };
-  }, [cameraInUse, microphoneInUse]);
+  }, [cameraInUse, microphoneInUse, privacyDotsEnabled]);
 
   // Mouse Safety & Renderer Error Logging Effect
   useEffect(() => {
@@ -3825,11 +4442,22 @@ export default function Island() {
 
   const [mediaPosition, setMediaPosition] = useState(0);
   const lastMediaActionRef = useRef(0);
+  const lastTrackNameRef = useRef("");
 
   // Sync position from spotifyTrack when track info updates from backend
   useEffect(() => {
-    if (spotifyTrack && spotifyTrack.position !== undefined) {
-      setMediaPosition(spotifyTrack.position);
+    if (!spotifyTrack) return;
+    const trackChanged = spotifyTrack.name !== lastTrackNameRef.current;
+    if (trackChanged) {
+      lastTrackNameRef.current = spotifyTrack.name || "";
+      setMediaPosition(Number(spotifyTrack.position) || 0);
+    } else if (typeof spotifyTrack.position === "number" && spotifyTrack.position > 0) {
+      setMediaPosition(prev => {
+        if (Math.abs(prev - spotifyTrack.position) > 3) {
+          return spotifyTrack.position;
+        }
+        return prev;
+      });
     }
   }, [spotifyTrack?.name, spotifyTrack?.artist, spotifyTrack?.position]);
 
@@ -3838,8 +4466,8 @@ export default function Island() {
     if (spotifyTrack?.state !== 'playing') return;
     const timer = setInterval(() => {
       setMediaPosition(prev => {
-        const dur = spotifyTrack?.duration || 0;
-        return (dur > 0 && prev >= dur) ? dur : prev + 0.5;
+        const dur = (spotifyTrack?.duration && spotifyTrack.duration > 0) ? spotifyTrack.duration : 210;
+        return (dur > 0 && prev >= dur) ? 0 : prev + 0.5;
       });
     }, 500);
     return () => clearInterval(timer);
@@ -3907,10 +4535,40 @@ export default function Island() {
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (recordingTabId !== null) return;
+      if (e.key === "Escape") {
+        if (hoverIntentTimer.current) {
+          clearTimeout(hoverIntentTimer.current);
+          hoverIntentTimer.current = null;
+        }
+        if (mouseLeaveTimer.current) {
+          clearTimeout(mouseLeaveTimer.current);
+          mouseLeaveTimer.current = null;
+        }
+        const activeTag = document.activeElement?.tagName;
+        if (activeTag === "INPUT" || activeTag === "TEXTAREA") {
+          document.activeElement.blur();
+        }
+        setHoverState(false);
+        setMode("still");
+        updateMouseIgnore(true, true);
+        return;
+      }
       if (e.key === "ArrowRight") {
         moveTab(1);
       } else if (e.key === "ArrowLeft") {
         moveTab(-1);
+      } else if (e.altKey && e.shiftKey && (e.key === "M" || e.key === "m")) {
+        e.preventDefault();
+        if (window.electronAPI?.toggleMinimalNotch) {
+          window.electronAPI.toggleMinimalNotch();
+        } else {
+          setMinimalNotch(prev => {
+            const next = !prev;
+            localStorage.setItem("minimal-notch", String(next));
+            return next;
+          });
+        }
+        return;
       } else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key && e.key !== "Alt" && e.key !== "Shift") {
         const keyChar = e.key.toUpperCase();
         const combo = `Alt+${keyChar}`;
@@ -3929,7 +4587,35 @@ export default function Island() {
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [moveTab, visibleTabs, currentTabId, tabShortcuts, recordingTabId]);
+  }, [moveTab, visibleTabs, currentTabId, tabShortcuts, recordingTabId, updateMouseIgnore, setHoverState]);
+
+  // Smart auto-collapse on outside click
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      const islandEl = document.getElementById("Island");
+      if (islandEl && !islandEl.contains(e.target)) {
+        if (hoverIntentTimer.current) {
+          clearTimeout(hoverIntentTimer.current);
+          hoverIntentTimer.current = null;
+        }
+        if (mouseLeaveTimer.current) {
+          clearTimeout(mouseLeaveTimer.current);
+          mouseLeaveTimer.current = null;
+        }
+        const activeTag = document.activeElement?.tagName;
+        if (activeTag === "INPUT" || activeTag === "TEXTAREA") {
+          document.activeElement.blur();
+        }
+        setHoverState(false);
+        setMode("still");
+        updateMouseIgnore(true, true);
+      }
+    };
+    window.addEventListener("pointerdown", handleOutsideClick);
+    return () => {
+      window.removeEventListener("pointerdown", handleOutsideClick);
+    };
+  }, [updateMouseIgnore, setHoverState]);
 
   // Ctrl+Hover Click-Through keyboard listeners
   useEffect(() => {
@@ -4031,23 +4717,23 @@ export default function Island() {
   const isFree = positionMode === "free";
   const sideStyles = useMemo(() => {
     switch (positionMode) {
-      case 'top-left': return { left: '15px', top: '6px', x: '0%' };
-      case 'top-right': return { left: 'calc(100% - 15px)', top: '6px', x: '-100%' };
+      case 'top-left': return { left: '15px', top: '0px', x: '0%' };
+      case 'top-right': return { left: 'calc(100% - 15px)', top: '0px', x: '-100%' };
       case 'bottom-left': return { left: '15px', top: 'auto', bottom: '45px', x: '0%' };
       case 'bottom-right': return { left: 'calc(100% - 15px)', top: 'auto', bottom: '45px', x: '-100%' };
-      case 'top-center': return { left: '49.8%', top: '0px', x: '-50%' };
-      case 'bottom-center': return { left: '49.8%', top: 'auto', bottom: '45px', x: '-50%' };
-      default: return { left: `${islandX}%`, top: `${islandY}px`, x: '-50%' };
+      case 'top-center': return { left: '50%', top: '0px', x: '-50%' };
+      case 'bottom-center': return { left: '50%', top: 'auto', bottom: '45px', x: '-50%' };
+      default: return { left: `${islandX}%`, top: '0px', x: '-50%' };
     }
-  }, [positionMode, islandX, islandY]);
+  }, [positionMode, islandX]);
 
-  const isAtTop = (sideStyles.top === '0px' || (positionMode === 'free' && islandY === 0)) && theme !== 'win95';
+  const isAtTop = theme !== 'win95';
   const islandBorderStroke = theme === "win95"
     ? "none"
     : islandBorderEnabled
-      ? (cameraInUse
+      ? ((privacyDotsEnabled && cameraInUse)
           ? "rgba(255, 215, 0, 0.8)"
-          : microphoneInUse
+          : (privacyDotsEnabled && microphoneInUse)
             ? "rgba(255, 154, 0, 0.8)"
             : (charging || chargingAlert)
               ? "rgba(111, 255, 123, 0.5)"
@@ -4063,6 +4749,7 @@ export default function Island() {
   return (
     <motion.div
       id="Island"
+      className="notch-shell"
       onMouseEnter={(e) => {
         if (mouseLeaveTimer.current) {
           clearTimeout(mouseLeaveTimer.current);
@@ -4075,18 +4762,23 @@ export default function Island() {
           updateMouseIgnore(true, true);
         } else {
           setCtrlState(false);
-          // If a temporary notification alert is currently active, DO NOT force large mode!
-          // Keep the notification banner visible and pause the auto-dismiss timer so user can read or click it.
+          updateMouseIgnore(false, true);
+
+          // If a temporary notification alert is currently active, keep banner visible
           if (notificationAlert) {
             if (notificationAlertTimeout.current) {
               clearTimeout(notificationAlertTimeout.current);
               notificationAlertTimeout.current = null;
             }
-            updateMouseIgnore(false, true);
             return;
           }
+
+          // Immediately expand on hover without intermediate blank delay state
+          if (hoverIntentTimer.current) {
+            clearTimeout(hoverIntentTimer.current);
+            hoverIntentTimer.current = null;
+          }
           setMode("large");
-          updateMouseIgnore(false, true);
         }
       }}
       onMouseMove={(e) => {
@@ -4105,14 +4797,22 @@ export default function Island() {
           setCtrlState(false);
         }
         if (isDraggingRef.current) return;
+
+        // Cancel pending hover intent if mouse leaves before delay
+        if (hoverIntentTimer.current) {
+          clearTimeout(hoverIntentTimer.current);
+          hoverIntentTimer.current = null;
+        }
+
         if (mouseLeaveTimer.current) clearTimeout(mouseLeaveTimer.current);
         mouseLeaveTimer.current = setTimeout(() => {
           mouseLeaveTimer.current = null;
-          setHoverState(false);
-          updateMouseIgnore(true, true);
 
           const activeTag = document.activeElement?.tagName;
-          if (activeTag === "INPUT" || activeTag === "TEXTAREA") return;
+          if (activeTag === "INPUT" || activeTag === "TEXTAREA" || isDragOverShelf) return;
+
+          setHoverState(false);
+          updateMouseIgnore(true, true);
 
           // If a notification alert is still active, resume the auto-dismiss countdown
           if (notificationAlert) {
@@ -4126,7 +4826,7 @@ export default function Island() {
               } else {
                 setMode("still");
               }
-            }, 3000);
+            }, 2000);
             return;
           }
 
@@ -4157,7 +4857,13 @@ export default function Island() {
           document.activeElement.blur();
         }
 
-        setMode(prev => prev === "large" ? "quick" : "large");
+        // Direct click triggers immediate expand without waiting for hover delay
+        if (hoverIntentTimer.current) {
+          clearTimeout(hoverIntentTimer.current);
+          hoverIntentTimer.current = null;
+        }
+
+        setMode(prev => prev === "large" ? "still" : "large");
         updateMouseIgnore(false, true);
       }}
       onWheel={handleWheelSwipe}
@@ -4167,49 +4873,30 @@ export default function Island() {
       initial={{
         x: sideStyles.x,
         left: sideStyles.left,
-        top: sideStyles.top || 'auto',
+        top: sideStyles.top || '0px',
         bottom: sideStyles.bottom || 'auto',
         borderTopLeftRadius: 0,
         borderTopRightRadius: 0,
-        borderBottomLeftRadius: 20,
-        borderBottomRightRadius: 20,
+        borderBottomLeftRadius: 22,
+        borderBottomRightRadius: 22,
       }}
       animate={{
         width: `${width}px`,
         height: `${height}px`,
         left: sideStyles.left,
-        top: sideStyles.top || 'auto',
+        top: sideStyles.top || '0px',
         bottom: sideStyles.bottom || 'auto',
         backgroundColor: bgColor || "#000000",
         color: textColor || "#FFFFFF",
-        scale: 1,
-        opacity: (ctrlHeld && isHovered)
-          ? 0.15
-          : (mode === "still" && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled) && !isPlaying && !showPausedQuickView && !isTimerRunning && timerSeconds === 0 && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !keyLockAlert && !usbAlert && !notificationAlert)
-            ? 0
-            : 1,
+        opacity: (ctrlHeld && isHovered) ? 0.15 : 1,
         x: sideStyles.x,
         borderTopLeftRadius: 0,
         borderTopRightRadius: 0,
-        borderBottomLeftRadius:
-          mode === "large" && theme === "win95"
-            ? 0
-            : mode === "large"
-              ? 26
-              : theme === "win95"
-                ? 0
-                : 20,
-        borderBottomRightRadius:
-          mode === "large" && theme === "win95"
-            ? 0
-            : mode === "large"
-              ? 26
-              : theme === "win95"
-                ? 0
-                : 20,
-        boxShadow: isHovered
-          ? "0 16px 36px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.2)"
-          : "0 8px 24px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.18)",
+        borderBottomLeftRadius: cornerRadius,
+        borderBottomRightRadius: cornerRadius,
+        boxShadow: (mode === "large" || isHudActive)
+          ? "inset 0 -12px 24px -10px rgba(100, 130, 255, 0.18), inset 0 -1px 0 rgba(255, 255, 255, 0.12), 0 8px 24px rgba(0, 0, 0, 0.6)"
+          : "inset 0 -1px 0 rgba(255, 255, 255, 0.08), 0 8px 24px rgba(0, 0, 0, 0.6)",
       }}
       onAnimationStart={() => {
         setIsTransitioning(true);
@@ -4218,10 +4905,11 @@ export default function Island() {
         setIsTransitioning(false);
       }}
       transition={{
-        type: "spring",
-        stiffness: 380,
-        damping: 35,
-        mass: 0.6,
+        width: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
+        height: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
+        borderBottomLeftRadius: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
+        borderBottomRightRadius: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
+        boxShadow: { duration: 0.38, ease: [0.16, 1, 0.3, 1] },
         x: { duration: 0.15 }
       }}
       style={{
@@ -4231,13 +4919,13 @@ export default function Island() {
         backgroundRepeat: "no-repeat",
         backgroundPosition: "center",
         backgroundSize: "cover",
-        justifyContent: (mode === "large" && currentTab === 3) ? "flex-start" : "center",
+        justifyContent: "center",
         overflow: "visible",
         fontFamily: theme === "win95" ? "w95" : "OpenRunde",
         borderTopLeftRadius: 0,
         borderTopRightRadius: 0,
-        border: theme === "win95" ? "2px solid rgb(254, 254, 254)" : islandBorderStroke !== "none" ? `1px solid ${islandBorderStroke}` : "none",
-        borderTop: (isAtTop || islandBorderStroke === "none") ? "none" : undefined,
+        border: theme === "win95" ? "2px solid rgb(254, 254, 254)" : islandBorderEnabled ? "1px solid rgba(255, 255, 255, 0.08)" : "none",
+        borderTop: "none",
         borderColor:
           theme === "win95"
             ? "#FFFFFF #808080 #808080 #FFFFFF"
@@ -4249,64 +4937,6 @@ export default function Island() {
         pointerEvents: isTransitioning ? 'auto' : (ctrlHeld && isHovered) ? 'none' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled)) ? 'none' : 'auto'
       }}
     >
-      {/* Dynamic Island Notch Ear Fillets (Concave upper corners) */}
-      {isAtTop && (
-        <>
-          {/* Left Notch Ear */}
-          <svg
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: -12,
-              width: 13,
-              height: 12,
-              pointerEvents: 'none',
-              zIndex: 999
-            }}
-            viewBox="0 0 13 12"
-          >
-            <path
-              d="M 0,0 A 12,12 0 0,1 12,12 H 13 V 0 Z"
-              fill={bgColor || "#000000"}
-            />
-            {islandBorderStroke !== "none" && (
-              <path
-                d="M 0,0 A 12,12 0 0,1 12,12"
-                fill="none"
-                stroke={islandBorderStroke}
-                strokeWidth="1"
-              />
-            )}
-          </svg>
-
-          {/* Right Notch Ear */}
-          <svg
-            style={{
-              position: 'absolute',
-              top: 0,
-              right: -12,
-              width: 13,
-              height: 12,
-              pointerEvents: 'none',
-              zIndex: 999
-            }}
-            viewBox="0 0 13 12"
-          >
-            <path
-              d="M 0,0 V 12 H 1 A 12,12 0 0,1 13,0 Z"
-              fill={bgColor || "#000000"}
-            />
-            {islandBorderStroke !== "none" && (
-              <path
-                d="M 1,12 A 12,12 0 0,1 13,0"
-                fill="none"
-                stroke={islandBorderStroke}
-                strokeWidth="1"
-              />
-            )}
-          </svg>
-        </>
-      )}
 
       {/* Depleting Orange Border Stroke & Synchronized Glow for Active Timer */}
       {(isTimerRunning || timerSeconds > 0) && (() => {
@@ -4378,7 +5008,7 @@ export default function Island() {
         }}
       >
         {/* Privacy Dots — persistent indicators for active camera/mic */}
-        {mode !== "large" && (cameraInUse || microphoneInUse) && (
+        {privacyDotsEnabled && mode !== "large" && (cameraInUse || microphoneInUse) && (
           <div style={{
             position: 'absolute',
             right: 8,
@@ -4426,4464 +5056,1732 @@ export default function Island() {
           </div>
         )}
 
-        {/*Quickview*/}
-        {mode !== "large" && (mode === "quick" || (mode === "still" && showInfoWhenIdleEnabled) || (mode === "still" && (isPlaying || showPausedQuickView || isTimerRunning || timerSeconds > 0)) || alert || chargingAlert || bluetoothAlert || cameraAlert || microphoneAlert || keyLockAlert || usbAlert || notificationAlert) ? (
-          <AnimatePresence mode="wait">
-            {notificationAlert && !keyLockAlert && !usbAlert ? (
-              <motion.div
-                key={`notif-alert-${notificationAlert.id}`}
-                initial={{ opacity: 0, scale: 0.99 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.99 }}
-                transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  width: '100%',
-                  padding: '0 12px 0 14px',
-                  gap: 8,
-                  boxSizing: 'border-box',
-                  overflow: 'hidden',
-                  cursor: 'pointer'
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleExecuteAction(notificationAlert.id, 'open', { appId: notificationAlert.appId });
-                  setNotificationAlert(null);
-                  if (notificationAlertTimeout.current) {
-                    clearTimeout(notificationAlertTimeout.current);
-                  }
-                  if (standbyBorderEnabled) {
-                    setMode("quick");
-                  } else if (largeStandbyEnabled) {
-                    setMode("large");
-                  } else {
-                    setMode("still");
-                  }
-                }}
-              >
-                {notificationAlert.isCall ? (
-                  <div className="notification-call-pulsing-icon" style={{ width: 26, height: 26 }}>
-                    <PhoneIncoming size={14} color="#ffffff" />
-                  </div>
-                ) : notificationAlert.icon ? (
-                  <img
-                    src={notificationAlert.icon}
-                    alt=""
-                    style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-                  />
-                ) : (
-                  <div style={{
-                    width: 24,
-                    height: 24,
-                    borderRadius: '50%',
-                    background: notificationAlert.appName?.toLowerCase().includes('whatsapp')
-                      ? 'linear-gradient(135deg, #25D366, #128C7E)'
-                      : notificationAlert.appName?.toLowerCase().includes('spotify')
-                        ? '#1db954'
-                        : notificationAlert.appName?.toLowerCase().includes('discord')
-                          ? '#5865F2'
-                          : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: '#ffffff',
-                    flexShrink: 0,
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)'
-                  }}>
-                    {notificationAlert.appName?.[0]?.toUpperCase() || <Bell size={12} color="#fff" />}
-                  </div>
-                )}
-                <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, gap: 1 }}>
-                  <span style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    opacity: notificationAlert.isCall ? 0.9 : 0.5,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.04em',
-                    color: notificationAlert.isCall ? '#25d366' : textColor,
-                    lineHeight: 1
-                  }}>
-                    {notificationAlert.isCall ? `Incoming ${notificationAlert.callType || 'Voice'} Call` : notificationAlert.appName}
-                  </span>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: textColor, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>
-                    {notificationAlert.title || notificationAlert.body}
-                  </span>
-                </div>
+        {/* NON-LARGE SIZE STATES: Micro (96x5), HUD Toast (260x40), Normal Idle (128x26) */}
+        {/* NON-LARGE SIZE STATES: Micro (96x5), HUD Toast (310x62), Mascot (140x32), Idle Clock (154x32) */}
+        {mode !== "large" && (
+          <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
+            {isHudActive ? (() => {
+              const toastTitle = activeHudToast?.title || notificationAlert?.title || notificationAlert?.appName || "System Alert";
+              const toastSubtext = activeHudToast?.subtext || notificationAlert?.message || notificationAlert?.body || "";
+              const toastType = activeHudToast?.type || (notificationAlert ? "notif" : "system");
+              const isBluetoothToast = toastType === 'bluetooth' || toastTitle.toLowerCase().includes('buds') || toastTitle.toLowerCase().includes('headphone') || toastTitle.toLowerCase().includes('airbuds');
+              const isChargingToast = toastType === 'battery' || toastTitle.toLowerCase().includes('charg') || activeHudToast?.state === 'Charging';
+              const batteryPct = percent || 70;
 
-                {/* Quick Actions */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                  {notificationAlert.isCall ? (
-                    <motion.button
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleExecuteAction(notificationAlert.id, 'open', { appId: notificationAlert.appId });
-                        setNotificationAlert(null);
-                      }}
-                      style={{
-                        padding: '3px 8px',
-                        borderRadius: 12,
-                        background: '#25d366',
-                        border: 'none',
-                        color: '#ffffff',
-                        fontSize: 10,
-                        fontWeight: 700,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 3,
-                        cursor: 'pointer'
-                      }}
-                      title="Open and Answer Call"
-                    >
-                      <Phone size={10} /> Answer
-                    </motion.button>
-                  ) : (
-                    <motion.button
-                      whileHover={{ scale: 1.1, backgroundColor: 'rgba(255, 255, 255, 0.16)' }}
-                      whileTap={{ scale: 0.9 }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSnooze(notificationAlert.id, 5);
-                        setNotificationAlert(null);
-                        if (notificationAlertTimeout.current) clearTimeout(notificationAlertTimeout.current);
-                      }}
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: '50%',
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: 'none',
-                        color: textColor,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        cursor: 'pointer',
-                        padding: 0,
-                        opacity: 0.7
-                      }}
-                      title="Snooze for 5 minutes"
-                    >
-                      <Clock size={11} strokeWidth={2} />
-                    </motion.button>
-                  )}
-                  <motion.button
-                    whileHover={{ scale: 1.1, backgroundColor: 'rgba(255, 255, 255, 0.16)' }}
-                    whileTap={{ scale: 0.9 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleExecuteAction(notificationAlert.id, 'dismiss');
-                      setNotificationAlert(null);
-                      if (notificationAlertTimeout.current) {
-                        clearTimeout(notificationAlertTimeout.current);
-                      }
-                      if (standbyBorderEnabled) {
-                        setMode("quick");
-                      } else if (largeStandbyEnabled) {
-                        setMode("large");
-                      } else {
-                        setMode("still");
-                      }
-                    }}
-                    style={{
-                      width: 20,
-                      height: 20,
+              if (isBluetoothToast) {
+                const devName = activeDevice?.name || toastTitle || "AirBuds Pro";
+                const devSub = toastSubtext || `Connected • ${batteryPct}%`;
+                return (
+                  <div className="notch-stage notch-stage-toast optical-blur-in">
+                    {/* Left: Glowing blue circular badge (#0ea5e9) with Bluetooth icon */}
+                    <div style={{
+                      width: 32,
+                      height: 32,
                       borderRadius: '50%',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: 'none',
-                      color: textColor,
+                      background: '#0ea5e9',
+                      boxShadow: '0 0 14px rgba(14, 165, 233, 0.7)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
-                      cursor: 'pointer',
-                      flexShrink: 0,
-                      padding: 0,
-                      opacity: 0.7
-                    }}
-                    title="Dismiss notification"
-                  >
-                    <X size={11} strokeWidth={2.5} />
-                  </motion.button>
-                </div>
-              </motion.div>
-          ) : (isPlaying || showPausedQuickView) && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !keyLockAlert && !usbAlert && !notificationAlert && !isTimerRunning && timerSeconds === 0 ? (
-            <motion.div
-              key={spotifyTrack?.name ? `playing-${spotifyTrack.name}-${spotifyTrack.artist}` : "playing"}
-              initial={{ opacity: 0, scale: 0.99 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.99 }}
-              transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                width: '100%',
-                minWidth: 0,
-                boxSizing: 'border-box',
-                opacity: showPausedQuickView ? 0.5 : (hideNotActiveIslandEnabled ? .6 : 1),
-                filter: showPausedQuickView ? 'grayscale(1)' : 'none',
-                padding: '0 9px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, overflow: 'visible', flex: 1, minWidth: 0, userSelect: 'none', perspective: '1200px' }}>
-                {spotifyTrack?.artwork_url ? (
-                  <div style={{ perspective: '1200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <img
-                      src={spotifyTrack.artwork_url}
-                      onClick={() => openMusicPlayer(spotifyTrack.source)}
-                      onMouseEnter={() => setAlbumHovered(true)}
-                      onMouseLeave={() => {
-                        setAlbumHovered(false);
-                        setAlbumRotation({ x: 0, y: 0 });
-                      }}
-                      onMouseMove={(e) => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        const centerX = rect.left + rect.width / 2;
-                        const centerY = rect.top + rect.height / 2;
-                        const deltaX = e.clientX - centerX;
-                        const deltaY = e.clientY - centerY;
-                        const maxDistance = Math.sqrt(rect.width * rect.width + rect.height * rect.height) / 2;
-                        const angleX = (deltaY / maxDistance) * 35;
-                        const angleY = (deltaX / maxDistance) * -35;
-                        setAlbumRotation({ x: angleX, y: angleY });
-                      }}
-                      style={{
-                        width: 24, height: 24, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, cursor: 'pointer',
-                        transition: 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.3s ease-out',
-                        transform: `rotateX(${albumRotation.x}deg) rotateY(${albumRotation.y}deg) scale(${albumHovered ? 1.25 : 1}) translateZ(0)`,
-                        transformStyle: 'preserve-3d',
-                        filter: albumHovered ? 'drop-shadow(0 10px 20px rgba(0,0,0,0.4))' : 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))',
-                        willChange: 'transform'
-                      }}
-                    />
-                  </div>
-                ) : (
-                  <div style={{ width: 24, height: 24, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, flexShrink: 0 }}>
-                    <Music size={14} color={textColor} />
-                  </div>
-                )}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end',
-                  gap: 3,
-                  paddingRight: 6,
-                  height: 18,
-                  flex: 1
-                }}>
-                  {[0.4, 0.9, 0.55, 0.8].map((delay, i) => (
-                    <motion.span
-                      key={`waveform-bar-${i}`}
-                      animate={{
-                        scaleY: isPlaying ? [0.3, 1, 0.35, 0.95, 0.3] : 0.3
-                      }}
-                      transition={{
-                        duration: 0.65,
-                        repeat: Infinity,
-                        repeatType: "reverse",
-                        delay: i * 0.14,
-                        ease: "easeInOut"
-                      }}
-                      style={{
-                        width: 3,
-                        height: 14,
-                        backgroundColor: '#1DB954',
-                        borderRadius: 2,
-                        transformOrigin: 'bottom',
-                        display: 'inline-block'
-                      }}
-                    />
-                  ))}
-                </div>
-                <AnimatePresence>
-                  {isHovered && (
-                    <motion.button
-                      key="play-pause-hover"
-                      initial={{ opacity: 0, width: 0 }}
-                      animate={{ opacity: 1, width: 30 }}
-                      exit={{ opacity: 0, width: 0 }}
-                      transition={{ duration: 0.25, ease: "easeInOut" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        lastMediaActionRef.current = Date.now();
-                        setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
-                        if (window.electronAPI?.controlSystemMedia) {
-                          window.electronAPI.controlSystemMedia('playpause');
-                        }
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!ctrlHeldRef.current && !e.ctrlKey && !e.metaKey) {
-                          updateMouseIgnore(false, true);
-                        }
-                      }}
-                      style={{
-                        height: 24,
-                        borderRadius: 12,
-                        border: 'none',
-                        background: 'rgba(255,255,255,0.2)',
-                        backdropFilter: 'blur(10px)',
+                      color: '#ffffff',
+                      flexShrink: 0
+                    }}>
+                      <Headphones size={16} color="#ffffff" />
+                    </div>
+
+                    {/* Center: Bold white device name + grey subtitle */}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '0 12px', lineHeight: 1.2 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {devName}
+                      </span>
+                      <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {devSub}
+                      </span>
+                    </div>
+
+                    {/* Right: Headphone icon inside a dark circle surrounded by 2 animated concentric pulsing blue ripple rings */}
+                    <div className="ripple-circle-wrap">
+                      <div className="ripple-ring ripple-ring-1" />
+                      <div className="ripple-ring ripple-ring-2" />
+                      <div style={{
+                        width: 30,
+                        height: 30,
+                        borderRadius: '50%',
+                        background: 'rgba(255, 255, 255, 0.1)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        cursor: 'pointer',
-                        flexShrink: 0,
-                        overflow: 'hidden',
-                        zIndex: 100,
-                        willChange: 'opacity, width',
-                        WebkitBackfaceVisibility: 'hidden',
-                        backfaceVisibility: 'hidden',
-                        transform: 'translateZ(0)'
-                      }}
-                    >
-                      {spotifyTrack?.state === 'playing' ? <Pause size={15} color="#FFFFFF" fill="#FFFFFF" /> : <Play size={15} color="#FFFFFF" fill="#FFFFFF" />}
-                    </motion.button>
-                  )}
-                </AnimatePresence>
-              </div>
-            </motion.div>
-          ) : hasActiveProgress ? (
-            <motion.div
-              key="compact-progress"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMode("large");
-                setTabState([13, 1]);
-              }}
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0 14px',
-                boxSizing: 'border-box',
-                cursor: 'pointer'
-              }}
-              title="Click to view Progress Island"
-            >
-              {/* Left: Mini Ring + Title */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: '65%' }}>
-                <ProgressMiniRing
-                  progress={progressSnapshot.compactDisplay.progress}
-                  status={progressSnapshot.compactDisplay.status}
-                  size={18}
-                  strokeWidth={2.5}
-                />
-                <span style={{
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  color: '#ffffff',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  lineHeight: 1
-                }}>
-                  {progressSnapshot.compactDisplay.title}
-                </span>
-              </div>
-
-              {/* Right: Percent/Status + Multi-badge + Speed */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                {progressSnapshot.compactDisplay.bytesPerSecond > 0 && (
-                  <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)' }}>
-                    {formatBytes(progressSnapshot.compactDisplay.bytesPerSecond)}/s
-                  </span>
-                )}
-                <span style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: progressSnapshot.compactDisplay.status === "failed" ? "#ef4444" : progressSnapshot.compactDisplay.status === "completed" ? "#22c55e" : "#38bdf8",
-                  lineHeight: 1
-                }}>
-                  {progressSnapshot.compactDisplay.formattedProgress}
-                </span>
-                {progressSnapshot.compactDisplay.hasMultiple && (
-                  <span style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    padding: '1px 5px',
-                    borderRadius: 6,
-                    background: 'rgba(255, 255, 255, 0.12)',
-                    color: 'rgba(255, 255, 255, 0.75)'
-                  }}>
-                    {progressSnapshot.compactDisplay.badgeText}
-                  </span>
-                )}
-              </div>
-            </motion.div>
-          ) : (
-            <motion.div
-              key={keyLockAlert ? "keylock" : usbAlert ? "usb" : chargingAlert ? "charging" : alert ? "battery" : bluetoothAlert ? "bluetooth" : cameraAlert ? "camera" : microphoneAlert ? "microphone" : (isTimerRunning || timerSeconds > 0) ? "timer" : "time"}
-              initial={{ opacity: 0, scale: 0.99 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.99 }}
-              transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-              style={{ width: '100%', height: '100%', position: 'relative' }}
-            >
-              <h1
-                className="text"
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  left: "18px",
-                  transform: "translateY(-50%)",
-                  fontSize: 16,
-                  fontWeight: 600,
-                  margin: 0,
-                  color: keyLockAlert ? "#4cc9f0ff" : usbAlert ? (usbAlert.action === "connected" ? "#34c759ff" : "#ff9500ff") : chargingAlert ? "#6fff7bff" : alert ? "#ff3f3fff" : cameraAlert ? "#ffff00ff" : microphoneAlert ? "#ff9a00ff" : (isTimerRunning || timerSeconds > 0) ? "#ff9500" : textColor,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  lineHeight: 1
-                }}
-              >
-                {keyLockAlert ? (
-                  <span style={{ fontSize: 18, fontWeight: 800, fontFamily: 'monospace' }}>{keyLockAlert.key === 'CapsLock' ? 'A' : '#'}</span>
-                ) : usbAlert ? (
-                  <Usb size={20} color={usbAlert.action === "connected" ? "#34c759" : "#ff9500"} />
-                ) : chargingAlert ? (
-                  <Zap size={20} color="#6fff7b" />
-                ) : alert ? (
-                  <Zap size={20} color="#ff3f3f" />
-                ) : cameraAlert ? (
-                  <Camera size={20} color="#ffff00" />
-                ) : microphoneAlert ? (
-                  <Mic size={20} color="#ff9a00" />
-                ) : volumeAlert ? (
-                  volumeLevel === 0 ? <VolumeX size={20} color="#ff4d4d" /> : <Volume2 size={20} color="#4cc9f0" />
-                ) : bluetoothAlert ? <Headphones size={20} /> : (isTimerRunning || timerSeconds > 0) ? (
-                  <TimerCircleProgress progress={timerTotalDuration > 0 ? (timerSeconds / timerTotalDuration) : 0} size={18} strokeWidth={2.5} />
-                ) : time}
-              </h1>
-              <h1
-                className="text"
-                style={{
-                  position: "absolute",
-                  top: "50%",
-                  right: "18px",
-                  transform: "translateY(-50%)",
-                  fontSize: 14,
-                  fontWeight: 600,
-                  margin: 0,
-                  maxWidth: '175px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  color: keyLockAlert
-                    ? "#4cc9f0ff"
-                    : usbAlert
-                      ? (usbAlert.action === "connected" ? "#34c759ff" : "#ff9500ff")
-                      : chargingAlert
-                        ? "#6fff7bff"
-                        : alert
-                          ? "#ff3f3fff"
-                          : cameraAlert
-                            ? "#ffff00ff"
-                            : microphoneAlert
-                              ? "#ff9a00ff"
-                              : volumeAlert
-                                ? "#4cc9f0ff"
-                                : (isTimerRunning || timerSeconds > 0)
-                                  ? "#ff9500"
-                                  : `${textColor}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'flex-end'
-                }}
-              >
-                {keyLockAlert ? `${keyLockAlert.key === 'CapsLock' ? 'Caps Lock' : 'Num Lock'} ${keyLockAlert.state ? 'ON' : 'OFF'}` : usbAlert ? `${usbAlert.name} ${usbAlert.action}` : alert === true ? (percent !== null ? `${percent}%` : '--') : chargingAlert === true ? (percent !== null ? `${percent}%` : '--') : standbyBorderEnabled ? (percent !== null ? `${percent}%` : '--') : cameraAlert ? "Camera" : microphoneAlert ? "Microphone" : volumeAlert ? `${volumeLevel}%` : bluetoothAlert ? cleanBluetoothDeviceName(bluetooth.devices?.[0]) : (isTimerRunning || timerSeconds > 0) ? (
-                  <span>{formatTimerMMSS(timerSeconds)}</span>
-                ) : (typeof weather.temp === "number" && !isNaN(weather.temp)) ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                    <WeatherIcon status={weather.status} size={14} color={textColor} />
-                    <span>{weather.temp}º</span>
+                        zIndex: 2
+                      }}>
+                        <Headphones size={15} color="#0ea5e9" />
+                      </div>
+                    </div>
                   </div>
-                ) : (percent !== null ? `${percent}%` : '--')}
-              </h1>
-            </motion.div>
-          )
-          }
-        </AnimatePresence >
-      ) : null}
+                );
+              }
 
-      <AnimatePresence custom={direction} mode="wait">
+              if (isChargingToast) {
+                const circ = 2 * Math.PI * 13;
+                const offset = circ * (1 - batteryPct / 100);
+                return (
+                  <div className="notch-stage notch-stage-toast optical-blur-in">
+                    {/* Left: Green lightning bolt inside an SVG circular progress ring (#22c55e) */}
+                    <div style={{ position: 'relative', width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                      <svg width={34} height={34} style={{ transform: 'rotate(-90deg)' }}>
+                        <circle cx={17} cy={17} r={13} fill="none" stroke="rgba(255, 255, 255, 0.15)" strokeWidth={2.8} />
+                        <circle
+                          cx={17}
+                          cy={17}
+                          r={13}
+                          fill="none"
+                          stroke="#22c55e"
+                          strokeWidth={2.8}
+                          strokeDasharray={circ}
+                          strokeDashoffset={offset}
+                          strokeLinecap="round"
+                          style={{ transition: 'stroke-dashoffset 400ms ease' }}
+                        />
+                      </svg>
+                      <div style={{ position: 'absolute' }}>
+                        <Zap size={15} color="#22c55e" />
+                      </div>
+                    </div>
+
+                    {/* Center: Bold white Charging + grey subtitle Charger connected */}
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '0 12px', lineHeight: 1.2 }}>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>Charging</span>
+                      <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)' }}>Charger connected</span>
+                    </div>
+
+                    {/* Right: Large crisp percentage readout (70%, 22px light/regular white) */}
+                    <div style={{ flexShrink: 0, paddingRight: 4 }}>
+                      <span style={{ fontSize: 22, fontWeight: 400, color: '#ffffff', letterSpacing: '-0.5px' }}>
+                        {batteryPct}%
+                      </span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // General Toast / Caps Lock / App Notifications
+              return (
+                <div 
+                  className="notch-stage notch-stage-toast optical-blur-in"
+                  style={{ cursor: notificationAlert ? 'pointer' : 'default' }}
+                  onClick={(e) => {
+                    if (notificationAlert) {
+                      e.stopPropagation();
+                      const aId = notificationAlert.applicationId || notificationAlert.appId || '';
+                      const aName = notificationAlert.applicationName || notificationAlert.appName || notificationAlert.title || '';
+                      if (window.electronAPI?.focusNotificationApp) {
+                        window.electronAPI.focusNotificationApp(aId, aName);
+                      }
+                      setNotificationAlert(null);
+                      setMode("still");
+                    }
+                  }}
+                >
+                  <div style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 8,
+                    background: 'rgba(255, 255, 255, 0.12)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ffffff',
+                    flexShrink: 0
+                  }}>
+                    {toastType === 'caps' ? (
+                      <ArrowUp size={16} color="#38bdf8" />
+                    ) : (
+                      <Bell size={16} color="#a855f7" />
+                    )}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '0 12px', lineHeight: 1.2 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {toastTitle}
+                    </span>
+                    {toastSubtext && (
+                      <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {toastSubtext}
+                      </span>
+                    )}
+                  </div>
+
+                  <div style={{ flexShrink: 0 }}>
+                    {activeHudToast?.state ? (
+                      <div style={{
+                        padding: '2px 8px',
+                        borderRadius: 8,
+                        fontSize: 10,
+                        fontWeight: 700,
+                        background: activeHudToast.state === 'On' ? 'rgba(56, 189, 248, 0.22)' : 'rgba(255, 255, 255, 0.12)',
+                        color: activeHudToast.state === 'On' ? '#38bdf8' : 'rgba(255, 255, 255, 0.7)',
+                        border: activeHudToast.state === 'On' ? '1px solid rgba(56, 189, 248, 0.4)' : '1px solid rgba(255, 255, 255, 0.1)'
+                      }}>
+                        {activeHudToast.state}
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 10, fontWeight: 700, color: '#38bdf8' }}>Active</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })() : isMicroMode ? (
+              /* Micro-Strip State (96x5) */
+              <div className="notch-stage notch-stage-micro optical-blur-in">
+                <div style={{ width: 48, height: 2, borderRadius: 1, background: 'rgba(255, 255, 255, 0.28)' }} />
+              </div>
+            ) : isIdleMascot ? (
+              /* Mascot Idle Mode (140x32): Glowing White Pill Eyes + Purple-Blue Glow */
+              <div className="notch-stage notch-stage-idle-mascot optical-blur-in">
+                <MascotEyes />
+              </div>
+            ) : (
+              /* Default Idle Clock (154x32): Animated Green Ring — Bold Time — 5-Bar Waveform */
+              <div className="notch-stage notch-stage-idle-clock optical-blur-in">
+                {/* Left: Animated Green Ring (14px) */}
+                <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  {isTimerRunning || pomodoroState.isRunning ? (
+                    <MiniProgressRing
+                      progress={pomodoroState.isRunning ? pomodoroState.secondsLeft / pomodoroState.totalSeconds : (timerTotalDuration > 0 ? timerSeconds / timerTotalDuration : 1)}
+                      color="#ef4444"
+                      size={14}
+                      strokeWidth={2.2}
+                    />
+                  ) : isPlaying ? (
+                    <div style={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: '#22c55e', boxShadow: '0 0 6px #22c55e' }} />
+                  ) : (
+                    <MiniProgressRing progress={percent ? percent / 100 : 0.8} color="#22c55e" size={14} strokeWidth={2.2} />
+                  )}
+                </div>
+
+                {/* Center: 16:57 (bold 13px white) */}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '0 4px' }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', letterSpacing: '0.02em', fontVariantNumeric: 'tabular-nums' }}>
+                    {pomodoroState.isRunning ? formatTimerMMSS(pomodoroState.secondsLeft) : time}
+                  </span>
+                </div>
+
+                {/* Right: 5-Bar Live Equalizer Waveform */}
+                <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+                  <MiniWaveform isPlaying={isPlaying} />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+      <AnimatePresence custom={direction} initial={false}>
         {mode === "large" && (
           <motion.div
-            key={currentTabId}
+            key="large-mode-shell"
             custom={direction}
             variants={tabVariants}
             initial="enter"
             animate="center"
             exit="exit"
+            className={`notch-stage ${isLyricsWide ? "notch-stage-expanded-wide" : "notch-stage-expanded"}`}
             style={{
-              width: "100%",
-              height: "100%",
               display: "flex",
-              flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
               position: "absolute",
-              inset: 0,
               overflow: "hidden",
-              borderRadius: "inherit"
+              borderRadius: "inherit",
+              boxSizing: "border-box"
             }}
           >
-            {/*Browser Search*/}
-            {currentTab === 0 && (
-              <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-                <input
-                  id="browser-searchbar"
-                  placeholder="Search google or enter URL"
-                  value={browserSearch}
-                  onChange={(e) => setBrowserSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      searchBrowser();
-                    }
+            {/* Left & Right Edge Navigation Arrows (Reveal on Edge Hover) */}
+            <EdgeNavigation
+              onPrev={() => moveTab(-1)}
+              onNext={() => moveTab(1)}
+            />
+
+            {/* Module Body Container (Full-Bleed 100% Height, Center-Aligned) */}
+            <div style={{
+              width: '100%',
+              height: '100%',
+              position: 'relative',
+              overflow: 'hidden',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px 18px',
+              boxSizing: 'border-box'
+            }}>
+              <AnimatePresence custom={direction} initial={false} mode="wait">
+                <motion.div
+                  key={currentTab}
+                  custom={direction}
+                  initial={{ opacity: 0, x: direction > 0 ? 16 : -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  exit={{ opacity: 0, x: direction > 0 ? -16 : 16 }}
+                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
-                  style={{ color: textColor }}
-                />
-              </div>
-            )}
+                >
+                {/* Tab 3: Music & Synced Lyrics (Standard View + Synced Lyrics Split View) */}
+                {currentTab === 3 && (() => {
+                  const isCurrentlyPlaying = spotifyTrack?.state === 'playing';
+                  const title = spotifyTrack?.name || "Midnight City";
+                  const artist = spotifyTrack?.artist || "M83 • Hurry Up, We're Dreaming";
+                  const artwork = spotifyTrack?.artwork_url;
+                  const duration = spotifyTrack?.duration || 244;
+                  const pos = mediaPosition || 64;
+                  const remaining = Math.max(0, duration - pos);
 
-            {/* Weather Dashboard (Redesigned per Image 2: 3D Animated Icons, Sky Glass Layout & 3-Day Forecast) */}
-            {currentTab === 1 && (() => {
-              const locName = localStorage.getItem("location") || weatherLocation || "CHATTOGRAM";
-              const tempVal = typeof weather.temp === "number" && !isNaN(weather.temp) ? weather.temp : 28;
-              const statusStr = weather.status || "Partly Sunny";
-              const humidityVal = weather.humidity || "65%";
-              const windVal = weather.wind || "12 km/h";
-              const precipVal = "2 mm";
+                  const DEMO_LYRICS = [
+                    { time: 0, text: "Waiting in a car" },
+                    { time: 10, text: "Waiting for a ride in the dark" },
+                    { time: 25, text: "The night city grows, look and see" },
+                    { time: 45, text: "The city is my church, it wraps me in the blinding light" },
+                    { time: 64, text: "Midnight city, the city is my church" },
+                    { time: 90, text: "Waiting in a car, waiting for a ride in the dark" },
+                    { time: 120, text: "The stars shine like a thousand eyes above us" },
+                    { time: 160, text: "Looking at the skyline, we are unstoppable" }
+                  ];
 
-              return (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 16px',
-                  boxSizing: 'border-box',
-                  gap: 16,
-                  userSelect: 'none'
-                }}>
-                  {/* Left Column: 3D Weather Icon + Location + Temp & Condition */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 175, flexShrink: 0 }}>
-                    <Animated3DWeatherIcon status={statusStr} size={42} />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                        {locName}
-                      </span>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif', lineHeight: 1.1 }}>
-                        {tempVal}°{weatherUnit === 'f' ? 'F' : 'C'}
-                      </div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', fontFamily: 'OpenRunde, system-ui, sans-serif', marginTop: 2 }}>
-                        {statusStr}
-                      </span>
-                    </div>
-                  </div>
+                  const activeLyrics = (syncedLyrics && syncedLyrics.length > 0) ? syncedLyrics : DEMO_LYRICS;
+                  const currentLyricIdx = activeLyrics.reduce((best, cur, idx) => {
+                    return pos >= cur.time ? idx : best;
+                  }, 0);
 
-                  {/* Right Column: Stats Row + 3-Day Forecast Cards */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0, height: '100%', justifyContent: 'center' }}>
-                    {/* Middle Stats Row: Humidity | Precip | Wind */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, width: '100%' }}>
-                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '3px 2px' }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Hum</span>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginTop: 1 }}>{humidityVal}</div>
-                      </div>
-                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '3px 2px' }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Precip</span>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginTop: 1 }}>{precipVal}</div>
-                      </div>
-                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '3px 2px' }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Wind</span>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginTop: 1 }}>{windVal}</div>
-                      </div>
-                    </div>
-
-                    {/* Bottom Row: 3-Day Forecast Glass Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, width: '100%' }}>
-                      {[
-                        { day: 'Today', icon: 'Partly Sunny', hi: `${tempVal}°`, lo: `${tempVal - 6}°`, rain: '5%' },
-                        { day: 'Tomorrow', icon: 'Partly Cloudy', hi: `${tempVal - 2}°`, lo: `${tempVal - 8}°`, rain: '15%' },
-                        { day: 'Wed', icon: 'Rain', hi: `${tempVal - 4}°`, lo: `${tempVal - 9}°`, rain: '80%' }
-                      ].map((fc) => (
-                        <motion.div
-                          key={fc.day}
-                          whileHover={{ y: -2, scale: 1.02 }}
-                          style={{
-                            background: 'rgba(255, 255, 255, 0.08)',
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                  return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', userSelect: 'none' }}>
+                      {!lyricsOpen ? (
+                        /* Standard View */
+                        <div style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '0 4px' }}>
+                          {/* 48x48 Album Art */}
+                          <div style={{
+                            width: 48,
+                            height: 48,
                             borderRadius: 10,
-                            padding: '4px 2px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-around',
-                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)'
-                          }}
-                        >
-                          <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>{fc.day}</span>
-                          <Animated3DWeatherIcon status={fc.icon} size={16} />
-                          <span style={{ fontSize: 10.5, fontWeight: 800, color: '#ffffff' }}>{fc.hi}</span>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: '#4fc3f7' }}>{fc.rain}</span>
-                        </motion.div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-            {/* Overview / StandBy Clock & Daily Quote Tab */}
-            {currentTab === 2 && (() => {
-              const d = new Date();
-              let h = d.getHours();
-              if (hourFormat) {
-                h = h % 12;
-                h = h ? h : 12;
-              }
-              const hStr = hourFormat ? String(h) : String(h).padStart(2, '0');
-              const mStr = String(d.getMinutes()).padStart(2, '0');
-              const dayAbbr = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
-              const dayNum = d.getDate();
-              const tempVal = typeof weather?.temp === "number" && !isNaN(weather.temp) ? weather.temp : 58;
-              const currentQuote = DAILY_QUOTES[dailyQuoteIndex % DAILY_QUOTES.length];
-
-              return (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '12px 18px',
-                  boxSizing: 'border-box',
-                  gap: 16,
-                  userSelect: 'none'
-                }}>
-                  {/* Left: iOS StandBy Style Clock (Scaled to 80% height) */}
-                  <div style={{
-                    height: '82%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    flexShrink: 0
-                  }}>
-                    {/* Big Bold Rounded Time Digits - 80% Notch Height */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontFamily: 'OpenRunde, -apple-system, system-ui, sans-serif',
-                      fontSize: 96,
-                      fontWeight: 800,
-                      letterSpacing: '-4px',
-                      lineHeight: 0.9,
-                      color: '#6ea8fe',
-                      userSelect: 'none'
-                    }}>
-                      <span>{hStr}</span>
-                      {/* Round Colon Dots */}
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 14,
-                        margin: '0 6px'
-                      }}>
-                        <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#6ea8fe' }} />
-                        <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#6ea8fe' }} />
-                      </div>
-                      <span>{mStr}</span>
-                    </div>
-
-                    {/* Day/Date & Temp Stack (e.g. TUE 6 / 58°) */}
-                    <div style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      justifyContent: 'center',
-                      gap: 4,
-                      fontFamily: 'OpenRunde, -apple-system, system-ui, sans-serif',
-                      marginLeft: 2
-                    }}>
-                      <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.4px', lineHeight: 1.1 }}>
-                        <span style={{ color: '#6ea8fe' }}>{dayAbbr} </span>
-                        <span style={{ color: '#ffffff' }}>{dayNum}</span>
-                      </div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.4px', lineHeight: 1.1, marginTop: 1 }}>
-                        {tempVal}°
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Vertical Subtle Separator */}
-                  <div style={{
-                    width: 1,
-                    height: '65%',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    flexShrink: 0
-                  }} />
-
-                  {/* Right: Realigned Minimalist Quote & Quoteman's Pic (No headers/buttons) */}
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={handleNextQuote}
-                    title="Click to cycle quote"
-                    style={{
-                      flex: 1,
-                      height: '100%',
-                      minWidth: 0,
-                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%)',
-                      border: '1px solid rgba(255, 255, 255, 0.09)',
-                      borderRadius: 14,
-                      padding: '10px 14px',
-                      boxSizing: 'border-box',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      position: 'relative',
-                      backdropFilter: 'blur(16px)',
-                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-                      cursor: 'pointer',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={currentQuote.author + currentQuote.quote}
-                        initial={{ opacity: 0, x: 6 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -6 }}
-                        transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          width: '100%',
-                          height: '100%'
-                        }}
-                      >
-                        {/* Quoteman's Pic Avatar */}
-                        <QuotemanAvatar quote={currentQuote} size={50} />
-
-                        {/* Quote & Author Details */}
-                        <div style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'center',
-                          flex: 1,
-                          minWidth: 0
-                        }}>
-                          <p style={{
-                            margin: 0,
-                            fontSize: 11.5,
-                            lineHeight: 1.35,
-                            color: 'rgba(255, 255, 255, 0.95)',
-                            fontStyle: 'italic',
-                            fontWeight: 500,
-                            fontFamily: 'OpenRunde, system-ui, sans-serif',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 3,
-                            WebkitBoxOrient: 'vertical',
                             overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }}>
-                            “{currentQuote.quote}”
-                          </p>
-
-                          <div style={{
+                            flexShrink: 0,
+                            background: 'linear-gradient(135deg, #1e293b, #0f172a)',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 5,
-                            marginTop: 5,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
+                            justifyContent: 'center',
+                            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                            border: '1px solid rgba(255,255,255,0.1)'
                           }}>
-                            <span style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: '#6ea8fe',
-                              fontFamily: 'OpenRunde, system-ui, sans-serif'
-                            }}>
-                              — {currentQuote.author}
-                            </span>
-                            <span style={{
-                              fontSize: 9.5,
-                              fontWeight: 500,
-                              color: 'rgba(255, 255, 255, 0.45)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis'
-                            }}>
-                              • {currentQuote.title}
-                            </span>
+                            {artwork ? (
+                              <img src={artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            ) : (
+                              <Music size={20} color="#38bdf8" />
+                            )}
                           </div>
-                        </div>
-                      </motion.div>
-                    </AnimatePresence>
-                  </motion.div>
-                </div>
-              );
-            })()}
 
-            {/* Battery Hub Screen (Apple Dynamic Island Design) */}
-            {currentTab === 11 && (() => {
-              const statusColor = batteryAnalytics.currentPercent <= 10
-                ? '#FF453A'
-                : (batteryAnalytics.currentPercent <= 20 ? '#FFD60A' : '#30D158');
+                          {/* Track Info & Scrubber & Controls */}
+                          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {title}
+                              </div>
+                              <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {artist}
+                              </div>
+                            </div>
 
-              return (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '14px 22px',
-                  boxSizing: 'border-box',
-                  gap: 18,
-                  userSelect: 'none'
-                }}>
-                  {/* Left Column: Apple Battery Graphic & Clean Status Caption */}
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    width: 190,
-                    flexShrink: 0
-                  }}>
-                    <AppleBatteryCapsule
-                      percent={batteryAnalytics.currentPercent}
-                      charging={batteryAnalytics.isCharging}
-                      width={168}
-                      height={66}
-                    />
-
-                    {/* Apple Status Caption */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      color: 'rgba(235, 235, 245, 0.65)',
-                      fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                    }}>
-                      {batteryAnalytics.isCharging ? (
-                        <>
-                          <Zap size={12} color="#30D158" fill="#30D158" />
-                          <span>Charging • AC Power</span>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            backgroundColor: statusColor
-                          }} />
-                          <span>{batteryAnalytics.currentPercent <= 20 ? 'Low Power Mode' : 'On Battery Power'}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Vertical Hairline Divider */}
-                  <div style={{
-                    width: 1,
-                    height: '70%',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    flexShrink: 0
-                  }} />
-
-                  {/* Right Column: Apple-style Estimated Runtime & Usage */}
-                  <div style={{
-                    flex: 1,
-                    height: '100%',
-                    minWidth: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    padding: '3px 0'
-                  }}>
-                    {/* Header Row: Label & Power Mode */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{
-                        fontSize: 10.5,
-                        fontWeight: 600,
-                        letterSpacing: '0.06em',
-                        color: 'rgba(235, 235, 245, 0.5)',
-                        textTransform: 'uppercase',
-                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                      }}>
-                        {batteryAnalytics.isCharging ? 'Time Until Full' : 'Estimated Remaining'}
-                      </span>
-
-                      <span style={{
-                        fontSize: 10.5,
-                        fontWeight: 500,
-                        color: 'rgba(235, 235, 245, 0.6)',
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        padding: '2px 8px',
-                        borderRadius: 6,
-                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                      }}>
-                        {batteryAnalytics.powerModeTag}
-                      </span>
-                    </div>
-
-                    {/* Hero Runtime Display */}
-                    <div style={{ marginTop: 1 }}>
-                      <div style={{
-                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
-                        fontSize: 32,
-                        fontWeight: 700,
-                        color: '#ffffff',
-                        letterSpacing: '-0.8px',
-                        lineHeight: 1
-                      }}>
-                        {batteryAnalytics.timeRemainingStr}
-                      </div>
-                      <div style={{
-                        fontSize: 12.5,
-                        fontWeight: 500,
-                        color: batteryAnalytics.isCharging ? '#30D158' : 'rgba(235, 235, 245, 0.65)',
-                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
-                        marginTop: 4
-                      }}>
-                        {batteryAnalytics.endTargetTimeStr}
-                      </div>
-                    </div>
-
-                    {/* Apple-style Activity Level & Pace Card */}
-                    <div style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      borderRadius: 10,
-                      padding: '6px 12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12
-                    }}>
-                      {/* Recent Activity Bar Graph */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 16 }}>
-                          {batteryAnalytics.activityBars.map((bar, i) => (
-                            <div
-                              key={i}
-                              style={{
-                                width: 3.5,
-                                height: `${bar.height}%`,
-                                minHeight: 4,
-                                borderRadius: 2,
-                                backgroundColor: bar.isCurrent
-                                  ? (batteryAnalytics.currentPercent <= 10
-                                      ? '#FF453A'
-                                      : (batteryAnalytics.currentPercent <= 20 ? '#FFD60A' : '#30D158'))
-                                  : 'rgba(255, 255, 255, 0.22)',
-                                transition: 'height 0.3s ease'
-                              }}
-                            />
-                          ))}
-                        </div>
-                        <span style={{
-                          fontSize: 11,
-                          fontWeight: 500,
-                          color: 'rgba(235, 235, 245, 0.6)',
-                          fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                        }}>
-                          Recent Activity
-                        </span>
-                      </div>
-
-                      {/* Average Pace */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{
-                          fontSize: 11,
-                          fontWeight: 500,
-                          color: 'rgba(235, 235, 245, 0.5)',
-                          fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                        }}>
-                          {batteryAnalytics.isCharging ? 'Charge Pace' : 'Discharge'}
-                        </span>
-                        <span style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: batteryAnalytics.isCharging ? '#30D158' : '#ffffff',
-                          fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                        }}>
-                          {batteryAnalytics.rateText}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Quick Pill Per-App Audio Mixer */}
-            {currentTab === 12 && (() => {
-              const filteredSessions = audioSessions.filter(s => {
-                if (!audioSearch.trim()) return true;
-                const q = audioSearch.toLowerCase();
-                return (s.displayName && s.displayName.toLowerCase().includes(q)) ||
-                       (s.processName && s.processName.toLowerCase().includes(q));
-              });
-
-              const currentDev = audioDevices.find(d => d.id === activeAudioDeviceId) ||
-                                 audioDevices.find(d => d.isDefault) ||
-                                 audioDevices[0];
-
-              return (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 16px',
-                  boxSizing: 'border-box',
-                  gap: 14,
-                  userSelect: 'none',
-                  position: 'relative'
-                }}>
-                  {/* Left Column: Device Info + Master Volume + Search/Refresh */}
-                  <div style={{
-                    width: 175,
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    flexShrink: 0
-                  }}>
-                    {/* Top Device Card */}
-                    <div style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      borderRadius: 12,
-                      padding: '8px 10px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6
-                    }}>
-                      {/* Header Row */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <SlidersHorizontal size={13} color="#a855f7" />
-                          <span style={{ fontSize: 11, fontWeight: 800, color: '#ffffff', letterSpacing: '0.3px', textTransform: 'uppercase' }}>
-                            Audio Mixer
-                          </span>
-                        </div>
-                        <span style={{
-                          fontSize: 9,
-                          fontWeight: 700,
-                          padding: '1px 5px',
-                          borderRadius: 8,
-                          background: audioSessions.length > 0 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                          color: audioSessions.length > 0 ? '#c084fc' : 'rgba(255, 255, 255, 0.5)'
-                        }}>
-                          {audioSessions.length} {audioSessions.length === 1 ? 'app' : 'apps'}
-                        </span>
-                      </div>
-
-                      {/* Device Selector Button */}
-                      <div style={{ position: 'relative' }}>
-                        <button
-                          type="button"
-                          onClick={() => setDeviceDropdownOpen(!deviceDropdownOpen)}
-                          style={{
-                            width: '100%',
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: 8,
-                            padding: '4px 6px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            color: '#ffffff',
-                            cursor: 'pointer',
-                            fontSize: 10,
-                            fontWeight: 600,
-                            overflow: 'hidden'
-                          }}
-                          title={currentDev?.name || "Select Output Device"}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflow: 'hidden' }}>
-                            <Headphones size={11} color="rgba(255,255,255,0.7)" style={{ flexShrink: 0 }} />
-                            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {currentDev?.name ? currentDev.name.replace(/\s*\([^)]*\)$/, '') : "Speakers"}
-                            </span>
-                          </div>
-                          <ChevronLeft size={11} style={{ transform: deviceDropdownOpen ? 'rotate(-90deg)' : 'rotate(90deg)', flexShrink: 0, opacity: 0.6 }} />
-                        </button>
-
-                        {/* Device Dropdown Menu */}
-                        {deviceDropdownOpen && (
-                          <div
-                            className="audio-mixer-scrollable"
-                            style={{
-                              position: 'absolute',
-                              top: '100%',
-                              left: 0,
-                              right: 0,
-                              marginTop: 4,
-                              background: '#121217',
-                              border: '1px solid rgba(255, 255, 255, 0.15)',
-                              borderRadius: 8,
-                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.7)',
-                              zIndex: 100,
-                              maxHeight: 110,
-                              overflowY: 'auto',
-                              padding: 3
-                            }}
-                          >
-                            {audioDevices.map(d => (
-                              <button
-                                key={d.id}
-                                type="button"
-                                onClick={() => {
-                                  setActiveAudioDeviceId(d.id);
-                                  localStorage.setItem("audio-mixer-device-id", d.id);
-                                  fetchAudioSessions(d.id, true);
-                                  setDeviceDropdownOpen(false);
+                            {/* Scrubber row with elapsed / remaining */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', minWidth: 28 }}>
+                                {formatTimerMMSS(pos)}
+                              </span>
+                              <div
+                                onClick={(e) => {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                                  const newSec = Math.floor(pct * duration);
+                                  setMediaPosition(newSec);
+                                  if (window.electronAPI?.controlSystemMedia) {
+                                    window.electronAPI.controlSystemMedia('seek', newSec);
+                                  }
                                 }}
                                 style={{
-                                  width: '100%',
-                                  padding: '5px 6px',
-                                  borderRadius: 5,
-                                  background: (d.id === (currentDev?.id || activeAudioDeviceId)) ? 'rgba(168, 85, 247, 0.25)' : 'transparent',
+                                  flex: 1,
+                                  height: 4,
+                                  borderRadius: 2,
+                                  background: 'rgba(255,255,255,0.15)',
+                                  cursor: 'pointer',
+                                  position: 'relative',
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                <div style={{
+                                  width: `${Math.min(100, (pos / (duration || 1)) * 100)}%`,
+                                  height: '100%',
+                                  background: 'linear-gradient(90deg, #22c55e, #38bdf8)',
+                                  borderRadius: 2
+                                }} />
+                              </div>
+                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', minWidth: 28, textAlign: 'right' }}>
+                                -{formatTimerMMSS(remaining)}
+                              </span>
+                            </div>
+
+                            {/* Bottom playback controls */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2 }}>
+                              <button
+                                onClick={() => setLyricsOpen(true)}
+                                title="Toggle Synced Lyrics"
+                                style={{
+                                  background: 'none',
                                   border: 'none',
-                                  color: (d.id === (currentDev?.id || activeAudioDeviceId)) ? '#c084fc' : 'rgba(255, 255, 255, 0.85)',
-                                  fontSize: 10,
-                                  fontWeight: 600,
+                                  padding: 2,
                                   cursor: 'pointer',
                                   display: 'flex',
                                   alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  textAlign: 'left'
+                                  color: 'rgba(255,255,255,0.6)'
                                 }}
                               >
-                                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                  {d.name.replace(/\s*\([^)]*\)$/, '')}
-                                </span>
-                                {d.id === (currentDev?.id || activeAudioDeviceId) && <Check size={10} color="#c084fc" />}
+                                <MessageSquare size={13} />
                               </button>
-                            ))}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <button
+                                  onClick={() => {
+                                    lastMediaActionRef.current = Date.now();
+                                    window.electronAPI?.controlSystemMedia?.('previous');
+                                  }}
+                                  style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#ffffff' }}
+                                >
+                                  <SkipBackIcon size={14} fill="#ffffff" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    lastMediaActionRef.current = Date.now();
+                                    window.electronAPI?.controlSystemMedia?.('playPause');
+                                  }}
+                                  style={{
+                                    background: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: 22,
+                                    height: 22,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    color: '#000000'
+                                  }}
+                                >
+                                  {isCurrentlyPlaying ? <Pause size={11} fill="#000000" /> : <Play size={11} fill="#000000" style={{ marginLeft: 1 }} />}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    lastMediaActionRef.current = Date.now();
+                                    window.electronAPI?.controlSystemMedia?.('next');
+                                  }}
+                                  style={{ background: 'none', border: 'none', padding: 2, cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#ffffff' }}
+                                >
+                                  <SkipForwardIcon size={14} fill="#ffffff" />
+                                </button>
+                              </div>
+                              <div style={{ width: 14 }} />
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Synced Lyrics Split View (expanded-wide 510px) */
+                        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', userSelect: 'none' }}>
+                          {/* Left Column (220px): Album cover, track info, scrubber, playback buttons */}
+                          <div style={{ width: 220, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{
+                                width: 48,
+                                height: 48,
+                                borderRadius: 10,
+                                overflow: 'hidden',
+                                flexShrink: 0,
+                                background: '#1e293b',
+                                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                                border: '1px solid rgba(255,255,255,0.1)'
+                              }}>
+                                {artwork ? (
+                                  <img src={artwork} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                ) : (
+                                  <Music size={20} color="#38bdf8" style={{ margin: 14 }} />
+                                )}
+                              </div>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {title}
+                                </div>
+                                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.55)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {artist}
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Scrubber row with elapsed / remaining */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', minWidth: 28 }}>
+                                {formatTimerMMSS(pos)}
+                              </span>
+                              <div
+                                onClick={(e) => {
+                                  const rect = e.currentTarget.getBoundingClientRect();
+                                  const pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                                  const newSec = Math.floor(pct * duration);
+                                  setMediaPosition(newSec);
+                                  if (window.electronAPI?.controlSystemMedia) {
+                                    window.electronAPI.controlSystemMedia('seek', newSec);
+                                  }
+                                }}
+                                style={{
+                                  flex: 1,
+                                  height: 4,
+                                  borderRadius: 2,
+                                  background: 'rgba(255,255,255,0.15)',
+                                  cursor: 'pointer',
+                                  position: 'relative',
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                <div style={{
+                                  width: `${Math.min(100, (pos / (duration || 1)) * 100)}%`,
+                                  height: '100%',
+                                  background: 'linear-gradient(90deg, #22c55e, #38bdf8)',
+                                  borderRadius: 2
+                                }} />
+                              </div>
+                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace', minWidth: 28, textAlign: 'right' }}>
+                                -{formatTimerMMSS(remaining)}
+                              </span>
+                            </div>
+
+                            {/* Compact controls with 💬 toggle */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 1 }}>
+                              <button
+                                onClick={() => setLyricsOpen(false)}
+                                title="Close Lyrics Split View"
+                                style={{
+                                  background: 'rgba(34, 197, 94, 0.22)',
+                                  border: '1px solid rgba(34, 197, 94, 0.45)',
+                                  borderRadius: 6,
+                                  padding: '2px 7px',
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  color: '#22c55e',
+                                  fontSize: 10,
+                                  fontWeight: 600
+                                }}
+                              >
+                                <MessageSquare size={11} />
+                                <span>Lyrics</span>
+                              </button>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <button
+                                  onClick={() => {
+                                    lastMediaActionRef.current = Date.now();
+                                    window.electronAPI?.controlSystemMedia?.('previous');
+                                  }}
+                                  style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', padding: 2, display: 'flex' }}
+                                >
+                                  <SkipBackIcon size={14} fill="#ffffff" />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    lastMediaActionRef.current = Date.now();
+                                    window.electronAPI?.controlSystemMedia?.('playPause');
+                                  }}
+                                  style={{
+                                    background: '#ffffff',
+                                    border: 'none',
+                                    borderRadius: '50%',
+                                    width: 22,
+                                    height: 22,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    cursor: 'pointer',
+                                    color: '#000000'
+                                  }}
+                                >
+                                  {isCurrentlyPlaying ? <Pause size={11} fill="#000000" /> : <Play size={11} fill="#000000" style={{ marginLeft: 1 }} />}
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    lastMediaActionRef.current = Date.now();
+                                    window.electronAPI?.controlSystemMedia?.('next');
+                                  }}
+                                  style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', padding: 2, display: 'flex' }}
+                                >
+                                  <SkipForwardIcon size={14} fill="#ffffff" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right Column (250px): Vertical Scrolling Synced Lyrics Stage with Fade Masks */}
+                          <div
+                            style={{
+                              width: 250,
+                              height: 116,
+                              position: 'relative',
+                              overflow: 'hidden',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center',
+                              maskImage: 'linear-gradient(to bottom, transparent 0%, black 22%, black 78%, transparent 100%)',
+                              WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 22%, black 78%, transparent 100%)'
+                            }}
+                          >
+                            <div
+                              style={{
+                                transform: `translateY(${-(currentLyricIdx * 28) + 44}px)`,
+                                transition: 'transform 350ms cubic-bezier(0.22, 1, 0.36, 1)',
+                                willChange: 'transform'
+                              }}
+                            >
+                              {activeLyrics.map((l, idx) => {
+                                const isActive = idx === currentLyricIdx;
+                                return (
+                                  <div
+                                    key={l.time + l.text + idx}
+                                    style={{
+                                      height: 28,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      gap: 6,
+                                      whiteSpace: 'nowrap',
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.28)',
+                                      fontSize: isActive ? 13 : 11,
+                                      fontWeight: isActive ? 700 : 400,
+                                      filter: isActive ? 'blur(0px)' : 'blur(0.5px)',
+                                      transform: isActive ? 'scale(1)' : 'scale(0.96)',
+                                      transformOrigin: 'left center',
+                                      transition: 'all 300ms cubic-bezier(0.22, 1, 0.36, 1)'
+                                    }}
+                                  >
+                                    {isActive && <div style={{ width: 4, height: 4, borderRadius: '50%', background: '#22c55e', flexShrink: 0 }} />}
+                                    <span>{l.text}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Tab 10: Nusa-Style Pomodoro Focus Timer */}
+                {currentTab === 10 && (() => {
+                  const isFocus = pomodoroState.mode === 'focus';
+                  const progress = 1 - (pomodoroState.secondsLeft / pomodoroState.totalSeconds);
+
+                  return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 10px', userSelect: 'none' }}>
+                      {/* Left: Bold 52x52 Circular Progress Ring in Coral Red #ef4444 */}
+                      <div style={{ position: 'relative', width: 52, height: 52, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width={52} height={52} style={{ transform: 'rotate(-90deg)' }}>
+                          <circle cx={26} cy={26} r={21} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={3.5} />
+                          <circle
+                            cx={26}
+                            cy={26}
+                            r={21}
+                            fill="none"
+                            stroke="#ef4444"
+                            strokeWidth={3.5}
+                            strokeDasharray={2 * Math.PI * 21}
+                            strokeDashoffset={2 * Math.PI * 21 * (1 - progress)}
+                            strokeLinecap="round"
+                            style={{ transition: 'stroke-dashoffset 300ms ease' }}
+                          />
+                        </svg>
+                        <div style={{ position: 'absolute' }}>
+                          <Timer size={19} color="#ef4444" />
+                        </div>
+                      </div>
+
+                      {/* Right: Crisp 24px Countdown + Subtitle + 3 Pill Buttons */}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', paddingLeft: 14 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                          <span style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif', letterSpacing: '-0.5px', lineHeight: 1 }}>
+                            {formatTimerMMSS(pomodoroState.secondsLeft)}
+                          </span>
+                          <span style={{ fontSize: 10, fontWeight: 600, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                            {isFocus ? 'Focus Time' : 'Short Break'}
+                          </span>
+                        </div>
+
+                        {/* Row of 3 sleek pill buttons */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          <button
+                            onClick={() => {
+                              setPomodoroState({
+                                isRunning: true,
+                                secondsLeft: 300,
+                                totalSeconds: 300,
+                                mode: 'break'
+                              });
+                            }}
+                            style={{
+                              background: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(255,255,255,0.14)',
+                              borderRadius: 12,
+                              padding: '3px 8px',
+                              fontSize: 9.5,
+                              fontWeight: 600,
+                              color: 'rgba(255,255,255,0.85)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ● Short Break
+                          </button>
+                          <button
+                            onClick={() => {
+                              setPomodoroState(prev => ({ ...prev, isRunning: !prev.isRunning }));
+                            }}
+                            style={{
+                              background: '#ef4444',
+                              border: 'none',
+                              borderRadius: 12,
+                              padding: '3px 12px',
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: '#ffffff',
+                              cursor: 'pointer',
+                              boxShadow: '0 2px 8px rgba(239, 68, 68, 0.4)'
+                            }}
+                          >
+                            {pomodoroState.isRunning ? '⏸ Pause' : '▶ Start'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setPomodoroState({
+                                isRunning: false,
+                                secondsLeft: 1500,
+                                totalSeconds: 1500,
+                                mode: 'focus'
+                              });
+                            }}
+                            style={{
+                              background: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(255,255,255,0.14)',
+                              borderRadius: 12,
+                              padding: '3px 8px',
+                              fontSize: 9.5,
+                              fontWeight: 600,
+                              color: 'rgba(255,255,255,0.85)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            ↻ Focus Time
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Tab 1: Nusa-Style Water Reminder with Hourly Bar Chart */}
+                {currentTab === 1 && (() => {
+                  const target = 1500;
+                  const pct = Math.min(100, Math.round((waterIntake / target) * 100));
+                  const liters = (waterIntake / 1000).toFixed(1);
+
+                  return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 6px', userSelect: 'none' }}>
+                      {/* Left Column: Readout + Progress + Buttons */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: 145, flexShrink: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5 }}>
+                          <span style={{ fontSize: 18, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                            {liters} <span style={{ fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.6)' }}>/ 1.5 L</span>
+                          </span>
+                        </div>
+                        <div style={{ fontSize: 9.5, color: '#38bdf8', fontWeight: 600 }}>
+                          Today: {pct}% • Next: 15:30
+                        </div>
+
+                        {/* Progress bar */}
+                        <div style={{ width: '100%', height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.12)', overflow: 'hidden' }}>
+                          <div style={{ width: `${pct}%`, height: '100%', background: 'linear-gradient(90deg, #0284c7, #38bdf8)', borderRadius: 2, transition: 'width 200ms ease' }} />
+                        </div>
+
+                        {/* Action buttons */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                          <button
+                            onClick={addWaterDrink}
+                            style={{
+                              background: '#0284c7',
+                              border: 'none',
+                              borderRadius: 6,
+                              padding: '3px 8px',
+                              fontSize: 10,
+                              fontWeight: 700,
+                              color: '#ffffff',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 3,
+                              boxShadow: '0 2px 8px rgba(2, 132, 199, 0.4)'
+                            }}
+                          >
+                            <Droplet size={10} fill="#ffffff" />
+                            <span>💧 Drink</span>
+                          </button>
+                          <button
+                            onClick={resetWaterDrink}
+                            style={{
+                              background: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(255,255,255,0.12)',
+                              borderRadius: 6,
+                              padding: '3px 6px',
+                              fontSize: 9.5,
+                              fontWeight: 600,
+                              color: 'rgba(255,255,255,0.65)',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Right Column: Mini Hourly Intake Bar Chart + Circular Gauge */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        {/* Mini Hourly Bar Chart */}
+                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 4, height: 44, padding: '0 2px' }}>
+                          {hourlyWater.map((item) => {
+                            const barPct = Math.min(100, Math.round((item.amount / 600) * 100));
+                            return (
+                              <div key={item.hour} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                                <div style={{
+                                  width: 6,
+                                  height: 32,
+                                  borderRadius: 3,
+                                  background: 'rgba(255,255,255,0.1)',
+                                  display: 'flex',
+                                  alignItems: 'flex-end',
+                                  overflow: 'hidden'
+                                }}>
+                                  <div style={{
+                                    width: '100%',
+                                    height: `${barPct}%`,
+                                    background: 'linear-gradient(to top, #0284c7, #38bdf8)',
+                                    borderRadius: 3,
+                                    transition: 'height 250ms ease'
+                                  }} />
+                                </div>
+                                <span style={{ fontSize: 7.5, color: 'rgba(255,255,255,0.45)', lineHeight: 1 }}>{item.hour}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Circular Gauge */}
+                        <div style={{ position: 'relative', width: 44, height: 44, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <svg width={42} height={42} style={{ transform: 'rotate(-90deg)' }}>
+                            <circle cx={21} cy={21} r={17} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={3} />
+                            <circle
+                              cx={21}
+                              cy={21}
+                              r={17}
+                              fill="none"
+                              stroke="#38bdf8"
+                              strokeWidth={3}
+                              strokeDasharray={2 * Math.PI * 17}
+                              strokeDashoffset={2 * Math.PI * 17 * (1 - pct / 100)}
+                              strokeLinecap="round"
+                              style={{ transition: 'stroke-dashoffset 300ms ease' }}
+                            />
+                          </svg>
+                          <div style={{ position: 'absolute' }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: '#ffffff' }}>{pct}%</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Tab 13: Interactive Drag & Drop File Shelf */}
+                {currentTab === 13 && (() => {
+                  const removeShelfItem = (idx) => {
+                    setShelfFiles(prev => {
+                      const updated = prev.filter((_, i) => i !== idx);
+                      localStorage.setItem("shelf-files", JSON.stringify(updated));
+                      return updated;
+                    });
+                  };
+
+                  const clearShelf = () => {
+                    setShelfFiles([]);
+                    localStorage.removeItem("shelf-files");
+                  };
+
+                  return (
+                    <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', userSelect: 'none' }}>
+                      {/* Translucent Dashed Drop-Zone Overlay during Drag-Over */}
+                      {isDragOverShelf && (
+                        <div className="shelf-drag-overlay">
+                          <Inbox size={26} color="#38bdf8" />
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff', letterSpacing: '0.02em' }}>
+                            Release to add
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Shelf Content (dims and blurs when dragging over, preserving stashed items) */}
+                      <div
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          justifyContent: 'center',
+                          opacity: isDragOverShelf ? 0.25 : 1,
+                          filter: isDragOverShelf ? 'blur(2px)' : 'none',
+                          transition: 'opacity 220ms ease, filter 220ms ease'
+                        }}
+                      >
+                        {shelfFiles.length === 0 ? (
+                          /* Empty State */
+                          <div className="shelf-dropzone" style={{
+                            width: '100%',
+                            height: 80,
+                            borderRadius: 12,
+                            border: '1.5px dashed rgba(255,255,255,0.2)',
+                            background: 'rgba(255,255,255,0.03)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 10,
+                            boxSizing: 'border-box'
+                          }}>
+                            <Inbox size={22} color="rgba(255,255,255,0.5)" />
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff' }}>
+                                Drop files here
+                              </span>
+                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>
+                                Drop files anytime, click to open
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          /* Populated State with Stashed Files */
+                          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {/* Top header row */}
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
+                                {shelfFiles.length} file{shelfFiles.length > 1 ? 's' : ''} stashed
+                              </span>
+                              <button
+                                onClick={clearShelf}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#ef4444',
+                                  fontSize: 9.5,
+                                  fontWeight: 600,
+                                  cursor: 'pointer',
+                                  padding: '1px 4px'
+                                }}
+                              >
+                                Clear
+                              </button>
+                            </div>
+
+                            {/* Horizontal scrollable row of file cards */}
+                            <div style={{
+                              display: 'flex',
+                              gap: 8,
+                              overflowX: 'auto',
+                              paddingBottom: 2,
+                              scrollbarWidth: 'none'
+                            }}>
+                              {shelfFiles.map((file, idx) => (
+                                <div
+                                  key={file.name + idx}
+                                  draggable
+                                  onDragStart={() => {
+                                    if (file.path && window.electronAPI?.startDrag) {
+                                      window.electronAPI.startDrag(file.path);
+                                    }
+                                  }}
+                                  onClick={() => {
+                                    if (file.path && window.electronAPI?.openExternal) {
+                                      window.electronAPI.openExternal(file.path);
+                                    }
+                                  }}
+                                  className={`shelf-item-card ${idx === 0 ? "shelf-popin-item" : ""}`}
+                                  style={{
+                                    background: 'rgba(255,255,255,0.08)',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    borderRadius: 10,
+                                    padding: '6px 10px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 6,
+                                    minWidth: 110,
+                                    maxWidth: 140,
+                                    cursor: 'pointer',
+                                    flexShrink: 0,
+                                    position: 'relative'
+                                  }}
+                                >
+                                  <File size={16} color="#38bdf8" style={{ flexShrink: 0 }} />
+                                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                      {file.name}
+                                    </span>
+                                    <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.5)' }}>
+                                      {file.size}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeShelfItem(idx);
+                                    }}
+                                    className="shelf-item-remove"
+                                    style={{
+                                      background: 'none',
+                                      border: 'none',
+                                      color: 'rgba(255,255,255,0.4)',
+                                      cursor: 'pointer',
+                                      padding: 2,
+                                      display: 'flex',
+                                      alignItems: 'center'
+                                    }}
+                                  >
+                                    <X size={10} />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
+                    </div>
+                  );
+                })()}
 
-                      {/* Device Master Volume Row */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                {/* Tab 8: To-Do List (Quick Tasks) */}
+                {currentTab === 8 && (() => {
+                  const completedCount = tasks.filter(t => (typeof t === 'object' ? (t.completed || t.done) : false)).length;
+                  const totalCount = tasks.length;
+                  const ratio = totalCount > 0 ? `${completedCount}/${totalCount}` : "0/0";
+
+                  const toggleTaskIdx = (idx) => {
+                    setTasks(prev => {
+                      const updated = [...prev];
+                      const item = updated[idx];
+                      if (typeof item === 'object') {
+                        updated[idx] = { ...item, completed: !item.completed };
+                      } else {
+                        updated[idx] = { title: String(item), completed: true };
+                      }
+                      localStorage.setItem("tasks", JSON.stringify(updated));
+                      return updated;
+                    });
+                  };
+
+                  const removeTaskIdx = (idx) => {
+                    setTasks(prev => {
+                      const updated = prev.filter((_, i) => i !== idx);
+                      localStorage.setItem("tasks", JSON.stringify(updated));
+                      return updated;
+                    });
+                  };
+
+                  const addNewTask = () => {
+                    if (!taskText.trim()) return;
+                    const newTask = { title: taskText.trim(), completed: false, id: Date.now() };
+                    setTasks(prev => {
+                      const updated = [newTask, ...prev];
+                      localStorage.setItem("tasks", JSON.stringify(updated));
+                      return updated;
+                    });
+                    setTaskText("");
+                  };
+
+                  return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '0 4px', userSelect: 'none' }}>
+                      {/* Left Column: Ratio & Quick Add */}
+                      <div style={{ width: 125, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                            {ratio} Done
+                          </div>
+                          <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.5)' }}>
+                            Tasks for today
+                          </div>
+                        </div>
+                        {/* Quick Add Input */}
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                          borderRadius: 6,
+                          padding: '2px 6px',
+                          marginTop: 2
+                        }}>
+                          <input
+                            placeholder="+ Add task..."
+                            value={taskText}
+                            onChange={(e) => setTaskText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                addNewTask();
+                              }
+                            }}
+                            style={{
+                              width: '100%',
+                              background: 'none',
+                              border: 'none',
+                              outline: 'none',
+                              fontSize: 10,
+                              color: '#ffffff',
+                              padding: 0
+                            }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Right Column: Scrollable Task List */}
+                      <div style={{
+                        flex: 1,
+                        height: 78,
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                        paddingRight: 2
+                      }}>
+                        {tasks.length === 0 ? (
+                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginTop: 24 }}>
+                            No tasks yet. Press Enter to add.
+                          </div>
+                        ) : (
+                          tasks.map((task, idx) => {
+                            const isDone = typeof task === 'object' ? (task.completed || task.done) : false;
+                            const title = typeof task === 'object' ? (task.title || task.text || "Task") : String(task);
+
+                            return (
+                              <div
+                                key={idx}
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  background: 'rgba(255,255,255,0.04)',
+                                  borderRadius: 6,
+                                  padding: '3px 6px',
+                                  gap: 6
+                                }}
+                              >
+                                <div
+                                  onClick={() => toggleTaskIdx(idx)}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1, minWidth: 0 }}
+                                >
+                                  {isDone ? (
+                                    <CheckSquare size={13} color="#22c55e" style={{ flexShrink: 0 }} />
+                                  ) : (
+                                    <Square size={13} color="rgba(255,255,255,0.4)" style={{ flexShrink: 0 }} />
+                                  )}
+                                  <span style={{
+                                    fontSize: 10.5,
+                                    color: isDone ? 'rgba(255,255,255,0.35)' : '#ffffff',
+                                    textDecoration: isDone ? 'line-through' : 'none',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis'
+                                  }}>
+                                    {title}
+                                  </span>
+                                </div>
+                                <button
+                                  onClick={() => removeTaskIdx(idx)}
+                                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', padding: 0 }}
+                                >
+                                  <Trash2 size={10} />
+                                </button>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Tab 0: Browser Search */}
+                {currentTab === 0 && (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 8px', boxSizing: 'border-box' }}>
+                    <div
+                      style={{
+                        width: '100%',
+                        maxWidth: 310,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 8,
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.14)',
+                        borderRadius: 10,
+                        padding: '6px 10px',
+                        boxSizing: 'border-box'
+                      }}
+                    >
+                      <Search size={14} color="rgba(255, 255, 255, 0.5)" style={{ flexShrink: 0 }} />
+                      <input
+                        id="browser-searchbar"
+                        placeholder="Search Google or type a URL..."
+                        value={browserSearch}
+                        onChange={(e) => setBrowserSearch(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            e.preventDefault();
+                            searchBrowser();
+                          }
+                        }}
+                        style={{
+                          flex: 1,
+                          minWidth: 0,
+                          background: 'transparent',
+                          border: 'none',
+                          outline: 'none',
+                          color: textColor || '#ffffff',
+                          fontSize: 12,
+                          fontWeight: 500,
+                          textAlign: 'left',
+                          padding: 0,
+                          caretColor: textColor || '#ffffff',
+                          fontFamily: 'OpenRunde, system-ui, sans-serif'
+                        }}
+                        autoFocus
+                      />
+                      {browserSearch && (
                         <button
                           type="button"
-                          onClick={() => handleToggleMasterMute()}
+                          onClick={() => setBrowserSearch("")}
                           style={{
                             background: 'transparent',
                             border: 'none',
-                            padding: 0,
                             cursor: 'pointer',
+                            padding: 0,
                             display: 'flex',
                             alignItems: 'center',
-                            opacity: masterAudioMuted ? 0.6 : 0.9
+                            color: 'rgba(255, 255, 255, 0.45)'
                           }}
-                          title={masterAudioMuted ? "Unmute Master" : "Mute Master"}
                         >
-                          {masterAudioMuted ? <VolumeX size={12} color="#f87171" /> : <Volume2 size={12} color="#a855f7" />}
+                          <X size={12} />
                         </button>
+                      )}
+                    </div>
+                    <div style={{ marginTop: 5, display: 'flex', alignItems: 'center', gap: 5, opacity: 0.45, fontSize: 9.5 }}>
+                      <span>Press</span>
+                      <kbd style={{ background: 'rgba(255,255,255,0.12)', padding: '1px 4px', borderRadius: 4, fontSize: 9 }}>Enter</kbd>
+                      <span>to search or navigate</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Tab 14: Quick App Launcher & Workspace Switcher */}
+                {currentTab === 14 && (
+                  <ErrorBoundary tabName="App Launcher" onGoHome={() => setTabState([3, -1])}>
+                    <AppLauncher
+                      textColor={textColor}
+                      accentColor="#38bdf8"
+                      onClose={() => setMode("still")}
+                    />
+                  </ErrorBoundary>
+                )}
+
+                {/* Tab 15: Quick Notes & Contextual Capture */}
+                {currentTab === 15 && (
+                  <ErrorBoundary tabName="Quick Notes" onGoHome={() => setTabState([3, -1])}>
+                    <QuickNotes
+                      textColor={textColor}
+                      accentColor="#10b981"
+                      onTaskCreated={(task) => {
+                        setTasks(prev => {
+                          const updated = [task, ...prev];
+                          localStorage.setItem("tasks", JSON.stringify(updated));
+                          return updated;
+                        });
+                      }}
+                    />
+                  </ErrorBoundary>
+                )}
+
+                {/* Tab 12: Audio Mixer */}
+                {currentTab === 12 && (() => {
+                  const masterPercent = Math.round((masterAudioVolume || 0) * 100);
+                  const activeDevice = audioDevices.find(d => d.id === activeAudioDeviceId);
+
+                  return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 8px', userSelect: 'none' }}>
+                      {/* Left: Master Volume Slider & Mute */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: 140 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                            {masterAudioMuted ? <VolumeX size={14} color="#ef4444" /> : <Volume2 size={14} color="#38bdf8" />}
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff' }}>Master</span>
+                          </div>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.7)' }}>{masterPercent}%</span>
+                        </div>
                         <input
                           type="range"
                           min="0"
                           max="100"
-                          value={masterAudioMuted ? 0 : Math.round(masterAudioVolume * 100)}
-                          onChange={(e) => handleSetMasterVolume(parseFloat(e.target.value) / 100)}
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            width: '100%',
-                            height: 3,
-                            accentColor: '#a855f7',
-                            cursor: 'pointer'
-                          }}
+                          value={masterPercent}
+                          onChange={(e) => handleSetMasterVolume(Number(e.target.value) / 100)}
+                          style={{ width: '100%', accentColor: '#38bdf8', height: 4, cursor: 'pointer' }}
                         />
-                        <span style={{ fontSize: 9.5, fontWeight: 700, color: masterAudioMuted ? '#f87171' : 'rgba(255,255,255,0.7)', width: 28, textAlign: 'right', flexShrink: 0 }}>
-                          {masterAudioMuted ? "M" : `${Math.round(masterAudioVolume * 100)}%`}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Bottom Search & Refresh Capsule */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      width: '100%',
-                      background: 'rgba(255, 255, 255, 0.06)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: 10,
-                      padding: '3px 6px',
-                      boxSizing: 'border-box'
-                    }}>
-                      <Search size={11} color="rgba(255, 255, 255, 0.4)" style={{ flexShrink: 0 }} />
-                      <input
-                        type="text"
-                        placeholder="Filter apps..."
-                        value={audioSearch}
-                        onChange={(e) => setAudioSearch(e.target.value)}
-                        style={{
-                          flex: 1,
-                          background: 'transparent',
-                          border: 'none',
-                          outline: 'none',
-                          color: '#ffffff',
-                          fontSize: 10,
-                          minWidth: 0
-                        }}
-                      />
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => {
-                          fetchAudioDevices();
-                          fetchAudioSessions(activeAudioDeviceId, true);
-                        }}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          padding: 2,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          color: 'rgba(255, 255, 255, 0.6)'
-                        }}
-                        title="Refresh sessions"
-                      >
-                        <RefreshCw size={11} className={audioLoading ? "spin-anim" : ""} />
-                      </motion.button>
-                    </div>
-                  </div>
-
-                  {/* Right Column: Scrollable List of Applications */}
-                  <div
-                    className="audio-mixer-scrollable"
-                    style={{
-                      flex: 1,
-                      height: '100%',
-                      overflowY: 'auto',
-                      overflowX: 'hidden',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                      minWidth: 0,
-                      paddingRight: 4,
-                      boxSizing: 'border-box'
-                    }}
-                  >
-                    {audioSessions.length === 0 ? (
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        height: '100%',
-                        opacity: 0.5,
-                        gap: 6
-                      }}>
-                        <Volume2 size={24} color="rgba(255,255,255,0.4)" />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>
-                          No active audio sessions
-                        </span>
-                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>
-                          Play sound in any app to control it here
-                        </span>
-                      </div>
-                    ) : filteredSessions.length === 0 ? (
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        height: '100%',
-                        opacity: 0.5,
-                        gap: 4
-                      }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>
-                          No apps match "{audioSearch}"
-                        </span>
-                      </div>
-                    ) : (
-                      filteredSessions.map((s) => {
-                        const isAppMuted = Boolean(s.isMuted);
-                        const appVol = typeof s.volume === 'number' ? s.volume : 1;
-                        const pct = isAppMuted ? 0 : Math.round(appVol * 100);
-                        const isAudioActive = s.peak > 0.01 || s.state === 'AudioSessionStateActive';
-
-                        return (
-                          <div
-                            key={s.id}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 9,
-                              padding: '5px 8px',
-                              background: 'rgba(255, 255, 255, 0.04)',
-                              border: '1px solid rgba(255, 255, 255, 0.07)',
-                              borderRadius: 10,
-                              boxSizing: 'border-box',
-                              userSelect: 'none'
-                            }}
-                          >
-                            {/* App Icon */}
-                            <div style={{
-                              width: 26,
-                              height: 26,
-                              borderRadius: 6,
-                              background: 'rgba(255, 255, 255, 0.06)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              overflow: 'hidden',
-                              flexShrink: 0,
-                              position: 'relative'
-                            }}>
-                              {s.icon ? (
-                                <img
-                                  src={s.icon}
-                                  alt=""
-                                  draggable={false}
-                                  style={{ width: 22, height: 22, objectFit: 'contain', pointerEvents: 'none' }}
-                                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                                />
-                              ) : (
-                                <SlidersHorizontal size={14} color="rgba(255,255,255,0.7)" />
-                              )}
-                              {/* Audio peak activity indicator */}
-                              {isAudioActive && (
-                                <span style={{
-                                  position: 'absolute',
-                                  bottom: 1,
-                                  right: 1,
-                                  width: 5,
-                                  height: 5,
-                                  borderRadius: '50%',
-                                  background: '#34d399',
-                                  boxShadow: '0 0 6px #34d399'
-                                }} />
-                              )}
-                            </div>
-
-                            {/* Center: App Name & Volume Slider */}
-                            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                                  <span style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    color: '#ffffff',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  }}>
-                                    {s.displayName || s.processName}
-                                  </span>
-                                  {s.sessionsCount > 1 && (
-                                    <span style={{
-                                      fontSize: 8,
-                                      fontWeight: 600,
-                                      padding: '0 4px',
-                                      borderRadius: 4,
-                                      background: 'rgba(255,255,255,0.1)',
-                                      color: 'rgba(255,255,255,0.6)'
-                                    }}>
-                                      {s.sessionsCount} streams
-                                    </span>
-                                  )}
-                                </div>
-                                <span style={{
-                                  fontSize: 10,
-                                  fontWeight: 700,
-                                  color: isAppMuted ? '#f87171' : 'rgba(255, 255, 255, 0.75)',
-                                  width: 32,
-                                  textAlign: 'right'
-                                }}>
-                                  {isAppMuted ? "Muted" : `${pct}%`}
-                                </span>
-                              </div>
-
-                              {/* Volume Slider Track */}
-                              <input
-                                type="range"
-                                min="0"
-                                max="100"
-                                value={isAppMuted ? 0 : pct}
-                                onChange={(e) => handleSetAppVolume(s, parseFloat(e.target.value) / 100)}
-                                style={{
-                                  width: '100%',
-                                  height: 4,
-                                  accentColor: isAppMuted ? '#f87171' : '#38bdf8',
-                                  cursor: 'pointer'
-                                }}
-                              />
-                            </div>
-
-                            {/* Mute Button */}
-                            <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
-                              type="button"
-                              onClick={() => handleToggleAppMute(s)}
-                              style={{
-                                width: 26,
-                                height: 26,
-                                borderRadius: 7,
-                                background: isAppMuted ? 'rgba(248, 113, 113, 0.15)' : 'rgba(255, 255, 255, 0.06)',
-                                border: `1px solid ${isAppMuted ? 'rgba(248, 113, 113, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
-                                cursor: 'pointer',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                flexShrink: 0
-                              }}
-                              title={isAppMuted ? "Unmute" : "Mute"}
-                            >
-                              {isAppMuted ? (
-                                <VolumeX size={13} color="#f87171" />
-                              ) : (
-                                <Volume2 size={13} color="rgba(255, 255, 255, 0.85)" />
-                              )}
-                            </motion.button>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Universal Progress Island Tab (Tab 13) */}
-            {currentTab === 13 && (() => {
-              const activeOps = progressSnapshot?.active || [];
-              const historyOps = progressSnapshot?.history || [];
-              const summary = progressSnapshot?.summary || {};
-
-              const displayedOps = progressFilter === "active"
-                ? activeOps
-                : progressFilter === "history"
-                  ? historyOps
-                  : [...activeOps, ...historyOps];
-
-              const getCategoryIcon = (category, size = 15, color = "#38bdf8") => {
-                switch (category) {
-                  case "download": return <Download size={size} color={color} />;
-                  case "upload": return <Upload size={size} color={color} />;
-                  case "file-operation": return <FileText size={size} color={color} />;
-                  case "update": return <RefreshCw size={size} color={color} />;
-                  case "installation": return <Package size={size} color={color} />;
-                  case "render": return <Film size={size} color={color} />;
-                  default: return <Layers size={size} color={color} />;
-                }
-              };
-
-              const getStatusBadge = (status) => {
-                switch (status) {
-                  case "running":
-                    return { text: "Running", bg: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", border: "rgba(56, 189, 248, 0.25)" };
-                  case "paused":
-                    return { text: "Paused", bg: "rgba(251, 191, 36, 0.12)", color: "#fbbf24", border: "rgba(251, 191, 36, 0.25)" };
-                  case "completed":
-                    return { text: "Completed", bg: "rgba(34, 197, 94, 0.12)", color: "#22c55e", border: "rgba(34, 197, 94, 0.25)" };
-                  case "failed":
-                    return { text: "Failed", bg: "rgba(239, 68, 68, 0.12)", color: "#ef4444", border: "rgba(239, 68, 68, 0.25)" };
-                  case "cancelled":
-                    return { text: "Cancelled", bg: "rgba(156, 163, 175, 0.12)", color: "#9ca3af", border: "rgba(156, 163, 175, 0.25)" };
-                  default:
-                    return { text: status, bg: "rgba(255, 255, 255, 0.08)", color: "rgba(255, 255, 255, 0.7)", border: "rgba(255, 255, 255, 0.1)" };
-                }
-              };
-
-              return (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: '8px 14px',
-                  boxSizing: 'border-box',
-                  gap: 7,
-                  userSelect: 'none'
-                }}>
-                  {/* Top Header Bar */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    paddingBottom: 2,
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
-                  }}>
-                    {/* Left: Title + Active summary badge */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <div style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: 6,
-                        background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2))',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <Layers size={13} color="#38bdf8" />
-                      </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>
-                        Universal Progress Island
-                      </span>
-                      {activeOps.length > 0 && (
-                        <span style={{
-                          fontSize: 9.5,
-                          fontWeight: 700,
-                          padding: '1px 6px',
-                          borderRadius: 8,
-                          background: 'rgba(56, 189, 248, 0.15)',
-                          color: '#38bdf8',
-                          border: '1px solid rgba(56, 189, 248, 0.3)'
-                        }}>
-                          {activeOps.length} active
-                        </span>
-                      )}
-                      {summary.totalBytesPerSecond > 0 && (
-                        <span style={{
-                          fontSize: 9.5,
-                          fontWeight: 600,
-                          color: 'rgba(255, 255, 255, 0.6)'
-                        }}>
-                          · {formatBytes(summary.totalBytesPerSecond)}/s
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Right: Filters & Test Tool */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {/* Filter Pills */}
-                      <div style={{
-                        display: 'flex',
-                        background: 'rgba(255, 255, 255, 0.06)',
-                        borderRadius: 7,
-                        padding: 2,
-                        gap: 2
-                      }}>
-                        {[
-                          { id: "all", label: `All (${activeOps.length + historyOps.length})` },
-                          { id: "active", label: `Active (${activeOps.length})` },
-                          { id: "history", label: `Done (${historyOps.length})` },
-                        ].map(f => (
-                          <button
-                            key={f.id}
-                            onClick={() => setProgressFilter(f.id)}
-                            style={{
-                              background: progressFilter === f.id ? 'rgba(255, 255, 255, 0.16)' : 'transparent',
-                              border: 'none',
-                              borderRadius: 5,
-                              padding: '2px 6px',
-                              color: progressFilter === f.id ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
-                              fontSize: 9.5,
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {f.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Clear History */}
-                      {historyOps.length > 0 && (
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={handleClearProgressHistory}
-                          title="Clear history"
+                        <button
+                          onClick={handleToggleMasterMute}
                           style={{
-                            background: 'transparent',
-                            border: 'none',
-                            padding: '2px 4px',
-                            color: 'rgba(255, 255, 255, 0.4)',
+                            background: masterAudioMuted ? 'rgba(239, 68, 68, 0.2)' : 'rgba(255,255,255,0.08)',
+                            border: `1px solid ${masterAudioMuted ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.12)'}`,
+                            borderRadius: 6,
+                            padding: '2px 8px',
+                            fontSize: 9.5,
+                            color: masterAudioMuted ? '#ef4444' : 'rgba(255,255,255,0.8)',
                             cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center'
+                            alignSelf: 'flex-start'
                           }}
                         >
-                          <Trash2 size={11} />
-                        </motion.button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Operations List Container */}
-                  <div
-                    className="progress-island-scrollable"
-                    style={{
-                      flex: 1,
-                      overflowY: 'auto',
-                      overflowX: 'hidden',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                      paddingRight: 3,
-                      boxSizing: 'border-box'
-                    }}
-                  >
-                    {displayedOps.length === 0 ? (
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        height: '100%',
-                        opacity: 0.6,
-                        gap: 5
-                      }}>
-                        <Layers size={22} color="rgba(255, 255, 255, 0.35)" />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>
-                          No {progressFilter === "active" ? "active" : progressFilter === "history" ? "past" : ""} operations
-                        </span>
-                        <span style={{ fontSize: 9.5, color: 'rgba(255, 255, 255, 0.45)' }}>
-                          Background downloads, file transfers, and system updates appear here
-                        </span>
+                          {masterAudioMuted ? 'Unmute' : 'Mute'}
+                        </button>
                       </div>
-                    ) : (
-                      displayedOps.map(op => {
-                        const statusBadge = getStatusBadge(op.status);
-                        const isIndeterminate = op.progress === null || op.status === "indeterminate";
-                        const percentVal = typeof op.progress === "number" ? Math.round(op.progress) : null;
-                        const caps = op.capabilities || {};
 
-                        return (
-                          <div
-                            key={op.id}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 10,
-                              padding: '6px 10px',
-                              background: 'rgba(255, 255, 255, 0.04)',
-                              border: '1px solid rgba(255, 255, 255, 0.08)',
-                              borderRadius: 10,
-                              boxSizing: 'border-box'
-                            }}
-                          >
-                            {/* Category Icon */}
-                            <div style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: 8,
-                              background: 'rgba(255, 255, 255, 0.06)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
-                            }}>
-                              {getCategoryIcon(op.category, 15, statusBadge.color)}
-                            </div>
-
-                            {/* Main Content: Info & Progress Bar */}
-                            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              {/* Row 1: Title + Application + Status */}
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                                  <span style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    color: '#ffffff',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  }}>
-                                    {op.title}
-                                  </span>
-                                  {op.applicationName && (
-                                    <span style={{
-                                      fontSize: 8.5,
-                                      fontWeight: 600,
-                                      padding: '1px 4px',
-                                      borderRadius: 4,
-                                      background: 'rgba(255, 255, 255, 0.08)',
-                                      color: 'rgba(255, 255, 255, 0.6)',
-                                      whiteSpace: 'nowrap'
-                                    }}>
-                                      {op.applicationName}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                  {/* Percent or working label */}
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: statusBadge.color }}>
-                                    {percentVal !== null ? `${percentVal}%` : statusBadge.text}
-                                  </span>
-                                  {/* Status Tag */}
-                                  <span style={{
-                                    fontSize: 8.5,
-                                    fontWeight: 700,
-                                    padding: '1px 5px',
-                                    borderRadius: 4,
-                                    background: statusBadge.bg,
-                                    color: statusBadge.color,
-                                    border: `1px solid ${statusBadge.border}`
-                                  }}>
-                                    {statusBadge.text}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Progress Bar */}
-                              <div style={{
-                                width: '100%',
-                                height: 4,
-                                borderRadius: 2,
-                                background: 'rgba(255, 255, 255, 0.1)',
-                                overflow: 'hidden',
-                                position: 'relative'
-                              }}>
-                                {isIndeterminate ? (
-                                  <div className="progress-shimmer-bar" style={{
-                                    height: '100%',
-                                    width: '35%',
-                                    background: statusBadge.color,
-                                    borderRadius: 2
-                                  }} />
-                                ) : (
-                                  <div style={{
-                                    height: '100%',
-                                    width: `${percentVal}%`,
-                                    background: statusBadge.color,
-                                    borderRadius: 2,
-                                    transition: 'width 0.25s ease'
-                                  }} />
-                                )}
-                              </div>
-
-                              {/* Row 2: Subtitle / Transfer stats & ETA */}
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 9, color: 'rgba(255, 255, 255, 0.5)' }}>
-                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '65%' }}>
-                                  {op.errorMessage ? (
-                                    <span style={{ color: '#ef4444' }}>{op.errorMessage}</span>
-                                  ) : op.subtitle ? (
-                                    op.subtitle
-                                  ) : (
-                                    op.totalBytes ? `${formatBytes(op.bytesCompleted || 0)} / ${formatBytes(op.totalBytes)}` : ""
-                                  )}
-                                </span>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                  {op.bytesPerSecond > 0 && (
-                                    <span>{formatBytes(op.bytesPerSecond)}/s</span>
-                                  )}
-                                  {op.estimatedRemainingSeconds > 0 && (
-                                    <span>{op.estimatedRemainingSeconds < 60 ? `${op.estimatedRemainingSeconds}s left` : `${Math.ceil(op.estimatedRemainingSeconds / 60)}m left`}</span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Actions Button Group */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                              {caps.canPause && op.status === "running" && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "pause")}
-                                  title="Pause"
-                                  style={{
-                                    background: 'rgba(255, 255, 255, 0.08)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#ffffff',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <Pause size={10} />
-                                </motion.button>
-                              )}
-
-                              {caps.canResume && op.status === "paused" && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "resume")}
-                                  title="Resume"
-                                  style={{
-                                    background: 'rgba(56, 189, 248, 0.2)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#38bdf8',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <Play size={10} fill="#38bdf8" />
-                                </motion.button>
-                              )}
-
-                              {caps.canCancel && (op.status === "running" || op.status === "paused") && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "cancel")}
-                                  title="Cancel"
-                                  style={{
-                                    background: 'rgba(255, 255, 255, 0.08)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'rgba(255, 255, 255, 0.6)',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <X size={11} />
-                                </motion.button>
-                              )}
-
-                              {caps.canRetry && (op.status === "failed" || op.status === "cancelled") && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "retry")}
-                                  title="Retry"
-                                  style={{
-                                    background: 'rgba(56, 189, 248, 0.2)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#38bdf8',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <RotateCcw size={10} />
-                                </motion.button>
-                              )}
-
-                              {caps.canOpenDestination && op.destinationPath && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "openDestination")}
-                                  title="Open destination folder"
-                                  style={{
-                                    background: 'rgba(255, 255, 255, 0.08)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#ffffff',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <FolderOpen size={11} />
-                                </motion.button>
-                              )}
-
-                              {caps.canDismiss && (op.status === "completed" || op.status === "failed" || op.status === "cancelled") && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "dismiss")}
-                                  title="Dismiss"
-                                  style={{
-                                    background: 'transparent',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 20,
-                                    height: 20,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'rgba(255, 255, 255, 0.35)',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <X size={11} />
-                                </motion.button>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Quick App Launcher & Workspace Switcher */}
-            {currentTab === 14 && (
-              <ErrorBoundary tabName="App Launcher" onGoHome={() => setTabState([2, -1])}>
-                <AppLauncher
-                  textColor={textColor}
-                  accentColor="#38bdf8"
-                  onClose={() => setMode("still")}
-                />
-              </ErrorBoundary>
-            )}
-
-            {/* Quick Notes & Contextual Capture */}
-            {currentTab === 15 && (
-              <ErrorBoundary tabName="Quick Notes" onGoHome={() => setTabState([2, -1])}>
-                <QuickNotes
-                  textColor={textColor}
-                  accentColor="#10b981"
-                  onTaskCreated={(task) => {
-                    setTasks(prev => {
-                      const updated = [task, ...prev];
-                      localStorage.setItem("tasks", JSON.stringify(updated));
-                      return updated;
-                    });
-                  }}
-                />
-              </ErrorBoundary>
-            )}
-
-            {/* Now Playing*/}
-            {currentTab === 3 && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                width: '100%',
-                height: '100%',
-                userSelect: 'none'
-              }}>
-                <AnimatePresence mode="wait">
-                  {spotifyTrack ? (
-                    <motion.div
-                      key={spotifyTrack.name + spotifyTrack.artist}
-                      initial={{ opacity: 0, filter: 'blur(10px)', scale: 0.95 }}
-                      animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
-                      exit={{ opacity: 0, filter: 'blur(10px)', scale: 0.95 }}
-                      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-                      style={{
-                        position: 'relative',
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        padding: '14px 18px',
-                        boxSizing: 'border-box',
-                        overflow: 'hidden',
-                        borderRadius: 24
-                      }}
-                    >
-                      {/* Full-bleed background album art */}
-                      {spotifyTrack.artwork_url && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            right: 0,
-                            bottom: 0,
-                            left: 0,
-                            backgroundImage: `url("${spotifyTrack.artwork_url}")`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                            filter: 'brightness(0.65)',
-                            borderRadius: 'inherit',
-                            zIndex: 0
-                          }}
-                        />
-                      )}
-
-                      {/* Vignette gradient dark overlay */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          background: 'linear-gradient(to right, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.45) 50%, rgba(0,0,0,0.25) 100%), linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 70%)',
-                          borderRadius: 'inherit',
-                          zIndex: 1
-                        }}
-                      />
-
-                      {/* Content Layer */}
-                      <div style={{
-                        position: 'relative',
-                        zIndex: 2,
-                        display: 'flex',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        height: '100%',
-                        width: '100%',
-                        gap: 16,
-                        padding: '4px 8px',
-                        boxSizing: 'border-box'
-                      }}>
-                        {/* Left: Album Artwork Card Thumbnail */}
-                        {spotifyTrack.artwork_url && (
-                          <div style={{
-                            width: 80,
-                            height: 80,
-                            borderRadius: 14,
-                            overflow: 'hidden',
-                            flexShrink: 0,
-                            boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
-                            position: 'relative'
-                          }}>
-                            <img
-                              src={spotifyTrack.artwork_url}
-                              alt=""
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
-                            {/* App badge at bottom-right corner */}
-                            <div style={{
-                              position: 'absolute',
-                              bottom: 4,
-                              right: 4,
-                              width: 20,
-                              height: 20,
-                              borderRadius: '50%',
-                              backgroundColor: 'rgba(0,0,0,0.7)',
-                              backdropFilter: 'blur(4px)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}>
-                              <Music size={11} color="#ffffff" />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Right: Metadata + Controls Column */}
+                      {/* Right: Output Device Info */}
+                      <div style={{ flex: 1, minWidth: 0, paddingLeft: 12, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.5)' }}>Output Device</span>
                         <div style={{
+                          background: 'rgba(255,255,255,0.06)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: 8,
+                          padding: '6px 8px',
                           display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                          flex: 1,
-                          minWidth: 0,
-                          height: 80
+                          alignItems: 'center',
+                          gap: 6
                         }}>
-                          {/* Title & Artist */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.6)' }}>
-                              <Music size={12} color="rgba(255,255,255,0.75)" />
-                              <span>{cleanAppName(spotifyTrack?.source)}</span>
+                          <Headphones size={14} color="#38bdf8" style={{ flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 10.5, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {activeDevice?.name || "System Default Endpoint"}
                             </div>
-                            <ScrollingTitle text={spotifyTrack.name || "Unknown Title"} fontSize={14} />
-                            <p
-                              style={{
-                                margin: 0,
-                                fontSize: 12,
-                                fontWeight: 400,
-                                color: 'rgba(255,255,255,0.65)',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                maxWidth: '360px',
-                                fontFamily: 'OpenRunde, system-ui, sans-serif'
-                              }}
-                            >
-                              {spotifyTrack.artist || "Unknown Artist"}
-                            </p>
-                          </div>
-
-                          {/* Row: Scrubber + Controls */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <WaveformScrubber
-                                position={mediaPosition}
-                                duration={spotifyTrack.duration || 0}
-                                isPlaying={spotifyTrack.state === 'playing'}
-                                onSeek={(sec) => {
-                                  setMediaPosition(sec);
-                                  if (window.electronAPI?.controlSystemMedia) {
-                                    window.electronAPI.controlSystemMedia('seek', sec);
-                                  }
-                                }}
-                              />
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                              <button
-                                className="media-btn"
-                                onClick={() => {
-                                  lastMediaActionRef.current = Date.now();
-                                  if (window.electronAPI?.controlSystemMedia) {
-                                    window.electronAPI.controlSystemMedia('previous');
-                                  }
-                                }}
-                                style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                title="Previous Track"
-                                aria-label="Previous Track"
-                              >
-                                <SkipBackIcon size={18} color="#ffffff" fill="#ffffff" />
-                              </button>
-                              <button
-                                className="media-btn"
-                                onClick={() => {
-                                  lastMediaActionRef.current = Date.now();
-                                  setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
-                                  if (window.electronAPI?.controlSystemMedia) {
-                                    window.electronAPI.controlSystemMedia('playpause');
-                                  }
-                                }}
-                                style={{
-                                  background: 'rgba(255,255,255,0.2)',
-                                  backdropFilter: 'blur(8px)',
-                                  border: '1px solid rgba(255,255,255,0.25)',
-                                  borderRadius: '50%',
-                                  width: 32,
-                                  height: 32,
-                                  color: '#ffffff',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  boxShadow: '0 2px 10px rgba(0,0,0,0.35)'
-                                }}
-                                title={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
-                                aria-label={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
-                              >
-                                {spotifyTrack.state === 'playing' ? <Pause size={16} color="#ffffff" fill="#ffffff" /> : <Play size={16} color="#ffffff" fill="#ffffff" />}
-                              </button>
-                              <button
-                                className="media-btn"
-                                onClick={() => {
-                                  lastMediaActionRef.current = Date.now();
-                                  if (window.electronAPI?.controlSystemMedia) {
-                                    window.electronAPI.controlSystemMedia('next');
-                                  }
-                                }}
-                                style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                title="Next Track"
-                                aria-label="Next Track"
-                              >
-                                <SkipForwardIcon size={18} color="#ffffff" fill="#ffffff" />
-                              </button>
-                            </div>
+                            <div style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.4)' }}>Windows Audio Device</div>
                           </div>
                         </div>
                       </div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="nothing"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'center',
-                        color: textColor,
-                        fontFamily: theme === "win95" ? "w95" : "OpenRunde"
-                      }}
-                    >
-                      <h3 style={{ margin: 0, fontSize: 16 }}>Nothing Playing</h3>
-                      <p style={{ margin: '5px 0 0 0', opacity: 0.7, fontSize: 13 }}>Play music on Spotify or Apple Music</p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
+                    </div>
+                  );
+                })()}
 
-            {/* Calendar Tab */}
-            {currentTab === 4 && (() => {
-              const today = new Date();
-              const selectedYear = calendarDate.getFullYear();
-              const selectedMonth = calendarDate.getMonth();
-              const monthNameUpper = calendarDate.toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
-              const todayWeekdayFull = today.toLocaleDateString('en-US', { weekday: 'long' });
-              const days = getCalendarDays(selectedYear, selectedMonth);
 
-              return (
-                <div
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '8px 16px',
-                    boxSizing: 'border-box',
-                    gap: 16,
-                    userSelect: 'none'
-                  }}
-                >
-                  {/* Left Column: Hero Date Card */}
-                  <div
-                    style={{
-                      width: 105,
-                      height: '100%',
-                      background: '#1b1b1f',
-                      borderRadius: 14,
-                      border: '1.5px solid #2c2c34',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-                      padding: '6px 8px',
-                      boxSizing: 'border-box',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexShrink: 0
-                    }}
-                  >
-                    {/* Month & Year */}
-                    <div style={{ textAlign: 'center' }}>
-                      <div
-                        style={{
-                          fontSize: 11,
-                          fontWeight: 800,
-                          color: '#ff3b30',
-                          letterSpacing: '1px',
-                          textTransform: 'uppercase',
-                          fontFamily: 'OpenRunde, system-ui, sans-serif'
-                        }}
-                      >
-                        {monthNameUpper}
+                {/* Tab 2: Overview / StandBy Clock */}
+                {currentTab === 2 && (() => {
+                  const now = new Date();
+                  const dayName = now.toLocaleDateString([], { weekday: 'short' });
+                  const dateNum = now.getDate();
+                  const monthName = now.toLocaleDateString([], { month: 'short' });
+
+                  return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', userSelect: 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ fontSize: 28, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif', letterSpacing: '-0.5px' }}>
+                          {time}
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#22c55e' }}>{dayName}</span>
+                          <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.5)' }}>{dateNum} {monthName}</span>
+                        </div>
                       </div>
-                      <div
-                        style={{
-                          fontSize: 9.5,
-                          fontWeight: 600,
-                          color: 'rgba(255,255,255,0.45)',
-                          marginTop: 1,
-                          fontFamily: 'OpenRunde, system-ui, sans-serif'
-                        }}
-                      >
-                        {selectedYear}
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '4px 8px' }}>
+                        <Battery size={14} color="#22c55e" />
+                        <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff' }}>{percent}%</span>
                       </div>
                     </div>
+                  );
+                })()}
 
-                    {/* Giant Day Number */}
-                    <div
-                      style={{
-                        fontSize: 38,
-                        fontWeight: 800,
-                        color: '#ffffff',
-                        fontFamily: 'OpenRunde, system-ui, sans-serif',
-                        letterSpacing: '-1.5px',
-                        lineHeight: 1
-                      }}
-                    >
-                      {today.getDate()}
-                    </div>
-
-                    {/* Full Weekday Name */}
-                    <div
-                      style={{
-                        fontSize: 10.5,
-                        fontWeight: 600,
-                        color: 'rgba(255,255,255,0.65)',
-                        fontFamily: 'OpenRunde, system-ui, sans-serif'
-                      }}
-                    >
-                      {todayWeekdayFull}
-                    </div>
-                  </div>
-
-                  {/* Right Column: Month Grid */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minWidth: 0 }}>
-                    {/* Calendar Month Nav Controls (Compact) */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
-                      <button
-                        onClick={() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 1 }}
-                      >
-                        <ChevronLeft size={13} />
-                      </button>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                        {calendarDate.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
-                      </span>
-                      <button
-                        onClick={() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 1 }}
-                      >
-                        <ChevronRight size={13} />
-                      </button>
-                    </div>
-
-                    {/* Weekday Header (S M T W T F S) - Red for S & S */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, textAlign: 'center' }}>
-                      {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
-                        const isWeekend = idx === 0 || idx === 6;
-                        return (
-                          <div
-                            key={`cal-h-${idx}`}
-                            style={{
-                              fontSize: 10,
-                              fontWeight: 800,
-                              color: isWeekend ? '#ff3b30' : 'rgba(255,255,255,0.6)',
-                              fontFamily: 'OpenRunde, system-ui, sans-serif'
-                            }}
-                          >
-                            {day}
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Date Days Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '1px', textAlign: 'center' }}>
-                      {days.map((item, idx) => {
-                        const col = idx % 7;
-                        const isWeekend = col === 0 || col === 6;
-                        const isToday = item.isCurrentMonth &&
-                          item.day === today.getDate() &&
-                          selectedMonth === today.getMonth() &&
-                          selectedYear === today.getFullYear();
-
-                        let dayCellColor = isWeekend ? '#ff3b30' : '#ffffff';
-                        if (!item.isCurrentMonth) {
-                          dayCellColor = isWeekend ? 'rgba(255, 59, 48, 0.3)' : 'rgba(255, 255, 255, 0.25)';
-                        }
-
-                        return (
-                          <div
-                            key={`cal-d-${idx}`}
-                            style={{
-                              height: 13,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 9.5,
-                              fontWeight: isToday ? 800 : 600,
-                              fontFamily: 'OpenRunde, system-ui, sans-serif',
-                              color: isToday ? '#ffffff' : dayCellColor
-                            }}
-                          >
-                            {isToday ? (
-                              <div
-                                style={{
-                                  width: 15,
-                                  height: 15,
-                                  borderRadius: '50%',
-                                  background: '#c42b27',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  color: '#ffffff',
-                                  boxShadow: '0 2px 6px rgba(196, 43, 39, 0.6)',
-                                  fontSize: 9
-                                }}
-                              >
-                                {item.day}
-                              </div>
-                            ) : (
-                              item.day
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Notifications Tab */}
-            {currentTab === 5 && (
-              <div className="notifications-container" style={{ position: 'relative' }}>
-                {/* Header Controls: Filters & Actions */}
-                <div className="smart-notifications-header">
-                  <div className="notification-filter-pills">
-                    <button
-                      type="button"
-                      className={`notification-filter-pill ${notificationFilter === 'all' ? 'active' : ''}`}
-                      onClick={() => setNotificationFilter('all')}
-                    >
-                      All <span className="notification-badge-count">{notificationSnapshot.stats.totalActive}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-pill ${notificationFilter === 'unread' ? 'active' : ''}`}
-                      onClick={() => setNotificationFilter('unread')}
-                    >
-                      Unread <span className="notification-badge-count">{notificationSnapshot.stats.unreviewedCount}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-pill ${notificationFilter === 'snoozed' ? 'active' : ''}`}
-                      onClick={() => setNotificationFilter('snoozed')}
-                    >
-                      Snoozed <span className="notification-badge-count">{notificationSnapshot.stats.snoozedCount}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-pill ${notificationFilter === 'history' ? 'active' : ''}`}
-                      onClick={() => setNotificationFilter('history')}
-                    >
-                      History <span className="notification-badge-count">{notificationSnapshot.stats.historyCount}</span>
-                    </button>
-                  </div>
-
-                  <div className="notification-header-actions">
-                    <button
-                      type="button"
-                      className="notification-header-btn"
-                      onClick={handleTogglePrivacy}
-                      title={notificationSnapshot.settings.hidePreviews ? "Previews are hidden. Click to show." : "Hide notification previews"}
-                    >
-                      {notificationSnapshot.settings.hidePreviews ? <EyeOff size={13} color="#f59e0b" /> : <Eye size={13} />}
-                    </button>
-
-                    {(notificationSnapshot.stats.hasUndo || undoToast) && (
-                      <button
-                        type="button"
-                        className="notification-header-btn"
-                        onClick={handleUndoDismiss}
-                        title="Undo dismissal"
-                      >
-                        <Undo size={12} /> Undo
-                      </button>
-                    )}
-
-                    {notificationFilter === 'history' ? (
-                      notificationSnapshot.history.length > 0 && (
-                        <button
-                          type="button"
-                          className="notification-header-btn"
-                          onClick={() => window.electronAPI?.notifications?.clearHistory?.()}
-                          title="Clear history"
-                        >
-                          <Trash2 size={12} /> Clear
-                        </button>
-                      )
-                    ) : (
-                      notificationSnapshot.stats.totalActive > 0 && (
-                        <button
-                          type="button"
-                          className="notification-header-btn"
-                          onClick={handleClearAll}
-                          title="Dismiss all active notifications"
-                        >
-                          <Trash2 size={12} /> Clear All
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                {/* Undo Notification Toast */}
-                {undoToast && (
-                  <div className="notification-undo-toast">
-                    <span style={{ color: '#ffffff', opacity: 0.9 }}>{undoToast.message}</span>
-                    <button
-                      type="button"
-                      onClick={handleUndoDismiss}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.15)',
-                        border: 'none',
-                        borderRadius: 4,
-                        color: '#38bdf8',
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Undo
-                    </button>
-                  </div>
-                )}
-
-                {/* Incoming Call Card (if active and not on history/snooze) */}
-                {notificationSnapshot.incomingCall && notificationFilter !== 'snoozed' && notificationFilter !== 'history' && (
-                  <div className="notification-call-card">
+                {/* Tab 11: Battery Hub */}
+                {currentTab === 11 && (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', userSelect: 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div className="notification-call-pulsing-icon">
-                        <PhoneIncoming size={15} />
+                      <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(34, 197, 94, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {charging ? <BatteryCharging size={20} color="#22c55e" /> : <Battery size={20} color="#22c55e" />}
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 700, color: '#25d366', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                          Incoming {notificationSnapshot.incomingCall.callType || 'Voice'} Call
-                        </span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>
-                          {notificationSnapshot.incomingCall.title || notificationSnapshot.incomingCall.applicationName}
-                        </span>
-                        <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.7)' }}>
-                          {notificationSnapshot.incomingCall.body}
-                        </span>
+                        <span style={{ fontSize: 16, fontWeight: 800, color: '#ffffff' }}>{percent}%</span>
+                        <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.5)' }}>{charging ? 'Charging plugged in' : 'On battery power'}</span>
                       </div>
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <button
-                        type="button"
-                        onClick={() => handleExecuteAction(notificationSnapshot.incomingCall.id, 'open', { appId: notificationSnapshot.incomingCall.applicationId })}
-                        style={{
-                          background: '#25d366',
-                          border: 'none',
-                          borderRadius: 8,
-                          color: '#ffffff',
-                          padding: '6px 12px',
-                          fontSize: 11,
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4
-                        }}
-                      >
-                        <Phone size={11} /> Answer
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleExecuteAction(notificationSnapshot.incomingCall.id, 'dismiss')}
-                        style={{
-                          background: 'rgba(255, 255, 255, 0.1)',
-                          border: 'none',
-                          borderRadius: 8,
-                          color: '#ffffff',
-                          padding: '6px 9px',
-                          fontSize: 12,
-                          cursor: 'pointer'
-                        }}
-                        title="Dismiss"
-                      >
-                        <X size={13} />
-                      </button>
+                    <div style={{ fontSize: 10, fontWeight: 600, color: '#22c55e', background: 'rgba(34, 197, 94, 0.1)', padding: '3px 8px', borderRadius: 6 }}>
+                      Healthy
                     </div>
                   </div>
                 )}
 
-                {/* Main Content Area based on Filter */}
-                {notificationFilter === 'snoozed' ? (
-                  notificationSnapshot.snoozed.length === 0 ? (
-                    <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 35, fontSize: 13 }}>
-                      <Clock size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
-                      <p style={{ margin: 0 }}>No snoozed notifications</p>
-                    </div>
-                  ) : (
-                    notificationSnapshot.snoozed.map((notif) => (
-                      <div key={notif.id} className="notification-card">
-                        {notif.applicationIcon ? (
-                          <img src={notif.applicationIcon} className="notification-icon" alt="" />
-                        ) : (
-                          <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Bell size={14} />
-                          </div>
-                        )}
-                        <div className="notification-content">
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span className="notification-app-name">{notif.applicationName}</span>
-                            <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600 }}>
-                              Snoozed until {notif.snoozedUntil ? new Date(notif.snoozedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'due'}
-                            </span>
-                          </div>
-                          <span className="notification-title">{notif.title}</span>
-                          <span className="notification-body">{notif.body}</span>
-                          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                            <button
-                              type="button"
-                              className="notification-action-btn"
-                              onClick={() => handleCancelSnooze(notif.id)}
-                            >
-                              <BellRing size={11} /> Wake Now
-                            </button>
-                            <button
-                              type="button"
-                              className="notification-action-btn"
-                              onClick={() => handleExecuteAction(notif.id, 'dismiss')}
-                            >
-                              <X size={11} /> Dismiss
-                            </button>
-                          </div>
+                {/* Tab 4: Calendar */}
+                {currentTab === 4 && (() => {
+                  const d = calendarDate || new Date();
+                  return (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', userSelect: 'none' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(244, 63, 94, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <CalendarIcon size={20} color="#f43f5e" />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff' }}>{d.toLocaleDateString([], { weekday: 'long' })}</span>
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}</span>
                         </div>
                       </div>
-                    ))
-                  )
-                ) : notificationFilter === 'history' ? (
-                  notificationSnapshot.history.length === 0 ? (
-                    <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 35, fontSize: 13 }}>
-                      <List size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
-                      <p style={{ margin: 0 }}>No notification history</p>
                     </div>
-                  ) : (
-                    notificationSnapshot.history.map((notif) => (
-                      <div key={notif.id} className="notification-card" style={{ opacity: 0.75 }}>
-                        {notif.applicationIcon ? (
-                          <img src={notif.applicationIcon} className="notification-icon" alt="" />
-                        ) : (
-                          <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Bell size={14} />
-                          </div>
-                        )}
-                        <div className="notification-content">
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span className="notification-app-name">{notif.applicationName}</span>
-                            <span style={{ fontSize: 9, opacity: 0.5 }}>
-                              {notif.dismissedAt ? formatRelativeTime(notif.dismissedAt) : ''}
-                            </span>
-                          </div>
-                          <span className="notification-title">{notif.title}</span>
-                          <span className="notification-body">{notif.body}</span>
-                        </div>
-                        {notif.applicationId && (
-                          <button
-                            type="button"
-                            className="notification-action-btn"
-                            style={{ alignSelf: 'center' }}
-                            onClick={() => handleExecuteAction(notif.id, 'open', { appId: notif.applicationId })}
-                            title="Open App"
-                          >
-                            <ExternalLink size={12} />
-                          </button>
-                        )}
-                      </div>
-                    ))
-                  )
-                ) : (
-                  /* 'all' or 'unread' view */
-                  (() => {
-                    const rawItems = Array.isArray(notificationSnapshot.active) && notificationSnapshot.active.length > 0
-                      ? notificationSnapshot.active
-                      : [
-                          ...(notificationSnapshot.standalone || []),
-                          ...(notificationSnapshot.groups?.flatMap(g => g.items) || [])
-                        ];
+                  );
+                })()}
 
-                    const validItems = rawItems.filter(item => {
-                      if (!item) return false;
-                      if (!item.title?.trim() && !item.body?.trim()) return false;
-                      if (notificationFilter === 'unread') return !item.localReviewed;
-                      return true;
-                    });
+                {/* Tab 5: Notifications (Summary View + Scrollable List View) */}
+                {currentTab === 5 && (() => {
+                  const rawList = Array.isArray(notificationSnapshot?.active) && notificationSnapshot.active.length > 0 
+                    ? notificationSnapshot.active 
+                    : (Array.isArray(notificationsList) ? notificationsList : []);
+                  const activeList = rawList.filter(Boolean);
+                  const activeCount = notificationSnapshot?.stats?.totalActive || activeList.length;
 
-                    if (validItems.length === 0 && !notificationSnapshot.incomingCall) {
-                      return (
-                        <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 40, fontSize: 13 }}>
-                          <Bell size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
-                          <p style={{ margin: 0 }}>{notificationFilter === 'unread' ? 'All notifications reviewed' : 'No new notifications'}</p>
-                        </div>
-                      );
-                    }
-
-                    const renderCardItem = (notif) => {
-                      if (!notif || (!notif.title?.trim() && !notif.body?.trim())) return null;
-                      const isMessaging = (notif.applicationName || "").toLowerCase().match(/whatsapp|telegram|slack|discord|signal|teams/);
-                      const hasReply = notif.capabilities?.some(c => c.type === 'reply' && c.supported);
-                      const currentActionStatus = actionStatuses[notif.id];
-                      const isSnoozeOpen = snoozeMenuOpenId === notif.id;
-
-                      return (
-                        <div
-                          key={notif.id}
-                          className="notification-card"
-                          onClick={() => {
-                            if (notif.applicationId || notif.appId) {
-                              handleExecuteAction(notif.id, 'open', { appId: notif.applicationId || notif.appId });
-                            }
-                            if (!notif.localReviewed) {
-                              window.electronAPI?.notifications?.markReviewed?.(notif.id);
-                            }
-                          }}
-                          style={{ cursor: (notif.applicationId || notif.appId) ? 'pointer' : 'default' }}
-                        >
-                          {/* Priority indicator dot */}
-                          <span className={`notification-priority-dot ${notif.priority || 'normal'}`} />
-
-                          {/* Icon */}
-                          {notif.applicationIcon || notif.icon ? (
-                            <img src={notif.applicationIcon || notif.icon} className="notification-icon" alt="" />
-                          ) : (
-                            <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Bell size={14} />
-                            </div>
-                          )}
-
-                          {/* Content */}
-                          <div className="notification-content">
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span className="notification-app-name">{notif.applicationName || notif.appName}</span>
-                              <span style={{ fontSize: 9, opacity: 0.5 }}>
-                                {formatRelativeTime(notif.receivedAt || notif.timestamp)}
-                              </span>
-                            </div>
-
-                            <span className="notification-title">{notif.title}</span>
-                            <span className="notification-body">{notif.body}</span>
-
-                            {/* Action Status feedback */}
-                            {currentActionStatus && (
-                              <div style={{
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: currentActionStatus.status === 'success' ? '#22c55e' : currentActionStatus.status === 'pending' ? '#38bdf8' : '#ef4444',
-                                marginTop: 4
-                              }}>
-                                {currentActionStatus.message}
-                              </div>
-                            )}
-
-                            {/* Inline Reply Row */}
-                            {(isMessaging || hasReply) && (
-                              <div
-                                className="notification-reply-container"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <input
-                                  type="text"
-                                  className="notification-reply-input"
-                                  placeholder={notif.senderName ? `Reply to ${notif.senderName}…` : "Type a reply…"}
-                                  value={replyInputs[notif.id] || ""}
-                                  onChange={(e) => setReplyInputs({ ...replyInputs, [notif.id]: e.target.value })}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      handleSendReply(notif.id);
-                                    }
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  className="notification-action-btn"
-                                  onClick={() => handleSendReply(notif.id)}
-                                  title="Send reply"
-                                  style={{ padding: '4px 8px' }}
-                                >
-                                  <Send size={11} />
-                                </button>
-                              </div>
-                            )}
-
-                            {/* Action Row */}
-                            <div
-                              style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              {(notif.applicationId || notif.appId) && (
-                                <button
-                                  type="button"
-                                  className="notification-action-btn"
-                                  onClick={() => handleExecuteAction(notif.id, 'open', { appId: notif.applicationId || notif.appId })}
-                                >
-                                  <ExternalLink size={10} /> Open
-                                </button>
-                              )}
-
-                              {/* Snooze Presets */}
-                              <div style={{ position: 'relative' }}>
-                                <button
-                                  type="button"
-                                  className="notification-action-btn"
-                                  onClick={() => setSnoozeMenuOpenId(isSnoozeOpen ? null : notif.id)}
-                                >
-                                  <Clock size={10} /> Snooze <ChevronDown size={9} />
-                                </button>
-                                {isSnoozeOpen && (
-                                  <div style={{
-                                    position: 'absolute',
-                                    bottom: '100%',
-                                    left: 0,
-                                    marginBottom: 4,
-                                    background: 'rgba(23, 23, 26, 0.98)',
-                                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                                    borderRadius: 8,
-                                    padding: 4,
-                                    display: 'flex',
-                                    gap: 4,
-                                    zIndex: 999,
-                                    boxShadow: '0 4px 14px rgba(0,0,0,0.5)'
-                                  }}>
-                                    {[5, 15, 30, 60].map(mins => (
-                                      <button
-                                        type="button"
-                                        key={mins}
-                                        onClick={() => handleSnooze(notif.id, mins)}
-                                        style={{
-                                          background: 'rgba(255,255,255,0.08)',
-                                          border: 'none',
-                                          color: '#ffffff',
-                                          fontSize: 10,
-                                          fontWeight: 600,
-                                          padding: '3px 6px',
-                                          borderRadius: 4,
-                                          cursor: 'pointer'
-                                        }}
-                                      >
-                                        {mins < 60 ? `${mins}m` : '1h'}
-                                      </button>
-                                    ))}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Dismiss Button */}
-                          <button
-                            type="button"
-                            className="notification-dismiss"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleExecuteAction(notif.id, 'dismiss');
-                            }}
-                            title="Dismiss notification"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      );
-                    };
-
-                    return (
-                      <>
-                        {/* Low Priority Collapsible Summary */}
-                        {notificationSnapshot.lowPrioritySummary?.count > 0 && notificationFilter === 'all' && (
-                          <div style={{
-                            marginBottom: 8,
-                            padding: '6px 10px',
-                            background: 'rgba(255, 255, 255, 0.04)',
-                            border: '1px solid rgba(255, 255, 255, 0.06)',
-                            borderRadius: 10,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 4
-                          }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div
-                                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1 }}
-                                onClick={() => setLowPriorityExpanded(prev => !prev)}
-                              >
-                                <SlidersHorizontal size={12} opacity={0.6} />
-                                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.8 }}>
-                                  {notificationSnapshot.lowPrioritySummary.count} low-priority {notificationSnapshot.lowPrioritySummary.count === 1 ? 'alert' : 'alerts'}
-                                </span>
-                                {lowPriorityExpanded ? <ChevronUp size={12} opacity={0.6} /> : <ChevronDown size={12} opacity={0.6} />}
-                              </div>
-                              <button
-                                type="button"
-                                className="notification-header-btn"
-                                onClick={() => {
-                                  notificationSnapshot.lowPrioritySummary.items.forEach(i => handleExecuteAction(i.id, 'dismiss'));
-                                }}
-                                title="Dismiss low-priority alerts"
-                              >
-                                Dismiss All
-                              </button>
-                            </div>
-
-                            {lowPriorityExpanded && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                                {notificationSnapshot.lowPrioritySummary.items.map(item => (
-                                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px', background: 'rgba(255,255,255,0.03)', borderRadius: 6 }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                                      <span style={{ fontSize: 10, fontWeight: 600 }}>{item.applicationName}: {item.title}</span>
-                                      <span style={{ fontSize: 9, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.body}</span>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="notification-dismiss"
-                                      onClick={() => handleExecuteAction(item.id, 'dismiss')}
-                                    >
-                                      <X size={12} />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* All Notification Cards */}
-                        {validItems.map(notif => renderCardItem(notif))}
-                      </>
-                    );
-                  })()
-                )}
-              </div>
-            )}
-
-            {/* Game / System Performance Overlay Tab */}
-            {currentTab === 6 && (
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 12,
-                width: '100%',
-                height: '100%',
-                padding: '12px 18px',
-                boxSizing: 'border-box',
-                userSelect: 'none'
-              }}>
-                {/* CPU Card */}
-                <div style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.09)',
-                  borderRadius: 14,
-                  padding: '10px 12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.05em' }}>CPU LOAD</span>
-                    <Activity size={14} color="#0070f3" />
-                  </div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                    {systemStats.cpu}%
-                  </div>
-                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${systemStats.cpu}%`, height: '100%', background: '#0070f3', borderRadius: 3, transition: 'width 0.4s ease' }} />
-                  </div>
-                </div>
-
-                {/* Memory Card */}
-                <div style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.09)',
-                  borderRadius: 14,
-                  padding: '10px 12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.05em' }}>MEMORY</span>
-                    <Zap size={14} color="#a855f7" />
-                  </div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                    {systemStats.ram}%
-                  </div>
-                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${systemStats.ram}%`, height: '100%', background: '#a855f7', borderRadius: 3, transition: 'width 0.4s ease' }} />
-                  </div>
-                </div>
-
-                {/* Battery Card */}
-                <div style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.09)',
-                  borderRadius: 14,
-                  padding: '10px 12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.05em' }}>BATTERY</span>
-                    <Sun size={14} color={(percent || 0) <= 20 ? '#ff3b30' : '#34c759'} />
-                  </div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                    {percent !== null ? `${percent}%` : 'N/A'}
-                  </div>
-                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${percent || 0}%`, height: '100%', background: (percent || 0) <= 20 ? '#ff3b30' : '#34c759', borderRadius: 3, transition: 'width 0.4s ease' }} />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/*Clipboard*/}
-            {currentTab === 7 && (
-              <div id="clipboard" style={{ animation: 'none' }}>
-                {clipboard.length > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, width: '100%' }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Clipboard History ({clipboard.length})
-                    </span>
-                    <button
-                      onClick={clearAllClipboard}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: textColor,
-                        opacity: 0.5,
-                        fontSize: 11,
-                        cursor: 'pointer',
-                        padding: 0
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                      onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
-                    >
-                      Clear All
-                    </button>
-                  </div>
-                )}
-                {clipboard.length === 0 ? (
-                  <p style={{ opacity: 0.5, textAlign: 'center', marginTop: 30, color: textColor }}>Clipboard is empty</p>
-                ) : (
-                  clipboard.map((item, index) => (
-                    <div className="clipboard-row" key={index}>
-                      <p className="clipboard-content" style={{ paddingRight: '55px', color: textColor }}>{item}</p>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(item);
-                          const btn = e.currentTarget;
-                          btn.innerText = "Copied!";
-                          btn.style.backgroundColor = 'rgba(52, 199, 89, 0.4)';
-                          setTimeout(() => {
-                            btn.innerText = "Copy";
-                            btn.style.backgroundColor = `color-mix(in srgb, ${textColor}, transparent 85%)`;
-                          }, 1500);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          top: '10px',
-                          right: '10px',
-                          zIndex: 10,
-                          backgroundColor: `color-mix(in srgb, ${textColor}, transparent 85%)`,
-                          border: `1px solid color-mix(in srgb, ${textColor}, transparent 75%)`,
-                          borderRadius: '6px',
-                          color: textColor,
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          padding: '4px 9px',
-                          cursor: 'pointer',
-                          backdropFilter: 'blur(4px)'
-                        }}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* Minimalist Apple Reminders Horizontal Tasks UI */}
-            {currentTab === 8 && (
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 16px',
-                  boxSizing: 'border-box',
-                  gap: 16,
-                  userSelect: 'none'
-                }}
-              >
-                {/* Left Column: List Header + Quick Add Input Card */}
-                <div
-                  style={{
-                    width: 165,
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    flexShrink: 0
-                  }}
-                >
-                  {/* Top Header Card */}
-                  <div style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: 12,
-                    padding: '8px 10px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 3
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <div style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 6,
-                          background: '#ff9500',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#ffffff'
-                        }}>
-                          <Check size={13} strokeWidth={2.5} />
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: textColor, fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                          Reminders
-                        </span>
-                      </div>
-                      <span style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: '1px 6px',
-                        borderRadius: 10,
-                        background: tasks.length > 0 ? 'rgba(255, 149, 0, 0.2)' : 'rgba(52, 199, 89, 0.2)',
-                        color: tasks.length > 0 ? '#ff9500' : '#34c759'
-                      }}>
-                        {tasks.length}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.5)', marginTop: 2 }}>
-                      {tasks.length === 0 ? "All tasks completed" : `${tasks.length} task${tasks.length === 1 ? '' : 's'} remaining`}
-                    </span>
-                  </div>
-
-                  {/* Bottom Quick Add Capsule */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      flexWrap: 'nowrap',
-                      alignItems: 'center',
-                      gap: 6,
-                      width: '100%',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      borderRadius: 10,
-                      padding: '2px 3px 2px 8px',
-                      boxSizing: 'border-box',
-                      minWidth: 0
-                    }}
-                  >
-                    <input
-                      type="text"
-                      placeholder="New task..."
-                      value={taskText}
-                      onChange={(e) => setTaskText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") addTask();
-                      }}
-                      style={{
-                        flex: 1,
-                        width: '100%',
-                        minWidth: 0,
-                        height: 28,
-                        background: 'none',
-                        color: textColor,
-                        border: 'none',
-                        fontSize: 11.5,
-                        fontWeight: 400,
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                        fontFamily: 'OpenRunde, system-ui, sans-serif'
-                      }}
-                    />
-
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => addTask()}
-                      style={{
-                        height: 24,
-                        padding: '0 8px',
-                        background: '#ff9500',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: 7,
-                        fontSize: 11,
-                        fontWeight: 700,
-                        fontFamily: 'OpenRunde, system-ui, sans-serif',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        whiteSpace: 'nowrap'
+                  return (
+                    <div 
+                      className="notif-drawer-full"
+                      data-no-toggle="true"
+                      style={{ 
+                        width: '100%', 
+                        height: '100%', 
+                        display: 'flex', 
+                        flexDirection: 'column', 
+                        padding: '4px 10px 6px 10px', 
+                        userSelect: 'none',
+                        boxSizing: 'border-box'
                       }}
                     >
-                      Add
-                    </motion.button>
-                  </div>
-                </div>
-
-                {/* Right Column: Scrollable Task List or Clean Empty State */}
-                <div
-                  id="task-list"
-                  className="task-list-scrollable"
-                  style={{
-                    flex: 1,
-                    height: '100%',
-                    overflowY: 'auto',
-                    overflowX: 'hidden',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 5,
-                    minWidth: 0,
-                    margin: 0,
-                    paddingRight: 4,
-                    boxSizing: 'border-box'
-                  }}
-                >
-                  <AnimatePresence mode="popLayout">
-                    {tasks.length === 0 ? (
-                      <motion.div
-                        key="empty-tasks"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: textColor,
-                          userSelect: 'none'
-                        }}
-                      >
-                        <CheckCircle2 size={26} color="#34c759" style={{ opacity: 0.85, marginBottom: 4 }} />
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>No pending tasks</span>
-                        <span style={{ fontSize: 10.5, color: 'rgba(255, 255, 255, 0.45)', marginTop: 2 }}>You're all caught up!</span>
-                      </motion.div>
-                    ) : (
-                      tasks.map((task, index) => (
-                        <motion.div
-                          key={`task-${task}-${index}`}
-                          initial={{ opacity: 0, y: 3 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, x: 10, height: 0, marginBottom: 0, padding: 0 }}
-                          transition={{ duration: 0.15 }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 8,
-                            padding: '6px 10px',
-                            borderRadius: 10,
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            border: '1px solid rgba(255, 255, 255, 0.07)',
-                            boxSizing: 'border-box',
-                            flexShrink: 0,
-                            userSelect: 'none'
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                            {/* Minimal Circular Check Button */}
-                            <motion.button
-                              whileTap={{ scale: 0.85 }}
-                              onClick={() => removeTask(index)}
-                              style={{
-                                width: 16,
-                                height: 16,
-                                borderRadius: '50%',
-                                border: '1.5px solid rgba(255, 255, 255, 0.35)',
-                                background: 'none',
-                                cursor: 'pointer',
-                                padding: 0,
-                                flexShrink: 0,
-                                transition: 'all 0.15s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = '#34c759';
-                                e.currentTarget.style.background = 'rgba(52, 199, 89, 0.2)';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)';
-                                e.currentTarget.style.background = 'none';
-                              }}
-                              title="Mark as completed"
-                            />
-
-                            <span
-                              style={{
-                                fontSize: 12,
-                                fontWeight: 500,
-                                color: textColor,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                fontFamily: 'OpenRunde, system-ui, sans-serif'
-                              }}
-                            >
-                              {task}
-                            </span>
-                          </div>
-
-                          <motion.button
-                            whileHover={{ opacity: 1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => removeTask(index)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: textColor,
-                              opacity: 0.3,
-                              cursor: 'pointer',
-                              padding: 2,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              borderRadius: 4
-                            }}
-                            title="Delete task"
-                          >
-                            <Trash2 size={13} color={textColor} />
-                          </motion.button>
-                        </motion.div>
-                      ))
-                    )}
-                  </AnimatePresence>
-                </div>
-              </div>
-            )}
-
-            {/* Timer Tab (Stopwatch Removed, Modern States & Dynamic Island Styling) */}
-            {currentTab === 10 && (
-              <div style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 18px',
-                boxSizing: 'border-box',
-                userSelect: 'none'
-              }}>
-                {!isTimerRunning && timerSeconds === 0 ? (
-                  /* STATE 1: Select Timer Setup Screen (Image 2) */
-                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    {/* Title Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 0 }}>
-                      <AlarmClock size={14} color="#ffffff" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                        Select Timer
-                      </span>
-                    </div>
-
-                    {/* Preset Chips Row: 15m, 30m, 60m, 100m */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, width: '100%' }}>
-                      {[
-                        { label: '15m', sec: 900 },
-                        { label: '30m', sec: 1800 },
-                        { label: '60m', sec: 3600 },
-                        { label: '100m', sec: 6000 }
-                      ].map((preset) => (
-                        <motion.button
-                          key={preset.label}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => {
-                            setTimerTotalDuration(preset.sec);
-                            startTimer(preset.sec);
-                          }}
-                          style={{
-                            background: '#222227',
-                            border: '1px solid rgba(255,255,255,0.08)',
-                            borderRadius: 10,
-                            height: 32,
-                            color: '#ffffff',
-                            fontSize: 12,
-                            fontWeight: 700,
-                            fontFamily: 'OpenRunde, system-ui, sans-serif',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-                          }}
-                        >
-                          {preset.label}
-                        </motion.button>
-                      ))}
-                    </div>
-
-                    {/* Bottom Row: Custom Time Picker (-) 05:00 (+) & Vibrant Orange START Button */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', marginBottom: 0 }}>
-                      {/* Left: Custom Time Picker Pill */}
+                      {/* Edge-to-edge Header */}
                       <div style={{
-                        background: '#222227',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 10,
-                        height: 34,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        padding: '0 12px',
-                        boxSizing: 'border-box',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+                        width: '100%',
+                        padding: '2px 0 6px 0',
+                        borderBottom: '1px solid rgba(255,255,255,0.08)',
+                        marginBottom: 6,
+                        flexShrink: 0
                       }}>
-                        <button
-                          onClick={() => setCustomTimerSetup(prev => Math.max(60, prev - 60))}
-                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: 700, cursor: 'pointer', padding: '0 2px' }}
-                        >
-                          -
-                        </button>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                          {formatTimerMMSS(customTimerSetup)}
-                        </span>
-                        <button
-                          onClick={() => setCustomTimerSetup(prev => prev + 60)}
-                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: 700, cursor: 'pointer', padding: '0 2px' }}
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      {/* Right: Big Orange START Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => {
-                          setTimerTotalDuration(customTimerSetup);
-                          startTimer(customTimerSetup);
-                        }}
-                        style={{
-                          background: '#ff9500',
-                          border: 'none',
-                          borderRadius: 10,
-                          height: 34,
-                          color: '#ffffff',
-                          fontSize: 12,
-                          fontWeight: 800,
-                          letterSpacing: '1px',
-                          fontFamily: 'OpenRunde, system-ui, sans-serif',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 16px rgba(255, 149, 0, 0.45)',
-                          textTransform: 'uppercase'
-                        }}
-                      >
-                        START
-                      </motion.button>
-                    </div>
-                  </div>
-                ) : (
-                  /* STATE 2: Active / Running / Paused Timer Screen (Image 4) */
-                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
-                    {/* Top Center: Bell / Total Duration Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.6 }}>
-                      <BellOff size={12} color="#ffffff" />
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                        {formatTimerMMSS(timerTotalDuration)}
-                      </span>
-                    </div>
-
-                    {/* Center Section: Left Pause/Play | Center Giant Time | Right Cancel */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 8px' }}>
-                      {/* Left: Glass Circle Pause/Play Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        onClick={toggleTimer}
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: '50%',
-                          background: 'rgba(255, 255, 255, 0.15)',
-                          border: '1px solid rgba(255, 255, 255, 0.25)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 14px rgba(0,0,0,0.3)'
-                        }}
-                      >
-                        {isTimerRunning ? (
-                          <Pause size={18} color="#ffffff" fill="#ffffff" />
-                        ) : (
-                          <Play size={18} color="#ffffff" fill="#ffffff" style={{ marginLeft: 2 }} />
-                        )}
-                      </motion.button>
-
-                      {/* Center: Giant Countdown Display & Subtitle */}
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                        <div style={{
-                          fontSize: 32,
-                          fontWeight: 800,
-                          color: '#ffffff',
-                          fontFamily: 'OpenRunde, system-ui, sans-serif',
-                          letterSpacing: '-1px',
-                          lineHeight: 1
-                        }}>
-                          {formatTimerMMSS(timerSeconds)}
-                        </div>
-                        <div style={{
-                          fontSize: 10,
-                          fontWeight: 600,
-                          color: 'rgba(255,255,255,0.5)',
-                          fontFamily: 'OpenRunde, system-ui, sans-serif',
-                          marginTop: 2
-                        }}>
-                          Timer
-                        </div>
-                      </div>
-
-                      {/* Right: Red Circle Cancel/Reset Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
-                        onClick={resetTimer}
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: '50%',
-                          background: 'rgba(255, 59, 48, 0.25)',
-                          border: '1px solid rgba(255, 59, 48, 0.5)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 14px rgba(255, 59, 48, 0.25)'
-                        }}
-                      >
-                        <X size={18} color="#ff3b30" />
-                      </motion.button>
-                    </div>
-
-                    {/* Bottom Spacer */}
-                    <div style={{ height: 2 }} />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Settings Overhaul - Apple macOS System Settings Architecture */}
-            {currentTab === 9 && (() => {
-              const categories = [
-                { id: 'general', label: 'General', icon: SlidersHorizontal },
-                { id: 'appearance', label: 'Appearance', icon: Palette },
-                { id: 'position', label: 'Position', icon: Compass },
-                { id: 'tabs', label: 'Tabs', icon: Layers },
-                { id: 'shortcuts', label: 'Shortcuts', icon: Keyboard },
-                { id: 'features', label: 'Features', icon: Zap },
-                { id: 'weather', label: 'Weather', icon: CloudSun },
-                { id: 'updates', label: 'Updates', icon: RefreshCw, hasBadge: (updateStatus === 'available' || updateStatus === 'downloaded') }
-              ];
-
-              const appleSelectStyle = {
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.14)',
-                borderRadius: 8,
-                padding: '4px 8px',
-                color: '#ffffff',
-                fontSize: 11.5,
-                fontWeight: 600,
-                outline: 'none',
-                cursor: 'pointer',
-                fontFamily: 'OpenRunde, system-ui, sans-serif'
-              };
-
-              return (
-                <div
-                  id="settings-container"
-                  ref={settingsContainerRef}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'row',
-                    width: '100%',
-                    height: '100%',
-                    padding: 0,
-                    margin: 0,
-                    boxSizing: 'border-box',
-                    overflow: 'hidden',
-                    userSelect: 'none'
-                  }}
-                >
-                  {/* Left Sidebar: Apple-style Category Navigation */}
-                  <div
-                    id="settings-sidebar"
-                    className="settings-sidebar settings-sidebar-scrollable"
-                    data-scrollable="true"
-                    style={{
-                      width: 130,
-                      height: '100%',
-                      borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-                      background: 'rgba(0, 0, 0, 0.22)',
-                      padding: '8px 6px',
-                      boxSizing: 'border-box',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 3,
-                      flexShrink: 0,
-                      overflowY: 'auto',
-                      overflowX: 'hidden',
-                      scrollbarWidth: 'thin',
-                      scrollbarColor: 'color-mix(in srgb, var(--island-text-color), transparent 80%) transparent'
-                    }}
-                  >
-                    {categories.map((cat) => {
-                      const IconComp = cat.icon;
-                      const isActive = settingsTab === cat.id;
-                      return (
-                        <button
-                          key={cat.id}
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSettingsTab(cat.id);
-                          }}
-                          style={{
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                          <div style={{
+                            width: 22,
+                            height: 22,
+                            borderRadius: 6,
+                            background: 'rgba(168, 85, 247, 0.2)',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 8,
-                            padding: '6px 8px',
-                            borderRadius: 8,
-                            background: isActive ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
-                            border: 'none',
-                            color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.65)',
-                            fontSize: 12,
-                            fontWeight: isActive ? 700 : 500,
-                            cursor: 'pointer',
-                            textAlign: 'left',
-                            width: '100%',
-                            flexShrink: 0,
-                            transition: 'all 0.15s ease',
-                            fontFamily: 'OpenRunde, system-ui, sans-serif'
-                          }}
-                        >
-                          <IconComp size={13} color={isActive ? '#0070f3' : 'currentColor'} />
-                          <span style={{ flex: 1 }}>{cat.label}</span>
-                          {cat.hasBadge && (
-                            <span style={{
-                              width: 6,
-                              height: 6,
-                              borderRadius: '50%',
-                              background: '#34c759',
-                              boxShadow: '0 0 6px #34c759'
-                            }} />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {/* Right Content Area: Inset Grouped Settings Panel */}
-                  <div
-                    id="settings-content"
-                    className="settings-content settings-content-scrollable"
-                    data-scrollable="true"
-                    style={{
-                      flex: 1,
-                      height: '100%',
-                      overflowY: 'auto',
-                      overflowX: 'hidden',
-                      padding: '10px 16px',
-                      boxSizing: 'border-box',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 10,
-                      scrollbarWidth: 'thin',
-                      scrollbarColor: 'color-mix(in srgb, var(--island-text-color), transparent 80%) transparent'
-                    }}
-                  >
-                    {/* CATEGORY: GENERAL */}
-                    {settingsTab === 'general' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
-                          General Preferences
-                        </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>12/24 Hour Format</span>
-                            <AppleSegmented
-                              value={hourFormat ? "12-hr" : "24-hr"}
-                              options={[{ value: '12-hr', label: '12-Hour' }, { value: '24-hr', label: '24-Hour' }]}
-                              onChange={(val) => handleHourFormatChange({ target: { value: val } })}
-                            />
+                            justifyContent: 'center'
+                          }}>
+                            <Bell size={12} color="#c084fc" />
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: displays.length > 0 ? '1px solid rgba(255,255,255,0.06)' : 'none' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Auto Launch on Boot</span>
-                            <AppleSwitch
-                              checked={autoLaunchEnabled}
-                              onChange={(checked) => handleAutoLaunchChange({ target: { value: checked ? "true" : "false" } })}
-                            />
-                          </div>
-                          {displays.length > 0 && (
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
-                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Target Display</span>
-                              <select
-                                value={currentDisplayId}
-                                onChange={handleDisplayChange}
-                                style={appleSelectStyle}
-                              >
-                                {displays.map(d => (
-                                  <option key={d.id} value={d.id} style={{ background: '#1c1c1e', color: '#fff' }}>{d.label}</option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* CATEGORY: APPEARANCE */}
-                    {settingsTab === 'appearance' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
-                          Appearance & Theme
-                        </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Theme</span>
-                            <select
-                              value={theme}
-                              onChange={(e) => setTheme(e.target.value)}
-                              style={appleSelectStyle}
-                            >
-                              <option value="none" style={{ background: '#1c1c1e', color: '#fff' }}>Default</option>
-                              <option value="sleek-black" style={{ background: '#1c1c1e', color: '#fff' }}>Sleek Black</option>
-                              <option value="win95" style={{ background: '#1c1c1e', color: '#fff' }}>Windows 95</option>
-                            </select>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Always on Top</span>
-                              <span style={{ fontSize: 9.5, opacity: 0.6, color: textColor }}>Stay above other windows at all times</span>
-                            </div>
-                            <AppleSwitch
-                              checked={alwaysOnTopEnabled}
-                              onChange={(checked) => handleAlwaysOnTopChange({ target: { value: checked ? "true" : "false" } })}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Island Border</span>
-                            <AppleSwitch
-                              checked={islandBorderEnabled}
-                              onChange={(checked) => handleIslandBorderChange({ target: { value: checked ? "true" : "false" } })}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Hide When Inactive</span>
-                            <AppleSwitch
-                              checked={hideNotActiveIslandEnabled}
-                              onChange={(checked) => handlehideNotActiveIslandChange({ target: { value: checked ? "true" : "false" } })}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <div style={{ width: 13, height: 13, borderRadius: '50%', background: bgColor, border: '1px solid rgba(255,255,255,0.2)' }} />
-                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Island Color</span>
-                            </div>
-                            <input
-                              className="select-input"
-                              style={{ width: 85, padding: '3px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
-                              placeholder="#000000"
-                              value={bgColor}
-                              onChange={handleBgColorChange}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <div style={{ width: 13, height: 13, borderRadius: '50%', background: textColor, border: '1px solid rgba(255,255,255,0.2)' }} />
-                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Text Color</span>
-                            </div>
-                            <input
-                              className="select-input"
-                              style={{ width: 85, padding: '3px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
-                              placeholder="#FAFAFA"
-                              value={textColor}
-                              onChange={handleTextColorChange}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 3, padding: '7px 12px' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Background Image URL</span>
-                            <input
-                              className="select-input"
-                              style={{ width: '100%', padding: '4px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
-                              placeholder="https://..."
-                              value={bgImage}
-                              onChange={handleBgImageChange}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* CATEGORY: POSITION */}
-                    {settingsTab === 'position' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
-                          Position & Placement
-                        </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          padding: '8px 10px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: 8
-                        }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 5, width: '100%' }}>
-                            {[
-                              { val: "top-left", label: "Top Left" },
-                              { val: "top-center", label: "Top Center" },
-                              { val: "top-right", label: "Top Right" },
-                              { val: "bottom-left", label: "Bottom Left" },
-                              { val: "bottom-center", label: "Bottom Center" },
-                              { val: "bottom-right", label: "Bottom Right" }
-                            ].map((pos) => {
-                              const isSel = positionMode === pos.val;
-                              return (
-                                <button
-                                  key={pos.val}
-                                  type="button"
-                                  onClick={() => {
-                                    setPositionMode(pos.val);
-                                    localStorage.setItem("position-mode", pos.val);
-                                  }}
-                                  style={{
-                                    padding: '5px 6px',
-                                    borderRadius: 7,
-                                    background: isSel ? 'rgba(0, 112, 243, 0.35)' : 'rgba(255, 255, 255, 0.06)',
-                                    border: isSel ? '1px solid rgba(0, 112, 243, 0.7)' : '1px solid rgba(255, 255, 255, 0.08)',
-                                    color: isSel ? '#ffffff' : 'rgba(255, 255, 255, 0.75)',
-                                    fontSize: 10.5,
-                                    fontWeight: isSel ? 700 : 500,
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease'
-                                  }}
-                                >
-                                  {pos.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-
-                          <div style={{ width: '100%', height: 1, background: 'rgba(255,255,255,0.06)' }} />
-
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Free (Manual) Position</span>
-                            <AppleSwitch
-                              checked={positionMode === "free"}
-                              onChange={(checked) => {
-                                const newMode = checked ? "free" : "top-center";
-                                setPositionMode(newMode);
-                                localStorage.setItem("position-mode", newMode);
-                              }}
-                            />
-                          </div>
-
-                          {positionMode === "free" && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 2 }}>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                <span style={{ fontSize: 10.5, opacity: 0.75 }}>X ({islandX.toFixed(1)}%)</span>
-                                <input
-                                  type="range"
-                                  min="0"
-                                  max="100"
-                                  step="0.1"
-                                  value={islandX}
-                                  onPointerDown={(e) => {
-                                    e.stopPropagation();
-                                    updateDragging(true);
-                                  }}
-                                  onChange={handleIslandXChange}
-                                  onPointerUp={(e) => {
-                                    e.stopPropagation();
-                                    savePosition();
-                                    handleDragEndChecks(e);
-                                    e.target.blur();
-                                  }}
-                                  style={{ flex: 1, accentColor: '#0070f3' }}
-                                />
-                              </div>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-                                <span style={{ fontSize: 10.5, opacity: 0.75 }}>Y ({islandY}px)</span>
-                                <input
-                                  type="range"
-                                  min="0"
-                                  max="500"
-                                  value={islandY}
-                                  onPointerDown={(e) => {
-                                    e.stopPropagation();
-                                    updateDragging(true);
-                                  }}
-                                  onChange={handleIslandYChange}
-                                  onPointerUp={(e) => {
-                                    e.stopPropagation();
-                                    savePosition();
-                                    handleDragEndChecks(e);
-                                    e.target.blur();
-                                  }}
-                                  style={{ flex: 1, accentColor: '#0070f3' }}
-                                />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* CATEGORY: TABS */}
-                    {settingsTab === 'tabs' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
-                            Tab Management
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.2px' }}>
+                            Notifications
                           </span>
-                          <span style={{ fontSize: 9.5, opacity: 0.5 }}>Drag or use arrows</span>
+                          {activeCount > 0 && (
+                            <span style={{
+                              background: 'rgba(168, 85, 247, 0.25)',
+                              color: '#c084fc',
+                              border: '1px solid rgba(168, 85, 247, 0.4)',
+                              borderRadius: 999,
+                              fontSize: 9.5,
+                              fontWeight: 700,
+                              padding: '1px 7px',
+                              lineHeight: '13px'
+                            }}>
+                              {activeCount}
+                            </span>
+                          )}
                         </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden',
-                          display: 'flex',
-                          flexDirection: 'column'
-                        }}>
-                          {tabOrder.map((id, i) => {
-                            const tabDef = TABS.find(t => t.id === id);
-                            if (!tabDef) return null;
-                            const isHidden = hiddenTabs.includes(id);
-                            return (
-                              <div
-                                key={id}
-                                className={`tab-order-item ${isHidden ? 'hidden' : ''}`}
-                                style={{
-                                  padding: '4px 8px',
-                                  borderBottom: i < tabOrder.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
-                                  cursor: 'grab'
-                                }}
-                                draggable
-                                onDragStart={(e) => {
-                                  e.dataTransfer.setData("text/plain", i);
-                                  e.currentTarget.style.opacity = '0.4';
-                                }}
-                                onDragEnd={(e) => {
-                                  e.currentTarget.style.opacity = isHidden ? '0.45' : '1';
-                                }}
-                                onDragOver={(e) => {
-                                  e.preventDefault();
-                                  e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-                                }}
-                                onDragLeave={(e) => {
-                                  e.currentTarget.style.background = '';
-                                }}
-                                onDrop={(e) => {
-                                  e.preventDefault();
-                                  e.currentTarget.style.background = '';
-                                  const fromIdx = parseInt(e.dataTransfer.getData("text/plain"));
-                                  moveTabOrder(fromIdx, i);
-                                }}
-                              >
-                                <GripVertical size={13} style={{ opacity: 0.35, cursor: 'grab' }} />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 7, flex: 1, minWidth: 0 }}>
-                                  {tabDef.icon(textColor)}
-                                  <span style={{ fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                    {tabDef.name}
-                                  </span>
-                                </div>
-                                <div style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                                  <button
-                                    type="button"
-                                    className="tab-order-btn"
-                                    onClick={() => {
-                                      setDefaultTabId(id);
-                                      localStorage.setItem("default-tab", id);
-                                    }}
-                                    title="Set as default"
-                                    style={{ opacity: defaultTabId === id ? 1 : 0.3, color: defaultTabId === id ? '#FFD700' : textColor, padding: 2 }}
-                                  >
-                                    <Star size={13} fill={defaultTabId === id ? '#FFD700' : 'none'} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="tab-order-btn"
-                                    onClick={() => toggleTabVisibility(id)}
-                                    title={isHidden ? "Show" : "Hide"}
-                                    style={{ opacity: isHidden ? 1 : 0.6, padding: 2 }}
-                                  >
-                                    {isHidden ? <EyeOff size={13} /> : <Eye size={13} />}
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="tab-order-btn"
-                                    disabled={i === 0}
-                                    onClick={() => moveTabOrder(i, i - 1)}
-                                    style={{ padding: 2 }}
-                                  >
-                                    <ChevronLeft size={13} style={{ transform: 'rotate(90deg)' }} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="tab-order-btn"
-                                    disabled={i === tabOrder.length - 1}
-                                    onClick={() => moveTabOrder(i, i + 1)}
-                                    style={{ padding: 2 }}
-                                  >
-                                    <ChevronLeft size={13} style={{ transform: 'rotate(-90deg)' }} />
-                                  </button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
 
-                    {/* CATEGORY: SHORTCUTS */}
-                    {settingsTab === 'shortcuts' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
-                              Tab Shortcuts
-                            </div>
-                            <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>
-                              Press Alt + [Letter] to open any tab instantly. Ctrl is reserved for Click-Through.
-                            </div>
-                          </div>
+                        {activeCount > 0 ? (
                           <button
-                            type="button"
-                            onClick={handleResetShortcuts}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleClearAll();
+                            }}
+                            className="notif-clear-btn"
                             style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 4,
-                              padding: '4px 8px',
-                              background: 'rgba(255, 255, 255, 0.08)',
-                              border: '1px solid rgba(255, 255, 255, 0.12)',
-                              borderRadius: 6,
-                              color: 'rgba(255, 255, 255, 0.8)',
-                              fontSize: 10.5,
+                              background: 'rgba(239, 68, 68, 0.14)',
+                              border: '1px solid rgba(239, 68, 68, 0.28)',
+                              color: '#f87171',
+                              fontSize: 10,
                               fontWeight: 600,
                               cursor: 'pointer',
+                              padding: '2px 10px',
+                              borderRadius: 999,
                               transition: 'all 0.15s ease'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
-                            title="Reset all tab shortcuts to defaults"
                           >
-                            <RotateCcw size={11} />
-                            <span>Reset Defaults</span>
+                            Clear All
                           </button>
-                        </div>
+                        ) : (
+                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', fontWeight: 500 }}>
+                            Quiet
+                          </span>
+                        )}
+                      </div>
 
-                        {recordingConflict && (
+                      {/* Notifications Body: Symmetrical Centered Empty State OR Full-Width Scrollable Items */}
+                      {activeList.length === 0 ? (
+                        <div style={{
+                          flex: 1,
+                          width: '100%',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 8,
+                          padding: '12px 0'
+                        }}>
                           <div style={{
-                            padding: '5px 10px',
-                            borderRadius: 8,
-                            fontSize: 10.5,
-                            fontWeight: 600,
-                            background: recordingConflict.includes('Ctrl') ? 'rgba(239, 68, 68, 0.18)' : 'rgba(56, 189, 248, 0.18)',
-                            border: recordingConflict.includes('Ctrl') ? '1px solid rgba(239, 68, 68, 0.35)' : '1px solid rgba(56, 189, 248, 0.35)',
-                            color: recordingConflict.includes('Ctrl') ? '#fca5a5' : '#7dd3fc',
+                            width: 38,
+                            height: 38,
+                            borderRadius: '50%',
+                            background: 'rgba(255,255,255,0.04)',
+                            border: '1px solid rgba(255,255,255,0.08)',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 6
+                            justifyContent: 'center'
                           }}>
-                            {recordingConflict.includes('Ctrl') ? <AlertCircle size={12} /> : <CheckCircle2 size={12} />}
-                            <span>{recordingConflict}</span>
+                            <Bell size={17} color="rgba(255,255,255,0.35)" />
                           </div>
-                        )}
-
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden',
-                          display: 'flex',
-                          flexDirection: 'column'
-                        }}>
-                          {TABS.map((tab, i) => {
-                            const isRecording = recordingTabId === tab.id;
-                            const currentShortcut = tabShortcuts[tab.id] || "";
-                            const parts = currentShortcut ? currentShortcut.split("+") : [];
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                            <span style={{ fontSize: 11.5, fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>
+                              No active notifications
+                            </span>
+                            <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.35)' }}>
+                              You're all caught up
+                            </span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div 
+                          className="notif-scroll-area"
+                          style={{
+                            flex: 1,
+                            overflowY: 'auto',
+                            maxHeight: 108,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 5,
+                            paddingRight: 3,
+                            paddingBottom: 2
+                          }}
+                        >
+                          {activeList.map((notif, idx) => {
+                            const nId = notif.id || notif.sourceNotificationId || idx;
+                            const notifIcon = notif.icon || notif.applicationIcon;
+                            const appName = notif.applicationName || notif.appName || '';
+                            const notifTitle = notif.title || appName || "Notification";
+                            const notifBody = notif.body || notif.message || "";
+                            const notifTime = notif.receivedAt || notif.timestamp;
+                            const targetAppId = notif.applicationId || notif.appId || '';
+                            const targetAppName = appName || notif.title || '';
 
                             return (
                               <div
-                                key={tab.id}
+                                key={nId}
+                                className="notif-item-card"
+                                data-no-toggle="true"
+                                title={`Open ${targetAppName || "Application"}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (window.electronAPI?.focusNotificationApp) {
+                                    window.electronAPI.focusNotificationApp(targetAppId, targetAppName);
+                                  }
+                                  setMode("still");
+                                }}
                                 style={{
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
-                                  padding: '6px 12px',
-                                  borderBottom: i < TABS.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
-                                  background: isRecording ? 'rgba(0, 112, 243, 0.12)' : 'transparent',
-                                  transition: 'background 0.15s ease'
+                                  background: 'rgba(255,255,255,0.05)',
+                                  border: '1px solid rgba(255,255,255,0.06)',
+                                  borderRadius: 8,
+                                  padding: '6px 9px',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.15s cubic-bezier(0.16, 1, 0.3, 1)',
+                                  position: 'relative'
                                 }}
                               >
-                                {/* Left: Icon & Tab Name */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0, flex: 1 }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
                                   <div style={{
-                                    width: 24,
-                                    height: 24,
+                                    width: 25,
+                                    height: 25,
                                     borderRadius: 6,
-                                    background: 'rgba(255, 255, 255, 0.06)',
+                                    background: notifIcon ? 'transparent' : 'rgba(168, 85, 247, 0.15)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
-                                    flexShrink: 0
+                                    flexShrink: 0,
+                                    overflow: 'hidden'
                                   }}>
-                                    {tab.icon("#0070f3")}
+                                    {notifIcon ? (
+                                      <img src={notifIcon} alt="" style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'contain' }} />
+                                    ) : (
+                                      <Bell size={13} color="#c084fc" />
+                                    )}
                                   </div>
-                                  <span style={{
-                                    fontSize: 12,
-                                    fontWeight: 500,
-                                    color: textColor,
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  }}>
-                                    {tab.name}
-                                  </span>
-                                </div>
-
-                                {/* Right: Key Badge & Action */}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                  {isRecording ? (
+                                  <div style={{ minWidth: 0, flex: 1, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                      <span style={{
-                                        padding: '3px 8px',
-                                        borderRadius: 6,
-                                        fontSize: 10.5,
-                                        fontWeight: 700,
-                                        color: '#ffffff',
-                                        background: '#0070f3',
-                                        boxShadow: '0 0 10px rgba(0, 112, 243, 0.5)',
-                                        letterSpacing: '0.02em'
-                                      }}>
-                                        Press letter...
+                                      <span style={{ fontSize: 10.5, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                        {notifTitle}
                                       </span>
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          setRecordingTabId(null);
-                                          setRecordingConflict(null);
-                                        }}
-                                        style={{
-                                          padding: '3px 6px',
-                                          borderRadius: 6,
-                                          background: 'rgba(255,255,255,0.1)',
-                                          border: 'none',
-                                          color: 'rgba(255,255,255,0.7)',
-                                          fontSize: 10,
-                                          cursor: 'pointer'
-                                        }}
-                                        title="Cancel"
-                                      >
-                                        <X size={12} />
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setRecordingTabId(tab.id);
-                                        setRecordingConflict(null);
-                                      }}
-                                      style={{
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: 4,
-                                        padding: '3px 7px',
-                                        background: currentShortcut ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.03)',
-                                        border: '1px solid rgba(255, 255, 255, 0.12)',
-                                        borderRadius: 6,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.15s ease'
-                                      }}
-                                      onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)'}
-                                      onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
-                                      title="Click to customize shortcut"
-                                    >
-                                      {parts.length > 0 ? (
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                                          {parts.map((p, pIdx) => (
-                                            <span
-                                              key={pIdx}
-                                              style={{
-                                                fontSize: 10.5,
-                                                fontWeight: 700,
-                                                padding: '1px 5px',
-                                                borderRadius: 4,
-                                                background: p === 'Alt' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 112, 243, 0.25)',
-                                                color: p === 'Alt' ? 'rgba(255, 255, 255, 0.85)' : '#60a5fa',
-                                                fontFamily: 'monospace',
-                                                letterSpacing: '0.04em'
-                                              }}
-                                            >
-                                              {p === 'Alt' ? '⌥ Alt' : p}
-                                            </span>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
-                                          None (Click to record)
+                                      {appName && appName !== notifTitle && (
+                                        <span style={{
+                                          fontSize: 8.5,
+                                          color: '#38bdf8',
+                                          background: 'rgba(56, 189, 248, 0.12)',
+                                          padding: '0.5px 5px',
+                                          borderRadius: 4,
+                                          fontWeight: 600,
+                                          flexShrink: 0
+                                        }}>
+                                          {appName}
                                         </span>
                                       )}
-                                    </button>
-                                  )}
+                                    </div>
+                                    {notifBody && (
+                                      <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.65)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: '12.5px' }}>
+                                        {notifBody}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                                  <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.4)', fontWeight: 500 }}>
+                                    {formatRelativeTime(notifTime)}
+                                  </span>
+                                  <button
+                                    title="Dismiss notification"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleExecuteAction(nId, 'dismiss');
+                                    }}
+                                    className="notif-dismiss-btn"
+                                    style={{
+                                      background: 'rgba(255,255,255,0.06)',
+                                      border: 'none',
+                                      color: 'rgba(255,255,255,0.5)',
+                                      cursor: 'pointer',
+                                      padding: 3,
+                                      borderRadius: 4,
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      transition: 'all 0.12s ease'
+                                    }}
+                                  >
+                                    <X size={10} />
+                                  </button>
                                 </div>
                               </div>
                             );
                           })}
                         </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Tab 6: Game / Stats */}
+                {currentTab === 6 && (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 12px', userSelect: 'none' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: 110 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 700, color: '#38bdf8' }}>
+                        <span>CPU</span>
+                        <span>{systemStats.cpu}%</span>
                       </div>
-                    )}
-
-                    {/* CATEGORY: FEATURES */}
-                    {settingsTab === 'features' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
-                          Features & Alerts
-                        </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Low Battery Alerts</span>
-                            <AppleSwitch
-                              checked={batteryAlertsEnabled}
-                              onChange={(checked) => handleBatteryAlertsChange({ target: { value: checked ? "true" : "false" } })}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Standby Mode</span>
-                            <AppleSwitch
-                              checked={standbyBorderEnabled}
-                              onChange={(checked) => handleStandbyChange({ target: { value: checked ? "true" : "false" } })}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Large Standby Mode</span>
-                            <AppleSwitch
-                              checked={largeStandbyEnabled}
-                              onChange={(checked) => handleLargeStandbyChange({ target: { value: checked ? "true" : "false" } })}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Show Info When Idle</span>
-                            <AppleSwitch
-                              checked={showInfoWhenIdleEnabled}
-                              onChange={(checked) => handleShowInfoWhenIdleChange({ target: { value: checked ? "true" : "false" } })}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Hide Notification Previews</span>
-                            <AppleSwitch
-                              checked={Boolean(notificationSnapshot?.settings?.hidePreviews)}
-                              onChange={() => handleTogglePrivacy()}
-                            />
-                          </div>
-                        </div>
+                      <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ width: `${systemStats.cpu}%`, height: '100%', background: '#38bdf8', borderRadius: 2 }} />
                       </div>
-                    )}
-
-                    {/* CATEGORY: WEATHER */}
-                    {settingsTab === 'weather' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
-                          Weather Preferences
-                        </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Location</span>
-                            <input
-                              className="select-input"
-                              style={{ width: 140, padding: '3px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
-                              placeholder="City, ST, Country"
-                              value={weatherLocation}
-                              onChange={(e) => {
-                                setWeatherLocation(e.target.value);
-                                localStorage.setItem("location", e.target.value);
-                              }}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Temperature Unit</span>
-                            <AppleSegmented
-                              value={weatherUnit}
-                              options={[{ value: 'c', label: '°C Celsius' }, { value: 'f', label: '°F Fahrenheit' }]}
-                              onChange={(val) => handleWeatherUnitChange({ target: { value: val } })}
-                            />
-                          </div>
-                        </div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, width: 110 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 700, color: '#a855f7' }}>
+                        <span>RAM</span>
+                        <span>{systemStats.ram}%</span>
                       </div>
-                    )}
-
-                    {/* CATEGORY: UPDATES */}
-                    {settingsTab === 'updates' && (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
-                          Software Updates
-                        </div>
-                        <div className="settings-update-card" style={{ padding: '8px 10px', borderRadius: 12 }}>
-                          <div className="settings-update-header">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <span style={{ fontSize: 11.5, fontWeight: 600, color: textColor }}>Quick Pill v{appVersion}</span>
-                              {updateStatus === 'checking' && (
-                                <span className="settings-update-badge checking">Checking...</span>
-                              )}
-                              {updateStatus === 'not-available' && (
-                                <span className="settings-update-badge up-to-date"><Check size={11} /> Up to date</span>
-                              )}
-                              {updateStatus === 'available' && (
-                                <span className="settings-update-badge available"><Sparkles size={11} /> v{updateInfo?.version}</span>
-                              )}
-                              {updateStatus === 'downloading' && (
-                                <span className="settings-update-badge available"><Download size={11} /> Downloading</span>
-                              )}
-                              {updateStatus === 'downloaded' && (
-                                <span className="settings-update-badge downloaded"><CheckCircle2 size={11} /> Ready</span>
-                              )}
-                              {updateStatus === 'error' && (
-                                <span className="settings-update-badge error"><AlertCircle size={11} /> Error</span>
-                              )}
-                            </div>
-
-                            <button
-                              className="settings-update-btn"
-                              onClick={handleManualCheckForUpdates}
-                              disabled={updateStatus === 'checking' || updateStatus === 'downloading'}
-                              title="Check for updates"
-                              style={{ padding: '3px 7px', fontSize: 10.5 }}
-                            >
-                              <RefreshCw size={11} className={updateStatus === 'checking' ? 'spin-anim' : ''} />
-                              <span>{updateStatus === 'checking' ? 'Checking...' : 'Check Now'}</span>
-                            </button>
-                          </div>
-
-                          {updateStatus === 'available' && updateInfo && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginTop: 3 }}>
-                              <div style={{ fontSize: 10.5, opacity: 0.9, color: textColor }}>
-                                A new version <strong>v{updateInfo.version}</strong> is available {updateInfo.size > 0 ? `(${formatBytes(updateInfo.size)})` : ''}.
-                              </div>
-                              {updateInfo.changelog && updateInfo.changelog.length > 0 && (
-                                <div className="settings-update-changelog" style={{ color: textColor, padding: '4px 6px', fontSize: 9.5 }}>
-                                  <span style={{ fontWeight: 600, opacity: 0.7, marginBottom: 2 }}>What's New:</span>
-                                  {updateInfo.changelog.map((item, idx) => (
-                                    <div key={idx} className="settings-update-changelog-item">
-                                      <span>•</span>
-                                      <span>{item}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              )}
-                              <button
-                                className="settings-update-btn primary"
-                                onClick={handleStartUpdateDownload}
-                                style={{ width: '100%', padding: '5px 10px', fontSize: 11, marginTop: 2 }}
-                              >
-                                <Download size={12} />
-                                Download & Update
-                              </button>
-                            </div>
-                          )}
-
-                          {updateStatus === 'downloading' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginTop: 3, color: textColor }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9.5, opacity: 0.85 }}>
-                                <span>Downloading v{updateInfo?.version}...</span>
-                                <span>{downloadProgress.percent}% ({formatBytes(downloadProgress.transferredBytes)} / {formatBytes(downloadProgress.totalBytes)})</span>
-                              </div>
-                              <div className="settings-update-progress-track" style={{ height: 4 }}>
-                                <div
-                                  className="settings-update-progress-fill"
-                                  style={{ width: `${downloadProgress.percent}%` }}
-                                />
-                              </div>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 9.5, opacity: 0.65 }}>
-                                <span>Speed: {formatBytes(downloadProgress.speedBytesPerSec)}/s</span>
-                                <button
-                                  onClick={handleCancelUpdateDownload}
-                                  style={{ background: 'none', border: 'none', color: textColor, opacity: 0.7, cursor: 'pointer', fontSize: 9.5, textDecoration: 'underline' }}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          )}
-
-                          {updateStatus === 'downloaded' && (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 3, color: textColor }}>
-                              <div style={{ fontSize: 11, opacity: 0.9 }}>
-                                Update <strong>v{updateInfo?.version}</strong> downloaded! {autoDownloadInstallEnabled ? 'Installing silently in the background...' : ''}
-                              </div>
-                              <button
-                                className="settings-update-btn install"
-                                onClick={handleInstallUpdate}
-                                style={{ width: '100%', padding: '5px 10px', fontSize: 11 }}
-                              >
-                                <Sparkles size={12} />
-                                Restart & Install Now
-                              </button>
-                            </div>
-                          )}
-
-                          {updateStatus === 'error' && (
-                            <div style={{ fontSize: 10, color: '#ef4444', marginTop: 2 }}>
-                              {updateErrorMessage || 'Failed to check or download update.'}
-                            </div>
-                          )}
-                        </div>
-
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden',
-                          display: 'flex',
-                          flexDirection: 'column'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Auto-Download & Install</span>
-                              <span style={{ fontSize: 9.5, opacity: 0.6, color: textColor }}>Automatically apply updates in background</span>
-                            </div>
-                            <AppleSwitch
-                              checked={autoDownloadInstallEnabled}
-                              onChange={(checked) => handleAutoDownloadInstallToggle(checked)}
-                            />
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px' }}>
-                            <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Auto-Check on Launch</span>
-                            <AppleSwitch
-                              checked={autoUpdateCheckEnabled}
-                              onChange={(checked) => handleAutoUpdateCheckToggle({ target: { value: checked ? "true" : "false" } })}
-                            />
-                          </div>
-                        </div>
+                      <div style={{ width: '100%', height: 4, background: 'rgba(255,255,255,0.1)', borderRadius: 2, overflow: 'hidden' }}>
+                        <div style={{ width: `${systemStats.ram}%`, height: '100%', background: '#a855f7', borderRadius: 2 }} />
                       </div>
-                    )}
+                    </div>
                   </div>
-                </div>
-              );
-            })()}
+                )}
+
+                {/* Tab 7: Clipboard */}
+                {currentTab === 7 && (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', userSelect: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                      <List size={16} color="#38bdf8" style={{ flexShrink: 0 }} />
+                      <span style={{ fontSize: 11, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {clipboard?.[0]?.text || "Clipboard is empty"}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {/* Fallback if currentTab does not match any known tab */}
+                {![0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15].includes(currentTab) && (
+                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Clock size={16} color="#38bdf8" />
+                      <span>{time}</span>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
+            </div>
+
+            {/* Elastic Bottom Pagination Dots (hidden during lyrics wide mode to maximize focus) */}
+            {!isLyricsWide && (
+              <div className="elastic-pagination">
+                {visibleTabs.map((tabId, idx) => {
+                  const isActive = tabId === currentTab;
+                  const tabInfo = TABS.find(t => t.id === tabId);
+                  return (
+                    <div
+                      key={tabId}
+                      className={`elastic-dot ${isActive ? "active" : "inactive"}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setTabState([tabId, tabId > currentTab ? 1 : -1]);
+                      }}
+                      title={tabInfo?.name || `Tab ${idx + 1}`}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
       </div>
-
-    </motion.div >
+    </motion.div>
   );
 }

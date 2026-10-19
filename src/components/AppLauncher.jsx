@@ -184,34 +184,47 @@ export default function AppLauncher({
     const safeRunningWindows = Array.isArray(runningWindows) ? runningWindows : [];
     const safeWorkspaces = Array.isArray(workspaces) ? workspaces : [];
 
+    let rawList = [];
+
     if (query.trim().length > 0) {
       const q = query.toLowerCase();
       if (filter === "favorites") {
-        return safeSearchResults.filter(item => item && safeFavorites.includes(item.id || item.target));
+        rawList = safeSearchResults.filter(item => item && safeFavorites.includes(item.id || item.target));
+      } else if (filter === "windows") {
+        rawList = safeSearchResults.filter(item => item && (item.itemType === "window" || item.type === "window" || item.hWnd));
+      } else if (filter === "workspaces") {
+        rawList = safeWorkspaces.filter(w => w && typeof w.name === "string" && w.name.toLowerCase().includes(q));
+      } else {
+        rawList = safeSearchResults.filter(Boolean);
       }
-      if (filter === "windows") {
-        return safeSearchResults.filter(item => item && (item.itemType === "window" || item.type === "window" || item.hWnd));
+    } else {
+      if (filter === "favorites") {
+        rawList = safeCatalog.filter(app => app && safeFavorites.includes(app.id || app.target));
+      } else if (filter === "windows") {
+        rawList = safeRunningWindows.filter(Boolean);
+      } else if (filter === "workspaces") {
+        rawList = safeWorkspaces.filter(Boolean);
+      } else {
+        // Default 'all': favorites first, then all discovered apps
+        const favApps = safeCatalog.filter(app => app && safeFavorites.includes(app.id || app.target));
+        const otherApps = safeCatalog.filter(app => app && !safeFavorites.includes(app.id || app.target));
+        rawList = [...favApps, ...otherApps];
       }
-      if (filter === "workspaces") {
-        return safeWorkspaces.filter(w => w && typeof w.name === "string" && w.name.toLowerCase().includes(q));
-      }
-      return safeSearchResults.filter(Boolean);
     }
 
-    if (filter === "favorites") {
-      return safeCatalog.filter(app => app && safeFavorites.includes(app.id || app.target));
+    // Deduplicate items to prevent duplicate rendering and identical React keys
+    const seen = new Set();
+    const deduplicated = [];
+    for (const item of rawList) {
+      if (!item) continue;
+      const key = item.id || item.target || (item.hWnd ? `win-${item.hWnd}` : null);
+      if (key) {
+        if (seen.has(key)) continue;
+        seen.add(key);
+      }
+      deduplicated.push(item);
     }
-    if (filter === "windows") {
-      return safeRunningWindows.filter(Boolean);
-    }
-    if (filter === "workspaces") {
-      return safeWorkspaces.filter(Boolean);
-    }
-
-    // Default 'all': favorites first, then all discovered apps
-    const favApps = safeCatalog.filter(app => app && safeFavorites.includes(app.id || app.target));
-    const otherApps = safeCatalog.filter(app => app && !safeFavorites.includes(app.id || app.target));
-    return [...favApps, ...otherApps];
+    return deduplicated;
   }, [query, filter, searchResults, catalog, favorites, runningWindows, workspaces]);
 
   // Launch application
@@ -511,9 +524,9 @@ export default function AppLauncher({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "10px 16px",
+        padding: "8px 12px",
         boxSizing: "border-box",
-        gap: 14,
+        gap: 10,
         userSelect: "none",
         position: "relative"
       }}
@@ -524,16 +537,16 @@ export default function AppLauncher({
       <div
         className="launcher-scrollable"
         style={{
-          width: 195,
+          width: 110,
           height: "100%",
           display: "flex",
           flexDirection: "column",
           justifyContent: "flex-start",
-          gap: 6,
+          gap: 5,
           flexShrink: 0,
           overflowY: "auto",
           overflowX: "hidden",
-          paddingRight: 4,
+          paddingRight: 3,
           boxSizing: "border-box"
         }}
       >
@@ -542,18 +555,18 @@ export default function AppLauncher({
           style={{
             background: "rgba(255, 255, 255, 0.05)",
             border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: 12,
-            padding: "6px 8px",
+            borderRadius: 10,
+            padding: "5px 6px",
             display: "flex",
             flexDirection: "column",
-            gap: 4,
+            gap: 3,
             flexShrink: 0
           }}
         >
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Compass size={14} color="#38bdf8" />
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#ffffff", letterSpacing: "0.4px", textTransform: "uppercase" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <Compass size={12} color="#38bdf8" />
+              <span style={{ fontSize: 10, fontWeight: 800, color: "#ffffff", letterSpacing: "0.4px", textTransform: "uppercase" }}>
                 Launcher
               </span>
             </div>
@@ -634,12 +647,12 @@ export default function AppLauncher({
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  padding: "4px 8px",
-                  borderRadius: 8,
+                  padding: "3px 6px",
+                  borderRadius: 6,
                   background: isActive ? "rgba(56, 189, 248, 0.16)" : "transparent",
                   border: isActive ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid transparent",
                   color: isActive ? "#38bdf8" : "rgba(255, 255, 255, 0.65)",
-                  fontSize: 11,
+                  fontSize: 9.5,
                   fontWeight: isActive ? 700 : 500,
                   cursor: "pointer",
                   textAlign: "left",
@@ -648,7 +661,7 @@ export default function AppLauncher({
                 }}
               >
                 <span>{btn.label}</span>
-                <span style={{ fontSize: 9.5, opacity: 0.6 }}>{btn.count}</span>
+                <span style={{ fontSize: 8.5, opacity: 0.6 }}>{btn.count}</span>
               </button>
             );
           })}
@@ -662,7 +675,7 @@ export default function AppLauncher({
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: 6,
           overflow: "hidden"
         }}
       >
@@ -671,15 +684,15 @@ export default function AppLauncher({
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 8,
+            gap: 6,
             background: "rgba(255, 255, 255, 0.06)",
             border: "1px solid rgba(255, 255, 255, 0.12)",
-            borderRadius: 10,
-            padding: "5px 10px",
+            borderRadius: 8,
+            padding: "3px 8px",
             boxSizing: "border-box"
           }}
         >
-          <Search size={14} color="rgba(255, 255, 255, 0.5)" />
+          <Search size={13} color="rgba(255, 255, 255, 0.5)" />
           <input
             ref={searchInputRef}
             type="text"
@@ -698,7 +711,7 @@ export default function AppLauncher({
               border: "none",
               outline: "none",
               color: "#ffffff",
-              fontSize: 12,
+              fontSize: 11,
               fontFamily: "OpenRunde, system-ui, sans-serif"
             }}
           />
@@ -708,7 +721,7 @@ export default function AppLauncher({
               onClick={() => { setQuery(""); searchInputRef.current?.focus(); }}
               style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.4)", cursor: "pointer", padding: 0 }}
             >
-              <X size={13} />
+              <X size={12} />
             </button>
           )}
           {filter === "workspaces" && (
@@ -719,35 +732,36 @@ export default function AppLauncher({
               style={{
                 background: "rgba(56, 189, 248, 0.2)",
                 border: "1px solid rgba(56, 189, 248, 0.4)",
-                borderRadius: 6,
-                padding: "3px 8px",
+                borderRadius: 5,
+                padding: "2px 6px",
                 color: "#38bdf8",
-                fontSize: 10.5,
+                fontSize: 9.5,
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: 4,
+                gap: 3,
                 whiteSpace: "nowrap"
               }}
             >
-              <Plus size={11} />
+              <Plus size={10} />
               New
             </button>
           )}
         </div>
 
-        {/* Results List */}
+        {/* Results List: Capped to 4 visible rows with clean custom scrollbar */}
         <div
           ref={listContainerRef}
           className="launcher-scrollable"
           style={{
             flex: 1,
+            maxHeight: 148,
             overflowY: "auto",
             display: "flex",
             flexDirection: "column",
             gap: 4,
-            paddingRight: 4
+            paddingRight: 3
           }}
         >
           {displayedItems.length === 0 ? (
@@ -778,7 +792,7 @@ export default function AppLauncher({
 
               return (
                 <div
-                  key={item.id || item.hWnd || item.target || idx}
+                  key={`${item.id || item.target || item.hWnd || 'item'}-${item.hWnd || ''}-${idx}`}
                   onClick={() => {
                     setSelectedIndex(idx);
                     if (isWindowItem) handleActivateWindow(item);
@@ -789,8 +803,11 @@ export default function AppLauncher({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
-                    padding: "5px 8px",
-                    borderRadius: 8,
+                    padding: "3px 6px",
+                    height: 32,
+                    boxSizing: "border-box",
+                    flexShrink: 0,
+                    borderRadius: 7,
                     background: isSelected ? "rgba(255, 255, 255, 0.12)" : "rgba(255, 255, 255, 0.03)",
                     border: isSelected ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(255, 255, 255, 0.05)",
                     cursor: "pointer",
@@ -798,13 +815,13 @@ export default function AppLauncher({
                   }}
                 >
                   {/* Left: Icon + Titles */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, flex: 1 }}>
                     {/* App or Window Icon */}
                     <div
                       style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 6,
+                        width: 20,
+                        height: 20,
+                        borderRadius: 5,
                         background: "rgba(0, 0, 0, 0.35)",
                         display: "flex",
                         alignItems: "center",
@@ -817,15 +834,15 @@ export default function AppLauncher({
                         <img
                           src={item.icon}
                           alt=""
-                          style={{ width: 18, height: 18, objectFit: "contain" }}
+                          style={{ width: 15, height: 15, objectFit: "contain" }}
                           onError={(e) => { e.currentTarget.style.display = "none"; }}
                         />
                       ) : isWindowItem ? (
-                        <Monitor size={14} color="#38bdf8" />
+                        <Monitor size={12} color="#38bdf8" />
                       ) : isWorkspaceItem ? (
-                        <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color || "#38bdf8" }} />
+                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: item.color || "#38bdf8" }} />
                       ) : (
-                        <Compass size={14} color="rgba(255, 255, 255, 0.6)" />
+                        <Compass size={12} color="rgba(255, 255, 255, 0.6)" />
                       )}
                     </div>
 
@@ -833,23 +850,25 @@ export default function AppLauncher({
                     <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
                       <span
                         style={{
-                          fontSize: 11.5,
+                          fontSize: 10.5,
                           fontWeight: 600,
                           color: "#ffffff",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
-                          textOverflow: "ellipsis"
+                          textOverflow: "ellipsis",
+                          lineHeight: 1.2
                         }}
                       >
                         {item.name || item.title || item.processName || "Untitled"}
                       </span>
                       <span
                         style={{
-                          fontSize: 9.5,
+                          fontSize: 8.5,
                           color: "rgba(255, 255, 255, 0.4)",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
-                          textOverflow: "ellipsis"
+                          textOverflow: "ellipsis",
+                          lineHeight: 1.1
                         }}
                       >
                         {isWindowItem
@@ -1427,9 +1446,9 @@ export default function AppLauncher({
                             return (app.name || "").toLowerCase().includes(workspaceModal.pickerQuery.toLowerCase());
                           })
                           .slice(0, 20)
-                          .map(app => (
+                          .map((app, appIdx) => (
                             <button
-                              key={app.id || app.target}
+                              key={`${app.id || app.target || 'app'}-${appIdx}`}
                               type="button"
                               onClick={() => {
                                 const newTarget = {

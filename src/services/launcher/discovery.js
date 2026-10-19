@@ -511,6 +511,19 @@ function deduplicateCatalog(rawApps = []) {
 
   const combined = [...win32Map.values(), ...uwpMap.values()];
 
+  // Ensure every discovered app has a globally unique ID
+  const idCounts = new Map();
+  for (const item of combined) {
+    if (!item.id) continue;
+    if (idCounts.has(item.id)) {
+      const count = idCounts.get(item.id) + 1;
+      idCounts.set(item.id, count);
+      item.id = `${item.id}-${count}`;
+    } else {
+      idCounts.set(item.id, 1);
+    }
+  }
+
   // Sort alphabetically by name
   return combined.sort((a, b) => a.name.localeCompare(b.name));
 }

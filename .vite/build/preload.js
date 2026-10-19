@@ -1,1 +1,224 @@
-"use strict";const{contextBridge:i,ipcRenderer:o}=require("electron");i.exposeInMainWorld("electronAPI",{setIgnoreMouseEvents:(e,t)=>o.invoke("set-ignore-mouse-events",e,t),getSystemMedia:()=>o.invoke("get-system-media"),getBluetoothStatus:()=>o.invoke("get-bluetooth-status"),getCameraStatus:()=>o.invoke("get-camera-status"),getMicrophoneStatus:()=>o.invoke("get-microphone-status"),getSystemMetrics:()=>o.invoke("get-system-metrics"),controlSystemMedia:(e,...t)=>o.invoke("control-system-media",e,...t),openExternal:e=>o.invoke("open-external",e),launchApp:e=>o.invoke("launcher:launch-app",e),buildAppCache:()=>o.invoke("launcher:reindex-catalog"),searchApps:e=>o.invoke("launcher:search-apps",e),getDisplays:()=>o.invoke("get-displays"),setDisplay:e=>o.invoke("set-display",e),updateWindowPosition:(e,t)=>o.invoke("update-window-position",e,t),setAutoLaunch:e=>o.invoke("set-auto-launch",e),getClipboardText:()=>o.invoke("get-clipboard-text"),writeClipboardText:e=>o.invoke("write-clipboard-text",e),clearClipboard:()=>o.invoke("clear-clipboard"),controlSystemVolume:e=>o.invoke("control-system-volume",e),focusWindow:()=>o.invoke("focus-window"),logMessage:(e,t,s)=>o.invoke("log-message",e,t,s),logRendererError:e=>o.invoke("log-renderer-error",e),getNotifications:()=>o.invoke("get-notifications"),dismissNotification:e=>o.invoke("dismiss-notification",e),focusNotificationApp:e=>o.invoke("focus-notification-app",e),onKeyLockChange:e=>{const t=(s,n)=>e(n);return o.on("key-lock-change",t),()=>o.removeListener("key-lock-change",t)},onUSBChange:e=>{const t=(s,n)=>e(n);return o.on("usb-change",t),()=>o.removeListener("usb-change",t)},checkForUpdates:()=>o.invoke("check-for-updates"),startUpdateDownload:()=>o.invoke("start-update-download"),cancelUpdateDownload:()=>o.invoke("cancel-update-download"),installUpdate:()=>o.invoke("install-update"),getAppVersion:()=>o.invoke("get-app-version"),getAutoDownloadInstall:()=>o.invoke("get-auto-download-install"),setAutoDownloadInstall:e=>o.invoke("set-auto-download-install",e),getAlwaysOnTop:()=>o.invoke("get-always-on-top"),setAlwaysOnTop:e=>o.invoke("set-always-on-top",e),onAlwaysOnTopChange:e=>{const t=(s,n)=>e(n);return o.on("always-on-top-changed",t),()=>o.removeListener("always-on-top-changed",t)},onUpdateEvent:e=>{const t=(s,n)=>e(n);return o.on("update-event",t),()=>o.removeListener("update-event",t)},onSystemResume:e=>{const t=()=>e();return o.on("system-resume",t),()=>o.removeListener("system-resume",t)},audioMixer:{getDevices:()=>o.invoke("audio-mixer:get-devices"),getSessions:e=>o.invoke("audio-mixer:get-sessions",e),setVolume:e=>o.invoke("audio-mixer:set-volume",e),setMute:e=>o.invoke("audio-mixer:set-mute",e),setMasterVolume:e=>o.invoke("audio-mixer:set-master-volume",e),setMasterMute:e=>o.invoke("audio-mixer:set-master-mute",e)},progress:{getSnapshot:()=>o.invoke("progress:get-snapshot"),executeAction:(e,t,s)=>o.invoke("progress:execute-action",e,t,s),startFileOperation:e=>o.invoke("progress:start-file-op",e),startHashOperation:e=>o.invoke("progress:start-hash-op",e),selectFile:()=>o.invoke("progress:select-file"),clearHistory:()=>o.invoke("progress:clear-history"),onUpdate:e=>{const t=(s,n)=>e(n);return o.on("progress:update",t),()=>o.removeListener("progress:update",t)}},notifications:{getSnapshot:()=>o.invoke("notification:get-snapshot"),syncNow:()=>o.invoke("notification:sync-now"),executeAction:(e,t,s)=>o.invoke("notification:execute-action",e,t,s),snooze:(e,t,s)=>o.invoke("notification:snooze",e,t,s),cancelSnooze:e=>o.invoke("notification:cancel-snooze",e),dismiss:e=>o.invoke("notification:dismiss",e),dismissGroup:e=>o.invoke("notification:dismiss-group",e),clearAll:()=>o.invoke("notification:clear-all"),undoDismiss:e=>o.invoke("notification:undo-dismiss",e),markReviewed:e=>o.invoke("notification:mark-reviewed",e),markAllReviewed:()=>o.invoke("notification:mark-all-reviewed"),setHidePreviews:e=>o.invoke("notification:set-hide-previews",e),setAppExcluded:(e,t)=>o.invoke("notification:set-app-excluded",e,t),clearHistory:()=>o.invoke("notification:clear-history"),onUpdate:e=>{const t=(s,n)=>e(n);return o.on("notification:update",t),()=>o.removeListener("notification:update",t)}},launcher:{searchApps:(e,t)=>o.invoke("launcher:search-apps",e,t),getCatalog:()=>o.invoke("launcher:get-catalog"),reindexCatalog:()=>o.invoke("launcher:reindex-catalog"),launchApp:e=>o.invoke("launcher:launch-app",e),getRunningWindows:e=>o.invoke("launcher:get-running-windows",e),activateWindow:e=>o.invoke("launcher:activate-window",e),getFavorites:()=>o.invoke("launcher:get-favorites"),setFavorites:e=>o.invoke("launcher:set-favorites",e),getWorkspaces:()=>o.invoke("workspaces:get-workspaces"),saveWorkspace:e=>o.invoke("workspaces:save-workspace",e),deleteWorkspace:e=>o.invoke("workspaces:delete-workspace",e),launchWorkspace:(e,t)=>o.invoke("workspaces:launch-workspace",e,t),onWindowActivated:e=>{const t=(s,n)=>e(n);return o.on("launcher:window-activated",t),()=>o.removeListener("launcher:window-activated",t)}},workspaces:{getWorkspaces:()=>o.invoke("workspaces:get-workspaces"),saveWorkspace:e=>o.invoke("workspaces:save-workspace",e),deleteWorkspace:e=>o.invoke("workspaces:delete-workspace",e),launchWorkspace:(e,t)=>o.invoke("workspaces:launch-workspace",e,t)},notes:{getNotes:(e,t)=>o.invoke("notes:get-notes",e,t),saveNote:e=>o.invoke("notes:save-note",e),deleteNote:e=>o.invoke("notes:delete-note",e),undoDelete:()=>o.invoke("notes:undo-delete"),togglePin:e=>o.invoke("notes:toggle-pin",e),toggleArchive:e=>o.invoke("notes:toggle-archive",e),saveDraft:e=>o.invoke("notes:save-draft",e),getDraft:()=>o.invoke("notes:get-draft"),clearDraft:()=>o.invoke("notes:clear-draft"),getContextualCapture:e=>o.invoke("notes:get-contextual-capture",e),searchNotes:(e,t)=>o.invoke("notes:search-notes",e,t),getTags:()=>o.invoke("notes:get-tags"),convertToTask:e=>o.invoke("notes:convert-to-task",e),onQuickCaptureTriggered:e=>{const t=(s,n)=>e(n);return o.on("notes:quick-capture-triggered",t),()=>o.removeListener("notes:quick-capture-triggered",t)},onNotesUpdated:e=>{const t=(s,n)=>e(n);return o.on("notes:updated",t),()=>o.removeListener("notes:updated",t)}},shortcuts:{getTabShortcuts:()=>o.invoke("shortcuts:get-tab-shortcuts"),setTabShortcuts:e=>o.invoke("shortcuts:set-tab-shortcuts",e),resetTabShortcuts:()=>o.invoke("shortcuts:reset-tab-shortcuts"),onOpenTabInstant:e=>{const t=(s,n)=>e(n);return o.on("open-tab-instant",t),()=>o.removeListener("open-tab-instant",t)}},platform:"win32"});
+"use strict";
+const { contextBridge, ipcRenderer, webUtils } = require("electron");
+contextBridge.exposeInMainWorld("electronAPI", {
+  getFilePath: (file) => {
+    if (webUtils && typeof webUtils.getPathForFile === "function") {
+      try {
+        return webUtils.getPathForFile(file);
+      } catch (_) {
+      }
+    }
+    return (file == null ? void 0 : file.path) || "";
+  },
+  settingsWindow: {
+    minimize: () => ipcRenderer.send("settings-window:minimize"),
+    close: () => ipcRenderer.send("settings-window:close")
+  },
+  setIgnoreMouseEvents: (ignore, forward) => {
+    return ipcRenderer.invoke("set-ignore-mouse-events", ignore, forward);
+  },
+  getSystemMedia: () => ipcRenderer.invoke("get-system-media"),
+  getBluetoothStatus: () => ipcRenderer.invoke("get-bluetooth-status"),
+  getCameraStatus: () => ipcRenderer.invoke("get-camera-status"),
+  getMicrophoneStatus: () => ipcRenderer.invoke("get-microphone-status"),
+  getSystemMetrics: () => ipcRenderer.invoke("get-system-metrics"),
+  controlSystemMedia: (command, ...args) => ipcRenderer.invoke("control-system-media", command, ...args),
+  openExternal: (url) => ipcRenderer.invoke("open-external", url),
+  launchApp: (appName) => ipcRenderer.invoke("launcher:launch-app", appName),
+  buildAppCache: () => ipcRenderer.invoke("launcher:reindex-catalog"),
+  searchApps: (query) => ipcRenderer.invoke("launcher:search-apps", query),
+  getDisplays: () => ipcRenderer.invoke("get-displays"),
+  setDisplay: (displayId) => ipcRenderer.invoke("set-display", displayId),
+  updateWindowPosition: (xPerc, yPx) => ipcRenderer.invoke("update-window-position", xPerc, yPx),
+  setAutoLaunch: (enable) => ipcRenderer.invoke("set-auto-launch", enable),
+  getClipboardText: () => ipcRenderer.invoke("get-clipboard-text"),
+  writeClipboardText: (text) => ipcRenderer.invoke("write-clipboard-text", text),
+  clearClipboard: () => ipcRenderer.invoke("clear-clipboard"),
+  controlSystemVolume: (action) => ipcRenderer.invoke("control-system-volume", action),
+  focusWindow: () => ipcRenderer.invoke("focus-window"),
+  logMessage: (level, msg, details) => ipcRenderer.invoke("log-message", level, msg, details),
+  logRendererError: (errorData) => ipcRenderer.invoke("log-renderer-error", errorData),
+  getNotifications: () => ipcRenderer.invoke("get-notifications"),
+  dismissNotification: (id) => ipcRenderer.invoke("dismiss-notification", id),
+  focusNotificationApp: (appId, appName) => ipcRenderer.invoke("focus-notification-app", appId, appName),
+  onKeyLockChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on("key-lock-change", handler);
+    return () => ipcRenderer.removeListener("key-lock-change", handler);
+  },
+  onUSBChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on("usb-change", handler);
+    return () => ipcRenderer.removeListener("usb-change", handler);
+  },
+  checkForUpdates: () => ipcRenderer.invoke("check-for-updates"),
+  startUpdateDownload: () => ipcRenderer.invoke("start-update-download"),
+  cancelUpdateDownload: () => ipcRenderer.invoke("cancel-update-download"),
+  installUpdate: () => ipcRenderer.invoke("install-update"),
+  getAppVersion: () => ipcRenderer.invoke("get-app-version"),
+  getAutoDownloadInstall: () => ipcRenderer.invoke("get-auto-download-install"),
+  setAutoDownloadInstall: (enable) => ipcRenderer.invoke("set-auto-download-install", enable),
+  getAlwaysOnTop: () => ipcRenderer.invoke("get-always-on-top"),
+  setAlwaysOnTop: (enable) => ipcRenderer.invoke("set-always-on-top", enable),
+  onAlwaysOnTopChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on("always-on-top-changed", handler);
+    return () => ipcRenderer.removeListener("always-on-top-changed", handler);
+  },
+  onUpdateEvent: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on("update-event", handler);
+    return () => ipcRenderer.removeListener("update-event", handler);
+  },
+  onSystemResume: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on("system-resume", handler);
+    return () => ipcRenderer.removeListener("system-resume", handler);
+  },
+  audioMixer: {
+    getDevices: () => ipcRenderer.invoke("audio-mixer:get-devices"),
+    getSessions: (deviceId) => ipcRenderer.invoke("audio-mixer:get-sessions", deviceId),
+    setVolume: (payload) => ipcRenderer.invoke("audio-mixer:set-volume", payload),
+    setMute: (payload) => ipcRenderer.invoke("audio-mixer:set-mute", payload),
+    setMasterVolume: (payload) => ipcRenderer.invoke("audio-mixer:set-master-volume", payload),
+    setMasterMute: (payload) => ipcRenderer.invoke("audio-mixer:set-master-mute", payload)
+  },
+  progress: {
+    getSnapshot: () => ipcRenderer.invoke("progress:get-snapshot"),
+    executeAction: (operationId, action, params) => ipcRenderer.invoke("progress:execute-action", operationId, action, params),
+    startFileOperation: (params) => ipcRenderer.invoke("progress:start-file-op", params),
+    startHashOperation: (params) => ipcRenderer.invoke("progress:start-hash-op", params),
+    selectFile: () => ipcRenderer.invoke("progress:select-file"),
+    clearHistory: () => ipcRenderer.invoke("progress:clear-history"),
+    onUpdate: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on("progress:update", handler);
+      return () => ipcRenderer.removeListener("progress:update", handler);
+    }
+  },
+  notifications: {
+    getSnapshot: () => ipcRenderer.invoke("notification:get-snapshot"),
+    syncNow: () => ipcRenderer.invoke("notification:sync-now"),
+    executeAction: (notificationId, actionType, params) => ipcRenderer.invoke("notification:execute-action", notificationId, actionType, params),
+    snooze: (notificationId, durationMs, untilTimestamp) => ipcRenderer.invoke("notification:snooze", notificationId, durationMs, untilTimestamp),
+    cancelSnooze: (notificationId) => ipcRenderer.invoke("notification:cancel-snooze", notificationId),
+    dismiss: (notificationId) => ipcRenderer.invoke("notification:dismiss", notificationId),
+    dismissGroup: (groupId) => ipcRenderer.invoke("notification:dismiss-group", groupId),
+    clearAll: () => ipcRenderer.invoke("notification:clear-all"),
+    undoDismiss: (notificationId) => ipcRenderer.invoke("notification:undo-dismiss", notificationId),
+    markReviewed: (notificationId) => ipcRenderer.invoke("notification:mark-reviewed", notificationId),
+    markAllReviewed: () => ipcRenderer.invoke("notification:mark-all-reviewed"),
+    setHidePreviews: (hide) => ipcRenderer.invoke("notification:set-hide-previews", hide),
+    setAppExcluded: (appName, excluded) => ipcRenderer.invoke("notification:set-app-excluded", appName, excluded),
+    clearHistory: () => ipcRenderer.invoke("notification:clear-history"),
+    onUpdate: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on("notification:update", handler);
+      return () => ipcRenderer.removeListener("notification:update", handler);
+    }
+  },
+  launcher: {
+    searchApps: (query, options) => ipcRenderer.invoke("launcher:search-apps", query, options),
+    getCatalog: () => ipcRenderer.invoke("launcher:get-catalog"),
+    reindexCatalog: () => ipcRenderer.invoke("launcher:reindex-catalog"),
+    launchApp: (target) => ipcRenderer.invoke("launcher:launch-app", target),
+    getRunningWindows: (options) => ipcRenderer.invoke("launcher:get-running-windows", options),
+    activateWindow: (hWnd) => ipcRenderer.invoke("launcher:activate-window", hWnd),
+    getFavorites: () => ipcRenderer.invoke("launcher:get-favorites"),
+    setFavorites: (favorites) => ipcRenderer.invoke("launcher:set-favorites", favorites),
+    getWorkspaces: () => ipcRenderer.invoke("workspaces:get-workspaces"),
+    saveWorkspace: (workspace) => ipcRenderer.invoke("workspaces:save-workspace", workspace),
+    deleteWorkspace: (id) => ipcRenderer.invoke("workspaces:delete-workspace", id),
+    launchWorkspace: (id, options) => ipcRenderer.invoke("workspaces:launch-workspace", id, options),
+    onWindowActivated: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on("launcher:window-activated", handler);
+      return () => ipcRenderer.removeListener("launcher:window-activated", handler);
+    }
+  },
+  workspaces: {
+    getWorkspaces: () => ipcRenderer.invoke("workspaces:get-workspaces"),
+    saveWorkspace: (workspace) => ipcRenderer.invoke("workspaces:save-workspace", workspace),
+    deleteWorkspace: (id) => ipcRenderer.invoke("workspaces:delete-workspace", id),
+    launchWorkspace: (id, options) => ipcRenderer.invoke("workspaces:launch-workspace", id, options)
+  },
+  notes: {
+    getNotes: (filter, options) => ipcRenderer.invoke("notes:get-notes", filter, options),
+    saveNote: (note) => ipcRenderer.invoke("notes:save-note", note),
+    deleteNote: (id) => ipcRenderer.invoke("notes:delete-note", id),
+    undoDelete: () => ipcRenderer.invoke("notes:undo-delete"),
+    togglePin: (id) => ipcRenderer.invoke("notes:toggle-pin", id),
+    toggleArchive: (id) => ipcRenderer.invoke("notes:toggle-archive", id),
+    saveDraft: (draft) => ipcRenderer.invoke("notes:save-draft", draft),
+    getDraft: () => ipcRenderer.invoke("notes:get-draft"),
+    clearDraft: () => ipcRenderer.invoke("notes:clear-draft"),
+    getContextualCapture: (options) => ipcRenderer.invoke("notes:get-contextual-capture", options),
+    searchNotes: (query, options) => ipcRenderer.invoke("notes:search-notes", query, options),
+    getTags: () => ipcRenderer.invoke("notes:get-tags"),
+    convertToTask: (noteOrId) => ipcRenderer.invoke("notes:convert-to-task", noteOrId),
+    onQuickCaptureTriggered: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on("notes:quick-capture-triggered", handler);
+      return () => ipcRenderer.removeListener("notes:quick-capture-triggered", handler);
+    },
+    onNotesUpdated: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on("notes:updated", handler);
+      return () => ipcRenderer.removeListener("notes:updated", handler);
+    }
+  },
+  shortcuts: {
+    getTabShortcuts: () => ipcRenderer.invoke("shortcuts:get-tab-shortcuts"),
+    setTabShortcuts: (shortcuts) => ipcRenderer.invoke("shortcuts:set-tab-shortcuts", shortcuts),
+    resetTabShortcuts: () => ipcRenderer.invoke("shortcuts:reset-tab-shortcuts"),
+    onOpenTabInstant: (callback) => {
+      const handler = (event, tabId) => callback(tabId);
+      ipcRenderer.on("open-tab-instant", handler);
+      return () => ipcRenderer.removeListener("open-tab-instant", handler);
+    }
+  },
+  getMascotMode: () => ipcRenderer.invoke("get-mascot-mode"),
+  setMascotMode: (enabled) => ipcRenderer.invoke("set-mascot-mode", enabled),
+  getMinimalNotch: () => ipcRenderer.invoke("get-minimal-notch"),
+  setMinimalNotch: (enabled) => ipcRenderer.invoke("set-minimal-notch", enabled),
+  toggleMinimalNotch: () => ipcRenderer.invoke("toggle-minimal-notch"),
+  getHiddenTabs: () => ipcRenderer.invoke("get-hidden-tabs"),
+  setHiddenTabs: (tabs) => ipcRenderer.invoke("set-hidden-tabs", tabs),
+  onHiddenTabsChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on("settings:hidden-tabs-changed", handler);
+    return () => ipcRenderer.removeListener("settings:hidden-tabs-changed", handler);
+  },
+  openSettingsWindow: () => ipcRenderer.invoke("open-settings-window"),
+  startDrag: (filePath) => {
+    try {
+      ipcRenderer.send("ondragstart", filePath);
+    } catch (_) {
+    }
+    return ipcRenderer.invoke("start-drag", filePath);
+  },
+  onObstructionStatus: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on("desktop:obstruction-status", handler);
+    return () => ipcRenderer.removeListener("desktop:obstruction-status", handler);
+  },
+  onMascotModeChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on("settings:mascot-mode-changed", handler);
+    return () => ipcRenderer.removeListener("settings:mascot-mode-changed", handler);
+  },
+  onMinimalNotchChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on("settings:minimal-notch-changed", handler);
+    return () => ipcRenderer.removeListener("settings:minimal-notch-changed", handler);
+  },
+  getPrivacyDots: () => ipcRenderer.invoke("get-privacy-dots"),
+  setPrivacyDots: (enabled) => ipcRenderer.invoke("set-privacy-dots", enabled),
+  onPrivacyDotsChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on("settings:privacy-dots-changed", handler);
+    return () => ipcRenderer.removeListener("settings:privacy-dots-changed", handler);
+  },
+  invalidateWindow: () => ipcRenderer.invoke("window:invalidate"),
+  platform: "win32"
+});

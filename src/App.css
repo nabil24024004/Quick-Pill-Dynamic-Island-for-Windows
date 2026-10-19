@@ -93,18 +93,52 @@ body {
   min-height: fit-content;
 }
 
-#Island {
-  position: fixed;
-  transform-origin: center;
+#Island,
+.notch-shell {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0 auto;
   z-index: 9999;
   scrollbar-width: none;
   -webkit-user-select: none;
   user-select: none;
-  will-change: transform, width, height;
+  will-change: width, height, border-radius, transform;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
   transform-style: preserve-3d;
-  background-color: #000000;
+  background-color: #000000 !important;
+  border-top: none !important;
+  transition: width 380ms cubic-bezier(0.16, 1, 0.3, 1), 
+              height 380ms cubic-bezier(0.16, 1, 0.3, 1), 
+              border-radius 380ms cubic-bezier(0.16, 1, 0.3, 1), 
+              box-shadow 380ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 200ms ease;
+}
+
+.notch-shell::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -12px;
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle at 0 100%, transparent 12px, #000000 12.5px);
+  pointer-events: none;
+  z-index: 999;
+}
+
+.notch-shell::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: -12px;
+  width: 12px;
+  height: 12px;
+  background: radial-gradient(circle at 100% 100%, transparent 12px, #000000 12.5px);
+  pointer-events: none;
+  z-index: 999;
 }
 
 #Island input,
@@ -455,20 +489,30 @@ label {
 
 #browser-searchbar {
   font-weight: 500;
-  animation: cubic-bezier(0.165, 0.84, 0.44, 1) appear .55s forwards;
   background-color: transparent;
   border: none;
-  padding: 12px 20px;
-  font-size: 20px;
   outline: none;
-  text-align: center;
-  width: 90%;
+  text-align: left;
+  padding: 0;
+  font-size: 13px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 #browser-searchbar::placeholder {
   color: var(--island-text-color);
-  opacity: 0.6;
+  opacity: 0.5;
 }
+
+.quick-switch-bar::-webkit-scrollbar {
+  display: none !important;
+}
+
+.quick-switch-bar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
 
 #clipboard {
   animation: appear 0.6s forwards;
@@ -1087,6 +1131,44 @@ label {
   background: color-mix(in srgb, var(--island-text-color), transparent 90%);
 }
 
+/* Full-Width Notification Drawer Styles */
+.notif-drawer-full {
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.notif-scroll-area::-webkit-scrollbar {
+  width: 3px;
+}
+.notif-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.notif-scroll-area::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+.notif-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.28);
+}
+
+.notif-item-card:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  transform: translateY(-0.5px);
+}
+
+.notif-dismiss-btn:hover {
+  background: rgba(255, 255, 255, 0.15) !important;
+  color: #ffffff !important;
+}
+
+.notif-clear-btn:hover {
+  background: rgba(239, 68, 68, 0.22) !important;
+  border-color: rgba(239, 68, 68, 0.45) !important;
+  color: #fca5a5 !important;
+}
+
 .notification-icon {
   width: 28px;
   height: 28px;
@@ -1588,4 +1670,331 @@ label {
 .progress-shimmer-bar {
   animation: progress-shimmer 1.5s infinite ease-in-out;
 }
+
+/* =========================================================
+   TOP-FLUSH NOTCH & CURATED COMPACT MODULES STYLES
+   ========================================================= */
+
+/* Mini Waveform Bars (Idle State) */
+.mini-waveform-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 12px;
+  width: 14px;
+  justify-content: center;
+}
+
+.mini-wave-bar {
+  width: 2.5px;
+  border-radius: 1px;
+  background-color: #22c55e;
+  transition: height 0.15s ease;
+}
+
+@keyframes miniWaveAnim1 {
+  0%, 100% { height: 3px; }
+  50% { height: 11px; }
+}
+
+@keyframes miniWaveAnim2 {
+  0%, 100% { height: 10px; }
+  50% { height: 4px; }
+}
+
+@keyframes miniWaveAnim3 {
+  0%, 100% { height: 4px; }
+  50% { height: 9px; }
+}
+
+.mini-wave-bar.wave-1 {
+  animation: miniWaveAnim1 0.75s ease-in-out infinite;
+}
+
+.mini-wave-bar.wave-2 {
+  animation: miniWaveAnim2 0.55s ease-in-out infinite;
+}
+
+.mini-wave-bar.wave-3 {
+  animation: miniWaveAnim3 0.85s ease-in-out infinite;
+}
+
+.mini-wave-bar.wave-idle {
+  height: 3px;
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+/* Mascot Eyes (Idle State) */
+.mascot-eye-container {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 14px;
+}
+
+.mascot-eye {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  transition: height 80ms ease, border-radius 80ms ease, transform 80ms ease;
+}
+
+.mascot-eye.blink {
+  height: 1.5px;
+  border-radius: 1px;
+  transform: translateY(1px);
+}
+
+/* Top Segmented Pagination Bar */
+.notch-segmented-bar {
+  position: absolute;
+  top: 2px;
+  left: 12px;
+  right: 12px;
+  height: 2px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  z-index: 20;
+}
+
+.notch-segment {
+  flex: 1;
+  height: 2px;
+  border-radius: 1px;
+  background-color: rgba(255, 255, 255, 0.18);
+  transition: background-color 0.18s ease, opacity 0.18s ease;
+}
+
+.notch-segment.active {
+  background-color: #ffffff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.5);
+}
+
+/* Edge Navigation Arrows (24x24 circular, reveal on edge hover) */
+.notch-nav-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1), 
+              background 0.15s ease, 
+              transform 0.15s ease;
+  user-select: none;
+}
+
+.notch-shell:hover .notch-nav-btn {
+  pointer-events: auto;
+}
+
+.notch-nav-btn:hover {
+  opacity: 1 !important;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-50%) scale(1.08);
+}
+
+.notch-nav-btn.left {
+  left: 6px;
+}
+
+.notch-nav-btn.right {
+  right: 6px;
+}
+
+/* Unified Expanded Header */
+.notch-header-row {
+  width: 100%;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  margin-top: 5px;
+  margin-bottom: 3px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.notch-header-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: #ffffff;
+  text-transform: capitalize;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.notch-header-badge {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 2px 7px;
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.notch-header-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #22c55e;
+  box-shadow: 0 0 5px rgba(34, 197, 94, 0.6);
+}
+
+/* Synced Lyrics Scrollable View */
+.lyrics-scroll-container {
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  scrollbar-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px 10px;
+  box-sizing: border-box;
+  scroll-behavior: smooth;
+}
+
+.lyrics-line {
+  font-size: 10px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.35);
+  transition: color 0.2s ease, font-size 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+
+.lyrics-line.active {
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  transform: scale(1.02);
+  text-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
+}
+
+/* Shelf Drag-and-Drop Area */
+.shelf-dropzone {
+  width: 100%;
+  height: 72px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: rgba(255, 255, 255, 0.65);
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.shelf-dropzone.active-drag {
+  border-color: #38bdf8;
+  background-color: rgba(56, 189, 248, 0.08);
+  color: #38bdf8;
+}
+
+.shelf-item-card {
+  height: 66px;
+  min-width: 68px;
+  max-width: 78px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 5px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  box-sizing: border-box;
+  cursor: grab;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.shelf-item-card:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.shelf-item-remove {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+}
+
+.shelf-item-remove:hover {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+/* --- Notification Drawer Polish --- */
+.notif-scroll-area::-webkit-scrollbar {
+  width: 3px;
+}
+.notif-scroll-area::-webkit-scrollbar-track {
+  background: transparent;
+}
+.notif-scroll-area::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 999px;
+}
+.notif-scroll-area::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.notif-item-card:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  transform: translateY(-0.5px);
+}
+.notif-item-card:active {
+  transform: scale(0.99);
+}
+
+.notif-dismiss-btn:hover {
+  background: rgba(239, 68, 68, 0.22) !important;
+  color: #ef4444 !important;
+}
+
+.notif-header-btn:hover {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.2) !important;
+}
+
 

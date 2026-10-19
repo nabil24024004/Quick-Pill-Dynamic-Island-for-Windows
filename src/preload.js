@@ -1,6 +1,18 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  getFilePath: (file) => {
+    if (webUtils && typeof webUtils.getPathForFile === 'function') {
+      try {
+        return webUtils.getPathForFile(file);
+      } catch (_) {}
+    }
+    return file?.path || '';
+  },
+  settingsWindow: {
+    minimize: () => ipcRenderer.send('settings-window:minimize'),
+    close: () => ipcRenderer.send('settings-window:close'),
+  },
   setIgnoreMouseEvents: (ignore, forward) => {
     return ipcRenderer.invoke('set-ignore-mouse-events', ignore, forward);
   },
@@ -27,7 +39,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   logRendererError: (errorData) => ipcRenderer.invoke('log-renderer-error', errorData),
   getNotifications: () => ipcRenderer.invoke('get-notifications'),
   dismissNotification: (id) => ipcRenderer.invoke('dismiss-notification', id),
-  focusNotificationApp: (appId) => ipcRenderer.invoke('focus-notification-app', appId),
+  focusNotificationApp: (appId, appName) => ipcRenderer.invoke('focus-notification-app', appId, appName),
   onKeyLockChange: (callback) => {
     const handler = (event, data) => callback(data);
     ipcRenderer.on('key-lock-change', handler);
@@ -164,5 +176,47 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('open-tab-instant', handler);
     },
   },
+  getMascotMode: () => ipcRenderer.invoke('get-mascot-mode'),
+  setMascotMode: (enabled) => ipcRenderer.invoke('set-mascot-mode', enabled),
+  getMinimalNotch: () => ipcRenderer.invoke('get-minimal-notch'),
+  setMinimalNotch: (enabled) => ipcRenderer.invoke('set-minimal-notch', enabled),
+  toggleMinimalNotch: () => ipcRenderer.invoke('toggle-minimal-notch'),
+  getHiddenTabs: () => ipcRenderer.invoke('get-hidden-tabs'),
+  setHiddenTabs: (tabs) => ipcRenderer.invoke('set-hidden-tabs', tabs),
+  onHiddenTabsChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on('settings:hidden-tabs-changed', handler);
+    return () => ipcRenderer.removeListener('settings:hidden-tabs-changed', handler);
+  },
+  openSettingsWindow: () => ipcRenderer.invoke('open-settings-window'),
+  startDrag: (filePath) => {
+    try {
+      ipcRenderer.send('ondragstart', filePath);
+    } catch (_) {}
+    return ipcRenderer.invoke('start-drag', filePath);
+  },
+  onObstructionStatus: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('desktop:obstruction-status', handler);
+    return () => ipcRenderer.removeListener('desktop:obstruction-status', handler);
+  },
+  onMascotModeChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on('settings:mascot-mode-changed', handler);
+    return () => ipcRenderer.removeListener('settings:mascot-mode-changed', handler);
+  },
+  onMinimalNotchChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on('settings:minimal-notch-changed', handler);
+    return () => ipcRenderer.removeListener('settings:minimal-notch-changed', handler);
+  },
+  getPrivacyDots: () => ipcRenderer.invoke('get-privacy-dots'),
+  setPrivacyDots: (enabled) => ipcRenderer.invoke('set-privacy-dots', enabled),
+  onPrivacyDotsChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on('settings:privacy-dots-changed', handler);
+    return () => ipcRenderer.removeListener('settings:privacy-dots-changed', handler);
+  },
+  invalidateWindow: () => ipcRenderer.invoke('window:invalidate'),
   platform: 'win32'
 });
