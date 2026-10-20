@@ -25,41 +25,104 @@ const MODULES_CONFIG = [
 ];
 
 const DEFAULT_SHORTCUTS = {
-  3: "Alt+M",   // Music
+  "minimal-notch": "Alt+Shift+M", // Minimal Notch Toggle
+  0: "Alt+B",   // Browser Search
   1: "Alt+W",   // Water Reminder
-  2: "Alt+C",   // Clock / StandBy
-  10: "Alt+P",  // Pomodoro
-  11: "Alt+B",  // Battery Hub
+  2: "Alt+O",   // Standby Clock
+  11: "Alt+H",  // Battery Hub
   12: "Alt+A",  // Audio Mixer
-  13: "Alt+F",  // File Shelf
+  13: "Alt+P",  // File Shelf
   14: "Alt+L",  // App Launcher
-  15: "Alt+N",  // Quick Notes
-  4: "Alt+D",   // Calendar
-  5: "Alt+O",   // Notifications
-  6: "Alt+G",   // Game / System Stats
-  7: "Alt+K",   // Clipboard
+  15: "Alt+Q",  // Quick Notes
+  3: "Alt+M",   // Music & Lyrics
+  4: "Alt+C",   // Calendar
+  5: "Alt+N",   // Notifications
+  6: "Alt+G",   // System Stats
+  7: "Alt+V",   // Clipboard History
   8: "Alt+T",   // To-Do List
-  0: "Alt+R",   // Browser Search
-  9: "Alt+S"    // Settings
+  10: "Alt+R"   // Pomodoro Focus
 };
 
 const MODULE_NAMES = {
-  3: "Music & Lyrics",
+  "minimal-notch": "Toggle Minimal Notch",
+  0: "Browser Search",
   1: "Water Reminder",
   2: "Standby Clock",
-  10: "Pomodoro Focus",
   11: "Battery Hub",
   12: "Audio Mixer",
   13: "File Shelf",
   14: "App Launcher",
   15: "Quick Notes",
+  3: "Music & Synced Lyrics",
   4: "Calendar",
   5: "Notifications",
   6: "System Stats",
-  7: "Clipboard",
+  7: "Clipboard History",
   8: "To-Do List",
-  0: "Browser Search"
+  10: "Pomodoro Focus"
 };
+
+const MODULE_DESCRIPTIONS = {
+  "minimal-notch": "Quick shortcut to force collapse / expand ultra-slim micro-strip",
+  0: "Instant web search bar with engine presets",
+  1: "Hydration tracking and customizable reminder alerts",
+  2: "Digital & analog clock with seconds and date display",
+  11: "Detailed battery percentage, health metrics, and power status",
+  12: "Per-application volume mixer and audio device selector",
+  13: "Quick drag & drop staging shelf for temporary file sharing",
+  14: "Quick-access dock for your favorite apps and web shortcuts",
+  15: "Fast scratchpad for thoughts, markdown notes, and checklists",
+  3: "Live media playback controls and real-time synced lyrics",
+  4: "Monthly calendar view with schedule events and agenda",
+  5: "Aggregated notifications center and toast history",
+  6: "Real-time CPU, RAM, GPU, network, and temperature graphs",
+  7: "Searchable history of copied text snippets and links",
+  8: "Task manager with completion status and priority tags",
+  10: "Productivity timer with work/break intervals and alarm sounds"
+};
+
+const MODULE_ICONS = {
+  "minimal-notch": Minus,
+  0: Search,
+  1: Droplet,
+  2: Clock,
+  11: BatteryCharging,
+  12: SlidersHorizontal,
+  13: FileText,
+  14: Compass,
+  15: List,
+  3: Music,
+  4: Calendar,
+  5: Bell,
+  6: Activity,
+  7: Inbox,
+  8: CheckSquare,
+  10: Timer
+};
+
+const MODULE_COLORS = {
+  "minimal-notch": "#38bdf8",
+  0: "#eab308",
+  1: "#0284c7",
+  2: "#38bdf8",
+  11: "#22c55e",
+  12: "#38bdf8",
+  13: "#a855f7",
+  14: "#f59e0b",
+  15: "#10b981",
+  3: "#22c55e",
+  4: "#f43f5e",
+  5: "#a855f7",
+  6: "#6366f1",
+  7: "#38bdf8",
+  8: "#ec4899",
+  10: "#ef4444"
+};
+
+const SHORTCUT_ITEMS = [
+  "minimal-notch",
+  2, 3, 10, 1, 13, 11, 12, 14, 15, 5, 8, 4, 6, 7, 0
+];
 
 export default function SettingsWindow() {
   const [activeNav, setActiveNav] = useState('general');
@@ -79,6 +142,7 @@ export default function SettingsWindow() {
 
   // Smart Behavior
   const [minimalNotch, setMinimalNotch] = useState(false);
+  const [smartBrowserAvoidance, setSmartBrowserAvoidance] = useState(() => localStorage.getItem('smart-browser-avoidance') !== 'false');
   const [mascotMode, setMascotMode] = useState(false);
   const [privacyDots, setPrivacyDots] = useState(() => localStorage.getItem('privacy-dots-enabled') === 'true');
 
@@ -91,6 +155,8 @@ export default function SettingsWindow() {
       return DEFAULT_SHORTCUTS;
     }
   });
+  const [recordingAction, setRecordingAction] = useState(null);
+  const [shortcutNotice, setShortcutNotice] = useState(null);
 
   // Modules visibility
   const [hiddenTabs, setHiddenTabs] = useState(() => {
@@ -112,6 +178,11 @@ export default function SettingsWindow() {
     if (window.electronAPI?.getMinimalNotch) {
       window.electronAPI.getMinimalNotch().then(val => setMinimalNotch(Boolean(val))).catch(() => {});
     }
+    if (window.electronAPI?.getSmartBrowserAvoidance) {
+      window.electronAPI.getSmartBrowserAvoidance().then(val => {
+        if (typeof val === 'boolean') setSmartBrowserAvoidance(val);
+      }).catch(() => {});
+    }
     if (window.electronAPI?.getMascotMode) {
       window.electronAPI.getMascotMode().then(val => setMascotMode(Boolean(val))).catch(() => {});
     }
@@ -126,15 +197,145 @@ export default function SettingsWindow() {
         if (Array.isArray(val)) setHiddenTabs(val);
       }).catch(() => {});
     }
-    if (window.electronAPI?.onHiddenTabsChange) {
-      const unsub = window.electronAPI.onHiddenTabsChange((val) => {
-        if (Array.isArray(val)) setHiddenTabs(val);
-      });
-      return () => {
-        if (typeof unsub === 'function') unsub();
-      };
+    if (window.electronAPI?.shortcuts?.getTabShortcuts) {
+      window.electronAPI.shortcuts.getTabShortcuts().then((saved) => {
+        if (saved && typeof saved === 'object') {
+          setShortcuts((prev) => ({ ...prev, ...saved }));
+        }
+      }).catch(() => {});
     }
+
+    const unsubs = [];
+    if (window.electronAPI?.onHiddenTabsChange) {
+      unsubs.push(window.electronAPI.onHiddenTabsChange((val) => {
+        if (Array.isArray(val)) setHiddenTabs(val);
+      }));
+    }
+    if (window.electronAPI?.onSmartBrowserAvoidanceChange) {
+      unsubs.push(window.electronAPI.onSmartBrowserAvoidanceChange((val) => {
+        setSmartBrowserAvoidance(val);
+      }));
+    }
+    if (window.electronAPI?.shortcuts?.onShortcutsUpdated) {
+      unsubs.push(window.electronAPI.shortcuts.onShortcutsUpdated((updated) => {
+        if (updated && typeof updated === 'object') {
+          setShortcuts((prev) => ({ ...prev, ...updated }));
+        }
+      }));
+    }
+
+    return () => {
+      unsubs.forEach(unsub => {
+        if (typeof unsub === 'function') unsub();
+      });
+    };
   }, []);
+
+  // Interactive Keydown Recorder for Shortcuts
+  useEffect(() => {
+    if (recordingAction === null) return;
+
+    const handleRecordKey = (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      // Escape cancels recording
+      if (e.key === "Escape") {
+        setRecordingAction(null);
+        setShortcutNotice(null);
+        return;
+      }
+
+      // Strictly disallow Ctrl / Meta (Click-Through feature exclusivity)
+      if (e.ctrlKey || e.key === "Control" || e.metaKey || e.key === "Meta") {
+        setShortcutNotice({ type: "error", message: "Ctrl is strictly reserved for Click-Through feature. Use Alt or Alt+Shift combinations." });
+        return;
+      }
+
+      // Ignore bare Alt / Shift
+      if (e.key === "Alt" || e.key === "Shift") {
+        return;
+      }
+
+      let keyChar = e.key.toUpperCase();
+      // Allow letters, numbers, and Function keys
+      if (keyChar.length === 1 || (keyChar.startsWith("F") && !isNaN(keyChar.slice(1)))) {
+        const parts = [];
+        if (e.altKey) parts.push("Alt");
+        if (e.shiftKey) parts.push("Shift");
+        if (parts.length === 0) {
+          parts.push("Alt");
+        }
+        parts.push(keyChar);
+        const combo = parts.join("+");
+
+        const updated = { ...shortcuts };
+        let conflictName = null;
+
+        for (const [key, existing] of Object.entries(updated)) {
+          if (String(key) !== String(recordingAction) && existing && existing.toUpperCase() === combo) {
+            conflictName = MODULE_NAMES[key] || `Tab ${key}`;
+            updated[key] = ""; // clear from conflicted assignment
+          }
+        }
+
+        updated[recordingAction] = combo;
+        setShortcuts(updated);
+        try {
+          localStorage.setItem("quick_pill_tab_shortcuts", JSON.stringify(updated));
+        } catch (_) {}
+
+        if (window.electronAPI?.shortcuts?.setTabShortcuts) {
+          window.electronAPI.shortcuts.setTabShortcuts(updated).catch(() => {});
+        }
+
+        setRecordingAction(null);
+        if (conflictName) {
+          setShortcutNotice({ type: "warning", message: `Assigned ${combo} (reassigned from ${conflictName})` });
+        } else {
+          setShortcutNotice({ type: "success", message: `Shortcut ${combo} registered successfully!` });
+        }
+        setTimeout(() => setShortcutNotice(null), 3500);
+      } else {
+        setShortcutNotice({ type: "error", message: "Press a letter (A-Z), digit (0-9), or F-key" });
+      }
+    };
+
+    window.addEventListener("keydown", handleRecordKey, true);
+    return () => {
+      window.removeEventListener("keydown", handleRecordKey, true);
+    };
+  }, [recordingAction, shortcuts]);
+
+  const handleClearShortcut = (key, e) => {
+    e.stopPropagation();
+    const updated = { ...shortcuts, [key]: "" };
+    setShortcuts(updated);
+    try {
+      localStorage.setItem("quick_pill_tab_shortcuts", JSON.stringify(updated));
+    } catch (_) {}
+    if (window.electronAPI?.shortcuts?.setTabShortcuts) {
+      window.electronAPI.shortcuts.setTabShortcuts(updated).catch(() => {});
+    }
+    setShortcutNotice({ type: "info", message: `Cleared shortcut for ${MODULE_NAMES[key] || key}` });
+    setTimeout(() => setShortcutNotice(null), 2500);
+  };
+
+  const handleResetShortcuts = async () => {
+    setShortcuts(DEFAULT_SHORTCUTS);
+    setRecordingAction(null);
+    try {
+      localStorage.setItem("quick_pill_tab_shortcuts", JSON.stringify(DEFAULT_SHORTCUTS));
+    } catch (_) {}
+    if (window.electronAPI?.shortcuts?.resetTabShortcuts) {
+      try {
+        const res = await window.electronAPI.shortcuts.resetTabShortcuts();
+        if (res?.shortcuts) setShortcuts(res.shortcuts);
+      } catch (_) {}
+    }
+    setShortcutNotice({ type: "success", message: "Reset all shortcuts to defaults" });
+    setTimeout(() => setShortcutNotice(null), 3000);
+  };
 
   const handleMinimize = () => {
     if (window.electronAPI?.settingsWindow?.minimize) {
@@ -166,6 +367,14 @@ export default function SettingsWindow() {
     setMinimalNotch(val);
     localStorage.setItem('minimal-notch', String(val));
     window.electronAPI?.setMinimalNotch?.(val);
+  };
+
+  const handleToggleSmartBrowserAvoidance = (val) => {
+    setSmartBrowserAvoidance(val);
+    localStorage.setItem('smart-browser-avoidance', String(val));
+    if (window.electronAPI?.setSmartBrowserAvoidance) {
+      window.electronAPI.setSmartBrowserAvoidance(val).catch(() => {});
+    }
   };
 
   const handleToggleMascotMode = (val) => {
@@ -496,9 +705,8 @@ export default function SettingsWindow() {
                 <SettingRow
                   title="Smart Browser Tab Obstruction Avoidance"
                   desc="Automatically retract into 96x5px Micro-Strip when Chrome, Edge, or IDE is maximized"
-                  checked={true}
-                  disabled
-                  badge="Hardware Polling Active (300ms)"
+                  checked={smartBrowserAvoidance}
+                  onChange={handleToggleSmartBrowserAvoidance}
                 />
                 <SettingRow
                   title="Animated Mascot Companion"
@@ -717,28 +925,33 @@ export default function SettingsWindow() {
 
           {activeNav === 'shortcuts' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Header with Title and Reset button */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div>
                   <h2 style={{ fontSize: 16, fontWeight: 800, margin: '0 0 4px 0', color: '#ffffff' }}>Global Shortcuts</h2>
-                  <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Instant Alt+key shortcuts to switch tabs anywhere</p>
+                  <p style={{ fontSize: 12, color: '#9ca3af', margin: 0 }}>Customizable global hotkeys to switch tabs and force toggle minimal notch</p>
                 </div>
                 <button
-                  onClick={() => {
-                    setShortcuts(DEFAULT_SHORTCUTS);
-                    localStorage.setItem('quick_pill_tab_shortcuts', JSON.stringify(DEFAULT_SHORTCUTS));
-                  }}
+                  onClick={handleResetShortcuts}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     gap: 6,
-                    padding: '6px 10px',
-                    borderRadius: 6,
+                    padding: '6px 12px',
+                    borderRadius: 7,
                     border: '1px solid rgba(255,255,255,0.1)',
                     background: 'rgba(255,255,255,0.05)',
                     color: '#ffffff',
                     fontSize: 11,
                     fontWeight: 600,
-                    cursor: 'pointer'
+                    cursor: 'pointer',
+                    transition: 'all 0.15s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
                   }}
                 >
                   <RotateCcw size={12} />
@@ -746,61 +959,197 @@ export default function SettingsWindow() {
                 </button>
               </div>
 
-              <div style={{ background: '#1c1c1f', borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)', padding: '6px 12px' }}>
+              {/* Status / Feedback Notice Banner */}
+              {shortcutNotice && (
                 <div style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 600,
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '9px 4px',
-                  borderBottom: '1px solid rgba(255,255,255,0.08)'
+                  gap: 8,
+                  background: shortcutNotice.type === 'error'
+                    ? 'rgba(239, 68, 68, 0.15)'
+                    : shortcutNotice.type === 'warning'
+                      ? 'rgba(245, 158, 11, 0.15)'
+                      : shortcutNotice.type === 'success'
+                        ? 'rgba(34, 197, 94, 0.15)'
+                        : 'rgba(56, 189, 248, 0.15)',
+                  border: shortcutNotice.type === 'error'
+                    ? '1px solid rgba(239, 68, 68, 0.3)'
+                    : shortcutNotice.type === 'warning'
+                      ? '1px solid rgba(245, 158, 11, 0.3)'
+                      : shortcutNotice.type === 'success'
+                        ? '1px solid rgba(34, 197, 94, 0.3)'
+                        : '1px solid rgba(56, 189, 248, 0.3)',
+                  color: shortcutNotice.type === 'error'
+                    ? '#f87171'
+                    : shortcutNotice.type === 'warning'
+                      ? '#fbbf24'
+                      : shortcutNotice.type === 'success'
+                        ? '#4ade80'
+                        : '#38bdf8'
                 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: 12, color: '#ffffff', fontWeight: 700 }}>
-                      Toggle Minimal Notch
-                    </span>
-                    <span style={{ fontSize: 10, color: '#9ca3af' }}>
-                      Quick shortcut to collapse/expand ultra-slim micro-strip
-                    </span>
-                  </div>
-                  <kbd style={{
-                    background: 'rgba(56, 189, 248, 0.15)',
-                    border: '1px solid rgba(56, 189, 248, 0.3)',
-                    padding: '3px 8px',
-                    borderRadius: 4,
-                    fontSize: 11,
-                    fontWeight: 700,
-                    color: '#38bdf8',
-                    fontFamily: 'monospace'
-                  }}>
-                    Alt+Shift+M
-                  </kbd>
+                  {shortcutNotice.message}
                 </div>
-                {Object.entries(shortcuts)
-                  .filter(([tabId]) => tabId !== '9' && tabId !== 9)
-                  .map(([tabId, keyCombo], idx, arr) => (
-                  <div key={tabId} style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '8px 4px',
-                    borderBottom: idx === arr.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.04)'
-                  }}>
-                    <span style={{ fontSize: 12, color: '#ffffff', fontWeight: 600 }}>
-                      {MODULE_NAMES[tabId] || `Tab ${tabId}`}
-                    </span>
-                    <kbd style={{
-                      background: 'rgba(255,255,255,0.08)',
-                      padding: '3px 8px',
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontWeight: 700,
-                      color: '#38bdf8',
-                      fontFamily: 'monospace'
-                    }}>
-                      {keyCombo}
-                    </kbd>
-                  </div>
-                ))}
+              )}
+
+              {/* Shortcuts List */}
+              <div style={{ background: '#1c1c1f', borderRadius: 12, border: '1px solid rgba(255,255,255,0.06)', padding: '6px 12px' }}>
+                {SHORTCUT_ITEMS.map((key, idx, arr) => {
+                  const Icon = MODULE_ICONS[key] || Keyboard;
+                  const name = MODULE_NAMES[key] || `Tab ${key}`;
+                  const desc = MODULE_DESCRIPTIONS[key] || "";
+                  const color = MODULE_COLORS[key] || "#38bdf8";
+                  const currentCombo = shortcuts[key];
+                  const isRecording = recordingAction === key;
+                  const isMinimalNotch = key === "minimal-notch";
+
+                  return (
+                    <div
+                      key={key}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '10px 4px',
+                        borderBottom: idx === arr.length - 1 ? 'none' : '1px solid rgba(255,255,255,0.05)',
+                        background: isRecording ? 'rgba(56, 189, 248, 0.05)' : 'transparent',
+                        borderRadius: isRecording ? 8 : 0,
+                        transition: 'background 0.2s ease'
+                      }}
+                    >
+                      {/* Left: Icon + Name + Description */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                        <div style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: 8,
+                          background: `${color}18`,
+                          border: `1px solid ${color}30`,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <Icon size={15} color={color} />
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, paddingRight: 10 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 13, color: '#ffffff', fontWeight: 700 }}>
+                              {name}
+                            </span>
+                            {isMinimalNotch && (
+                              <span style={{
+                                fontSize: 9,
+                                fontWeight: 800,
+                                padding: '1px 6px',
+                                borderRadius: 4,
+                                background: 'rgba(56, 189, 248, 0.15)',
+                                color: '#38bdf8',
+                                border: '1px solid rgba(56, 189, 248, 0.3)',
+                                textTransform: 'uppercase'
+                              }}>
+                                Force Toggle
+                              </span>
+                            )}
+                          </div>
+                          <span style={{ fontSize: 11, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {desc}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right: Shortcut Recorder / Badge */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        {isRecording ? (
+                          <div
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              padding: '5px 12px',
+                              borderRadius: 6,
+                              background: 'rgba(56, 189, 248, 0.18)',
+                              border: '1px solid #38bdf8',
+                              boxShadow: '0 0 10px rgba(56, 189, 248, 0.3)',
+                              color: '#38bdf8',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              fontFamily: 'monospace',
+                              cursor: 'pointer'
+                            }}
+                            onClick={() => setRecordingAction(null)}
+                            title="Click or press Esc to cancel"
+                          >
+                            <span style={{ display: 'inline-block', width: 6, height: 6, borderRadius: '50%', background: '#38bdf8' }} />
+                            <span>Press keys... (Esc to cancel)</span>
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <kbd
+                              onClick={() => {
+                                setRecordingAction(key);
+                                setShortcutNotice(null);
+                              }}
+                              title="Click to record new shortcut"
+                              style={{
+                                cursor: 'pointer',
+                                background: currentCombo ? 'rgba(56, 189, 248, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+                                border: currentCombo ? '1px solid rgba(56, 189, 248, 0.28)' : '1px dashed rgba(255, 255, 255, 0.18)',
+                                padding: '4px 10px',
+                                borderRadius: 6,
+                                fontSize: 11,
+                                fontWeight: 700,
+                                color: currentCombo ? '#38bdf8' : '#9ca3af',
+                                fontFamily: 'monospace',
+                                transition: 'all 0.15s ease',
+                                userSelect: 'none'
+                              }}
+                              onMouseEnter={(e) => {
+                                e.currentTarget.style.borderColor = '#38bdf8';
+                                e.currentTarget.style.background = 'rgba(56, 189, 248, 0.2)';
+                              }}
+                              onMouseLeave={(e) => {
+                                e.currentTarget.style.borderColor = currentCombo ? 'rgba(56, 189, 248, 0.28)' : 'rgba(255, 255, 255, 0.18)';
+                                e.currentTarget.style.background = currentCombo ? 'rgba(56, 189, 248, 0.12)' : 'rgba(255, 255, 255, 0.05)';
+                              }}
+                            >
+                              {currentCombo || "+ Add Shortcut"}
+                            </kbd>
+                            {Boolean(currentCombo) && (
+                              <button
+                                onClick={(e) => handleClearShortcut(key, e)}
+                                title="Unbind / Clear shortcut"
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#6b7280',
+                                  cursor: 'pointer',
+                                  padding: 4,
+                                  borderRadius: 4,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  transition: 'color 0.15s ease'
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.color = '#ef4444';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.color = '#6b7280';
+                                }}
+                              >
+                                <X size={13} />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

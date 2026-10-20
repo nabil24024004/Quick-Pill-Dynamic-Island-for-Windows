@@ -175,6 +175,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
       const handler = (event, tabId) => callback(tabId);
       ipcRenderer.on("open-tab-instant", handler);
       return () => ipcRenderer.removeListener("open-tab-instant", handler);
+    },
+    onShortcutsUpdated: (callback) => {
+      const handler = (event, shortcuts) => callback(shortcuts);
+      ipcRenderer.on("shortcuts:updated", handler);
+      return () => ipcRenderer.removeListener("shortcuts:updated", handler);
     }
   },
   getMascotMode: () => ipcRenderer.invoke("get-mascot-mode"),
@@ -192,10 +197,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
   openSettingsWindow: () => ipcRenderer.invoke("open-settings-window"),
   startDrag: (filePath) => {
     try {
-      ipcRenderer.send("ondragstart", filePath);
+      ipcRenderer.send("shelf:start-drag", filePath);
     } catch (_) {
     }
-    return ipcRenderer.invoke("start-drag", filePath);
+  },
+  cacheFileIcon: (filePath) => ipcRenderer.invoke("shelf:cache-icon", filePath),
+  clipboard: {
+    getHistory: () => ipcRenderer.invoke("clipboard:get-history"),
+    write: (text) => ipcRenderer.send("clipboard:write", text),
+    clear: () => ipcRenderer.send("clipboard:clear"),
+    onUpdate: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on("clipboard:update", handler);
+      return () => ipcRenderer.removeListener("clipboard:update", handler);
+    }
   },
   onObstructionStatus: (callback) => {
     const handler = (event, data) => callback(data);
@@ -211,6 +226,18 @@ contextBridge.exposeInMainWorld("electronAPI", {
     const handler = (event, val) => callback(val);
     ipcRenderer.on("settings:minimal-notch-changed", handler);
     return () => ipcRenderer.removeListener("settings:minimal-notch-changed", handler);
+  },
+  getSmartBrowserAvoidance: () => ipcRenderer.invoke("get-smart-browser-avoidance"),
+  setSmartBrowserAvoidance: (enabled) => ipcRenderer.invoke("set-smart-browser-avoidance", enabled),
+  onSmartBrowserAvoidanceChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on("settings:smart-browser-avoidance-changed", handler);
+    return () => ipcRenderer.removeListener("settings:smart-browser-avoidance-changed", handler);
+  },
+  onToggleMinimalNotchHotkey: (callback) => {
+    const handler = () => callback();
+    ipcRenderer.on("toggle-minimal-notch-hotkey", handler);
+    return () => ipcRenderer.removeListener("toggle-minimal-notch-hotkey", handler);
   },
   getPrivacyDots: () => ipcRenderer.invoke("get-privacy-dots"),
   setPrivacyDots: (enabled) => ipcRenderer.invoke("set-privacy-dots", enabled),

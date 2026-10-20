@@ -473,13 +473,35 @@ export default function AppLauncher({
     if (e.key === "ArrowDown") {
       e.preventDefault();
       e.stopPropagation();
-      setSelectedIndex(prev => Math.min(prev + 1, displayedItems.length - 1));
-      scrollSelectedIntoView(selectedIndex + 1);
+      setSelectedIndex(prev => {
+        const next = Math.min(prev + 2, displayedItems.length - 1);
+        scrollSelectedIntoView(next);
+        return next;
+      });
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       e.stopPropagation();
-      setSelectedIndex(prev => Math.max(prev - 1, 0));
-      scrollSelectedIntoView(selectedIndex - 1);
+      setSelectedIndex(prev => {
+        const next = Math.max(prev - 2, 0);
+        scrollSelectedIntoView(next);
+        return next;
+      });
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelectedIndex(prev => {
+        const next = Math.min(prev + 1, displayedItems.length - 1);
+        scrollSelectedIntoView(next);
+        return next;
+      });
+    } else if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      e.stopPropagation();
+      setSelectedIndex(prev => {
+        const next = Math.max(prev - 1, 0);
+        scrollSelectedIntoView(next);
+        return next;
+      });
     } else if (e.key === "Enter") {
       e.preventDefault();
       e.stopPropagation();
@@ -521,551 +543,214 @@ export default function AppLauncher({
         width: "100%",
         height: "100%",
         display: "flex",
-        flexDirection: "row",
-        alignItems: "center",
-        justifyContent: "space-between",
+        flexDirection: "column",
+        justifyContent: "flex-start",
         padding: "8px 12px",
         boxSizing: "border-box",
-        gap: 10,
+        gap: 6,
         userSelect: "none",
         position: "relative"
       }}
       onKeyDown={handleKeyDown}
       onClick={() => setQuickAddMenu(null)}
     >
-      {/* LEFT COLUMN: Sidebar summary, active workspace & filter tabs */}
+
+      {/* Top: Modern Full-Width Search Bar (height: 30px) */}
       <div
-        className="launcher-scrollable"
         style={{
-          width: 110,
-          height: "100%",
+          width: "100%",
+          height: 30,
           display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          gap: 5,
-          flexShrink: 0,
-          overflowY: "auto",
-          overflowX: "hidden",
-          paddingRight: 3,
-          boxSizing: "border-box"
+          alignItems: "center",
+          gap: 8,
+          background: "rgba(255, 255, 255, 0.07)",
+          border: "1px solid rgba(255, 255, 255, 0.12)",
+          borderRadius: 8,
+          padding: "0 10px",
+          boxSizing: "border-box",
+          flexShrink: 0
         }}
       >
-        {/* Top Header Card */}
+        <Search size={14} color="rgba(255, 255, 255, 0.5)" style={{ flexShrink: 0 }} />
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setSelectedIndex(0);
+          }}
+          placeholder="Search apps..."
+          style={{
+            flex: 1,
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            color: "#ffffff",
+            fontSize: 11.5,
+            fontFamily: "OpenRunde, system-ui, sans-serif"
+          }}
+        />
+        {query && (
+          <button
+            type="button"
+            onClick={() => {
+              setQuery("");
+              setSelectedIndex(0);
+              searchInputRef.current?.focus();
+            }}
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "rgba(255, 255, 255, 0.4)",
+              cursor: "pointer",
+              padding: 0,
+              display: "flex",
+              alignItems: "center"
+            }}
+          >
+            <X size={12} />
+          </button>
+        )}
         <div
           style={{
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: 10,
-            padding: "5px 6px",
-            display: "flex",
-            flexDirection: "column",
-            gap: 3,
+            fontSize: 9.5,
+            fontWeight: 600,
+            color: "rgba(255, 255, 255, 0.5)",
+            background: "rgba(255, 255, 255, 0.08)",
+            padding: "2px 6px",
+            borderRadius: 4,
             flexShrink: 0
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-              <Compass size={12} color="#38bdf8" />
-              <span style={{ fontSize: 10, fontWeight: 800, color: "#ffffff", letterSpacing: "0.4px", textTransform: "uppercase" }}>
-                Launcher
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleReindex}
-              disabled={isReindexing}
-              title="Re-index installed applications"
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "2px",
-                display: "flex",
-                alignItems: "center",
-                color: isReindexing ? "#38bdf8" : "rgba(255, 255, 255, 0.45)"
-              }}
-            >
-              <RefreshCw size={12} className={isReindexing ? "spin-anim" : ""} />
-            </button>
-          </div>
-
-          {/* Active Workspace Pill */}
-          {activeWorkspace && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                background: "rgba(0, 0, 0, 0.25)",
-                padding: "3px 6px",
-                borderRadius: 6,
-                fontSize: 10,
-                color: "rgba(255, 255, 255, 0.8)"
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: activeWorkspace.color || "#38bdf8"
-                }}
-              />
-              <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {activeWorkspace.name}
-              </span>
-            </div>
-          )}
-
-          {/* Catalog & Window Counts */}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "rgba(255, 255, 255, 0.45)", marginTop: 2 }}>
-            <span>{Array.isArray(catalog) ? catalog.length : 0} apps</span>
-            <span>{Array.isArray(runningWindows) ? runningWindows.length : 0} windows</span>
-          </div>
-        </div>
-
-        {/* Filter Navigation Buttons */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0 }}>
-          {[
-            { id: "all", label: "All Apps", count: Array.isArray(catalog) ? catalog.length : 0 },
-            { id: "favorites", label: "Favorites", count: Array.isArray(favorites) ? favorites.length : 0 },
-            { id: "windows", label: "Windows", count: Array.isArray(runningWindows) ? runningWindows.length : 0 },
-            { id: "workspaces", label: "Workspaces", count: Array.isArray(workspaces) ? workspaces.length : 0 }
-          ].map(btn => {
-            const isActive = filter === btn.id;
-            return (
-              <button
-                key={btn.id}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFilter(btn.id);
-                  setSelectedIndex(0);
-                  searchInputRef.current?.focus();
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "3px 6px",
-                  borderRadius: 6,
-                  background: isActive ? "rgba(56, 189, 248, 0.16)" : "transparent",
-                  border: isActive ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid transparent",
-                  color: isActive ? "#38bdf8" : "rgba(255, 255, 255, 0.65)",
-                  fontSize: 9.5,
-                  fontWeight: isActive ? 700 : 500,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                  fontFamily: "OpenRunde, system-ui, sans-serif"
-                }}
-              >
-                <span>{btn.label}</span>
-                <span style={{ fontSize: 8.5, opacity: 0.6 }}>{btn.count}</span>
-              </button>
-            );
-          })}
+          {displayedItems.length} {displayedItems.length === 1 ? "app" : "apps"}
         </div>
       </div>
 
-      {/* RIGHT COLUMN: Search Header + Scrollable Results */}
+      {/* Bottom Area: Compact 2-column Grid of Applications (height: 76px) */}
       <div
+        ref={listContainerRef}
+        className="launcher-scrollable"
         style={{
-          flex: 1,
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          gap: 6,
-          overflow: "hidden"
+          width: "100%",
+          height: 76,
+          maxHeight: 76,
+          overflowY: "auto",
+          overflowX: "hidden",
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 5,
+          paddingRight: 2,
+          boxSizing: "border-box"
         }}
       >
-        {/* Search Header Bar */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            background: "rgba(255, 255, 255, 0.06)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-            borderRadius: 8,
-            padding: "3px 8px",
-            boxSizing: "border-box"
-          }}
-        >
-          <Search size={13} color="rgba(255, 255, 255, 0.5)" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={
-              filter === "windows"
-                ? "Search running windows..."
-                : filter === "workspaces"
-                ? "Search workspaces..."
-                : "Type to search applications..."
-            }
+        {displayedItems.length === 0 ? (
+          <div
             style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              color: "#ffffff",
-              fontSize: 11,
-              fontFamily: "OpenRunde, system-ui, sans-serif"
+              gridColumn: "1 / -1",
+              height: 76,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              color: "rgba(255, 255, 255, 0.4)",
+              fontSize: 11
             }}
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => { setQuery(""); searchInputRef.current?.focus(); }}
-              style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.4)", cursor: "pointer", padding: 0 }}
-            >
-              <X size={12} />
-            </button>
-          )}
-          {filter === "workspaces" && (
-            <button
-              type="button"
-              onClick={handleOpenCreateWorkspace}
-              title="Create new workspace"
-              style={{
-                background: "rgba(56, 189, 248, 0.2)",
-                border: "1px solid rgba(56, 189, 248, 0.4)",
-                borderRadius: 5,
-                padding: "2px 6px",
-                color: "#38bdf8",
-                fontSize: 9.5,
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 3,
-                whiteSpace: "nowrap"
-              }}
-            >
-              <Plus size={10} />
-              New
-            </button>
-          )}
-        </div>
+          >
+            <Sparkles size={16} opacity={0.4} />
+            <span>{query ? `No apps matching "${query}"` : "No applications found"}</span>
+          </div>
+        ) : (
+          displayedItems.map((item, idx) => {
+            if (!item) return null;
+            const isSelected = idx === selectedIndex;
+            const appName = item.name || item.title || item.processName || "Application";
+            const appSub = item.publisher || (item.target ? item.target.split("\\").pop() : "") || "App";
 
-        {/* Results List: Capped to 4 visible rows with clean custom scrollbar */}
-        <div
-          ref={listContainerRef}
-          className="launcher-scrollable"
-          style={{
-            flex: 1,
-            maxHeight: 148,
-            overflowY: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            paddingRight: 3
-          }}
-        >
-          {displayedItems.length === 0 ? (
-            <div
-              style={{
-                flex: 1,
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                color: "rgba(255, 255, 255, 0.4)",
-                fontSize: 11
-              }}
-            >
-              <Sparkles size={18} opacity={0.4} />
-              <span>
-                {query ? `No results for "${query}"` : filter === "favorites" ? "No pinned favorites yet" : "No items found"}
-              </span>
-            </div>
-          ) : (
-            displayedItems.map((item, idx) => {
-              if (!item) return null;
-              const isSelected = idx === selectedIndex;
-              const isFav = Array.isArray(favorites) && favorites.includes(item.id || item.target);
-              const isWindowItem = filter === "windows" || item.itemType === "window" || Boolean(item.hWnd);
-              const isWorkspaceItem = filter === "workspaces" || Boolean(item.isWorkspace);
-
-              return (
+            return (
+              <div
+                key={`${item.id || item.target || item.hWnd || 'app'}-${idx}`}
+                onClick={() => {
+                  setSelectedIndex(idx);
+                  if (item.hWnd || item.itemType === "window") {
+                    handleActivateWindow(item);
+                  } else {
+                    handleLaunchApp(item);
+                  }
+                }}
+                onMouseEnter={() => setSelectedIndex(idx)}
+                style={{
+                  height: 34,
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "0 8px",
+                  gap: 8,
+                  borderRadius: 7,
+                  boxSizing: "border-box",
+                  background: isSelected ? "rgba(56, 189, 248, 0.18)" : "rgba(255, 255, 255, 0.04)",
+                  border: isSelected ? "1px solid rgba(56, 189, 248, 0.4)" : "1px solid rgba(255, 255, 255, 0.06)",
+                  cursor: "pointer",
+                  transition: "background 0.12s ease, border-color 0.12s ease",
+                  overflow: "hidden"
+                }}
+              >
+                {/* Native App Icon */}
                 <div
-                  key={`${item.id || item.target || item.hWnd || 'item'}-${item.hWnd || ''}-${idx}`}
-                  onClick={() => {
-                    setSelectedIndex(idx);
-                    if (isWindowItem) handleActivateWindow(item);
-                    else if (isWorkspaceItem) handleSelectWorkspace(item);
-                    else handleLaunchApp(item);
-                  }}
                   style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 4,
+                    background: "rgba(0, 0, 0, 0.3)",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "3px 6px",
-                    height: 32,
-                    boxSizing: "border-box",
-                    flexShrink: 0,
-                    borderRadius: 7,
-                    background: isSelected ? "rgba(255, 255, 255, 0.12)" : "rgba(255, 255, 255, 0.03)",
-                    border: isSelected ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(255, 255, 255, 0.05)",
-                    cursor: "pointer",
-                    transition: "all 0.12s ease"
+                    justifyContent: "center",
+                    overflow: "hidden",
+                    flexShrink: 0
                   }}
                 >
-                  {/* Left: Icon + Titles */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 7, minWidth: 0, flex: 1 }}>
-                    {/* App or Window Icon */}
-                    <div
-                      style={{
-                        width: 20,
-                        height: 20,
-                        borderRadius: 5,
-                        background: "rgba(0, 0, 0, 0.35)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        overflow: "hidden",
-                        flexShrink: 0
-                      }}
-                    >
-                      {item.icon ? (
-                        <img
-                          src={item.icon}
-                          alt=""
-                          style={{ width: 15, height: 15, objectFit: "contain" }}
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
-                      ) : isWindowItem ? (
-                        <Monitor size={12} color="#38bdf8" />
-                      ) : isWorkspaceItem ? (
-                        <span style={{ width: 8, height: 8, borderRadius: "50%", background: item.color || "#38bdf8" }} />
-                      ) : (
-                        <Compass size={12} color="rgba(255, 255, 255, 0.6)" />
-                      )}
-                    </div>
-
-                    {/* Texts */}
-                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
-                      <span
-                        style={{
-                          fontSize: 10.5,
-                          fontWeight: 600,
-                          color: "#ffffff",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          lineHeight: 1.2
-                        }}
-                      >
-                        {item.name || item.title || item.processName || "Untitled"}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 8.5,
-                          color: "rgba(255, 255, 255, 0.4)",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          lineHeight: 1.1
-                        }}
-                      >
-                        {isWindowItem
-                          ? `${item.processName || "Window"} • Active`
-                          : isWorkspaceItem
-                          ? `${item.launchProfile?.length || item.apps?.length || 0} items in profile`
-                          : (item.publisher || item.target || "Application")}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Right Actions */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 8 }}>
-                    {isWindowItem ? (
-                      <span
-                        style={{
-                          fontSize: 9.5,
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          background: "rgba(56, 189, 248, 0.2)",
-                          color: "#38bdf8",
-                          fontWeight: 600
-                        }}
-                      >
-                        Switch
-                      </span>
-                    ) : isWorkspaceItem ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        {item.id === activeWorkspaceId && (
-                          <span
-                            style={{
-                              fontSize: 9,
-                              padding: "2px 5px",
-                              borderRadius: 4,
-                              background: "rgba(56, 189, 248, 0.2)",
-                              color: "#38bdf8",
-                              fontWeight: 700
-                            }}
-                          >
-                            Active
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => handlePromptLaunchWorkspace(e, item)}
-                          title="Launch all apps in this workspace"
-                          style={{
-                            background: "rgba(56, 189, 248, 0.2)",
-                            border: "none",
-                            borderRadius: 4,
-                            padding: "2px 6px",
-                            color: "#38bdf8",
-                            fontSize: 9.5,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 3
-                          }}
-                        >
-                          <Play size={10} fill="currentColor" />
-                          Launch
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenEditWorkspace(item, e)}
-                          title="Configure / Edit workspace"
-                          style={{
-                            background: "rgba(255, 255, 255, 0.08)",
-                            border: "none",
-                            borderRadius: 4,
-                            padding: "3px 5px",
-                            color: "rgba(255, 255, 255, 0.7)",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center"
-                          }}
-                        >
-                          <Pencil size={11} />
-                        </button>
-                        {workspaces.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteWorkspaceModal(item.id);
-                            }}
-                            title="Delete workspace"
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              borderRadius: 4,
-                              padding: "3px 4px",
-                              color: "rgba(239, 68, 68, 0.6)",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center"
-                            }}
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "center", gap: 3, position: "relative" }}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setQuickAddMenu(prev => prev?.item?.id === item.id ? null : { item });
-                          }}
-                          title="Add to workspace..."
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "3px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: quickAddMenu?.item?.id === item.id ? "#38bdf8" : "rgba(255, 255, 255, 0.35)"
-                          }}
-                        >
-                          <FolderPlus size={13} />
-                        </button>
-                        {quickAddMenu?.item?.id === item.id && (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              position: "absolute",
-                              top: 24,
-                              right: 0,
-                              background: "#0f172a",
-                              border: "1px solid rgba(255, 255, 255, 0.15)",
-                              borderRadius: 8,
-                              padding: 4,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 2,
-                              minWidth: 140,
-                              zIndex: 50,
-                              boxShadow: "0 8px 20px rgba(0,0,0,0.7)"
-                            }}
-                          >
-                            <span style={{ fontSize: 9, color: "rgba(255, 255, 255, 0.4)", padding: "3px 6px", fontWeight: 700, textTransform: "uppercase" }}>
-                              Add to Workspace
-                            </span>
-                            {workspaces.map(ws => (
-                              <button
-                                key={ws.id}
-                                type="button"
-                                onClick={() => handleQuickAddToWorkspace(item, ws.id)}
-                                style={{
-                                  background: "transparent",
-                                  border: "none",
-                                  borderRadius: 4,
-                                  padding: "4px 6px",
-                                  color: "#ffffff",
-                                  fontSize: 10.5,
-                                  cursor: "pointer",
-                                  textAlign: "left",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 6
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                              >
-                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: ws.color || "#38bdf8" }} />
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ws.name}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleFavorite(e, item)}
-                          title={isFav ? "Unpin favorite" : "Pin to favorites"}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "3px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: isFav ? "#eab308" : "rgba(255, 255, 255, 0.25)"
-                          }}
-                        >
-                          <Star size={13} fill={isFav ? "#eab308" : "none"} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  {item.icon ? (
+                    <img
+                      src={item.icon}
+                      alt=""
+                      style={{ width: 16, height: 16, objectFit: "contain" }}
+                      onError={(e) => { e.currentTarget.style.display = "none"; }}
+                    />
+                  ) : (
+                    <Compass size={12} color="#38bdf8" />
+                  )}
                 </div>
-              );
-            })
-          )}
-        </div>
+
+                {/* App Name and Subtitle */}
+                <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1, lineHeight: 1.15 }}>
+                  <span
+                    style={{
+                      fontSize: 10.5,
+                      fontWeight: 600,
+                      color: isSelected ? "#ffffff" : "rgba(255, 255, 255, 0.9)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis"
+                    }}
+                    title={appName}
+                  >
+                    {appName}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 8,
+                      color: isSelected ? "rgba(56, 189, 248, 0.85)" : "rgba(255, 255, 255, 0.4)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis"
+                    }}
+                  >
+                    {appSub}
+                  </span>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Floating Status Toast */}

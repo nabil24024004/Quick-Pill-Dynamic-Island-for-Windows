@@ -80,32 +80,8 @@ function Get-ObstructionStatus {
         return @{ isObstructed = $true; reason = "FullscreenApp" }
     }
 
-    # Rule 2: Maximized Browser / App Obstruction
-    if ($isZoomed -or ($rect.Top -le 8 -and $winW -ge ($screenW * 0.90) -and $winH -ge ($screenH * 0.85))) {
-        $isBrowser = $cls -eq "Chrome_WidgetWin_1" -or $cls -eq "MozillaWindowClass"
-        if ($isBrowser) {
-            # Inspect top-center zone under notch (e.g. screenW / 2 - 40, y = 18)
-            $hDC = [NativeTracker]::GetDC([IntPtr]::Zero)
-            $sampleX = [int]($screenW / 2 - 40)
-            $sampleY = 18
-            $pixel = [NativeTracker]::GetPixel($hDC, $sampleX, $sampleY)
-            [void][NativeTracker]::ReleaseDC([IntPtr]::Zero, $hDC)
-
-            $sbText = New-Object System.Text.StringBuilder 512
-            [void][NativeTracker]::GetWindowText($fgHwnd, $sbText, 512)
-            $title = $sbText.ToString()
-
-            # If browser has few tabs, top-center titlebar is empty background
-            # Multi-tab indicator in Chrome title e.g. "and 5 more tabs"
-            $hasManyTabs = $title -match "and ([5-9]|\d{2,}) more tabs"
-            if ($hasManyTabs) {
-                return @{ isObstructed = $true; reason = "BrowserManyTabs" }
-            }
-
-            # If top-center zone is empty titlebar, keep Normal Idle Notch open
-            return @{ isObstructed = $false; reason = "BrowserCenterEmpty" }
-        }
-
+    # Rule 2: Maximized Window / Browser / App Obstruction
+    if ($isZoomed -or ($rect.Top -le 8 -and $winW -ge ($screenW * 0.90))) {
         return @{ isObstructed = $true; reason = "MaximizedApp" }
     }
 

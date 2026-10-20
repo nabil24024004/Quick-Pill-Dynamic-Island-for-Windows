@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, ArrowLeft, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing, Keyboard, Droplet, Flame, Inbox, File, CheckSquare, Square, CornerDownLeft, Lock } from "lucide-react";
+import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Clipboard, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, ArrowLeft, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing, Keyboard, Droplet, Flame, Inbox, File, CheckSquare, Square, CornerDownLeft, Lock } from "lucide-react";
 import "./App.css";
 import AppLauncher from "./components/AppLauncher";
 import QuickNotes from "./components/QuickNotes";
+import MascotStandbyHub from "./components/MascotStandbyHub";
+import CalendarModule from "./components/CalendarModule";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 // Helper parse synced LRC format lyrics
@@ -533,7 +535,8 @@ const DEFAULT_TAB_SHORTCUTS = {
   6: "Alt+G",   // Game / Stats
   7: "Alt+V",   // Clipboard
   8: "Alt+T",   // Tasks
-  10: "Alt+R"   // Timer
+  10: "Alt+R",  // Timer
+  "minimal-notch": "Alt+Shift+M"
 };
 
 // 5-Bar Live Equalizer Waveform for Idle Notch Standby
@@ -579,8 +582,8 @@ const MiniProgressRing = ({ progress = 1, color = "#22c55e", size = 14, strokeWi
   );
 };
 
-// Mascot Eyes for Quiet Standby Notch Mode (Glowing Pill Eyes + Purple-Blue Ambient Glow)
-const MascotEyes = () => {
+// Mascot Eyes for Quiet Standby Notch Mode (Glowing Pill Eyes + Reactive Mood Accessories)
+const MascotEyes = ({ mood = "chill", isPlaying = false, charging = false, percent = null }) => {
   const [isBlink, setIsBlink] = useState(false);
   const [lookOffset, setLookOffset] = useState(0);
 
@@ -604,20 +607,89 @@ const MascotEyes = () => {
     };
   }, []);
 
+  const eyeColor = charging
+    ? "#22c55e"
+    : mood === "thirsty"
+    ? "#38bdf8"
+    : mood === "focusing"
+    ? "#ef4444"
+    : mood === "vibing"
+    ? "#c084fc"
+    : percent !== null && percent < 25
+    ? "#f43f5e"
+    : "#ffffff";
+
+  const glowShadow = charging
+    ? "0 0 8px rgba(34, 197, 94, 0.9)"
+    : mood === "thirsty"
+    ? "0 0 8px rgba(56, 189, 248, 0.9)"
+    : mood === "focusing"
+    ? "0 0 8px rgba(239, 68, 68, 0.9)"
+    : mood === "vibing"
+    ? "0 0 8px rgba(192, 132, 252, 0.9)"
+    : percent !== null && percent < 25
+    ? "0 0 6px rgba(244, 63, 94, 0.8)"
+    : "0 0 6px rgba(255, 255, 255, 0.85)";
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      {/* Soft ambient purple-blue radial glow at bottom edge of the notch */}
-      <div className="mascot-ambient-glow" />
+      {/* Soft ambient radial glow at bottom edge of the notch */}
       <div
-        className="mascot-pill-eyes"
+        className="mascot-ambient-glow"
+        style={{
+          background: charging
+            ? "radial-gradient(circle at 50% 100%, rgba(34, 197, 94, 0.4), transparent 70%)"
+            : mood === "thirsty"
+            ? "radial-gradient(circle at 50% 100%, rgba(56, 189, 248, 0.4), transparent 70%)"
+            : mood === "focusing"
+            ? "radial-gradient(circle at 50% 100%, rgba(239, 68, 68, 0.4), transparent 70%)"
+            : mood === "vibing"
+            ? "radial-gradient(circle at 50% 100%, rgba(168, 85, 247, 0.4), transparent 70%)"
+            : undefined
+        }}
+      />
+      <div
+        className={`mascot-pill-eyes ${isPlaying || mood === "vibing" ? "idle-mascot-vibing" : ""}`}
         style={{
           transform: `translateX(${lookOffset}px)`,
-          transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)'
+          transition: 'transform 240ms cubic-bezier(0.22, 1, 0.36, 1)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6
         }}
-        title="Quiet Standby Mascot"
+        title={`Quick Pill Companion (${mood})`}
       >
-        <div className={`mascot-eye-pill ${isBlink ? "blink" : ""}`} />
-        <div className={`mascot-eye-pill ${isBlink ? "blink" : ""}`} />
+        {/* Mood Reactive Badge Icon */}
+        {mood === "thirsty" && (
+          <Droplet size={11} color="#38bdf8" className="idle-mascot-droplet" style={{ filter: "drop-shadow(0 0 4px #38bdf8)" }} />
+        )}
+        {charging && (
+          <Zap size={10} color="#22c55e" style={{ filter: "drop-shadow(0 0 4px #22c55e)" }} />
+        )}
+        {mood === "focusing" && !charging && (
+          <Timer size={10} color="#ef4444" style={{ filter: "drop-shadow(0 0 4px #ef4444)" }} />
+        )}
+        {(isPlaying || mood === "vibing") && !charging && (
+          <Music size={10} color="#38bdf8" style={{ filter: "drop-shadow(0 0 4px #38bdf8)" }} />
+        )}
+
+        {/* Mascot Glowing Pill Eyes */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <div
+            className={`mascot-eye-pill ${isBlink ? "blink" : ""}`}
+            style={{
+              background: eyeColor,
+              boxShadow: glowShadow
+            }}
+          />
+          <div
+            className={`mascot-eye-pill ${isBlink ? "blink" : ""}`}
+            style={{
+              background: eyeColor,
+              boxShadow: glowShadow
+            }}
+          />
+        </div>
       </div>
     </div>
   );
@@ -1744,7 +1816,7 @@ export default function Island() {
       setIsCollapsing(true);
       const timer = setTimeout(() => {
         setIsCollapsing(false);
-      }, 260);
+      }, 320);
       return () => clearTimeout(timer);
     }
     prevModeRef.current = mode;
@@ -1902,6 +1974,8 @@ export default function Island() {
   const captureAlertDisplayed = useRef({ camera: false, microphone: false });
   const [tasks, setTasks] = useState(JSON.parse(localStorage.getItem("tasks") || "[]"));
   const [taskText, setTaskText] = useState("");
+  const [isAddingTask, setIsAddingTask] = useState(false);
+  const [copiedClipboardId, setCopiedClipboardId] = useState(null);
   const [isHovered, setIsHovered] = useState(false);
   const isHoveredRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -1957,6 +2031,10 @@ export default function Island() {
 
   // Smart Obstruction Avoidance & System Tray Settings States
   const [isObstructed, setIsObstructed] = useState(false);
+  const [forceReveal, setForceReveal] = useState(false);
+  const [smartBrowserAvoidance, setSmartBrowserAvoidance] = useState(() => {
+    return localStorage.getItem("smart-browser-avoidance") !== "false";
+  });
   const [mascotMode, setMascotMode] = useState(() => {
     return localStorage.getItem("mascot-mode") !== "false";
   });
@@ -2121,19 +2199,37 @@ export default function Island() {
   // 3. Water Reminder (Hydration Tracker) State with Hourly Bar Chart
   const [waterIntake, setWaterIntake] = useState(() => {
     const saved = localStorage.getItem("water-intake");
-    return saved !== null ? Number(saved) : 1000;
+    if (saved === "1000" || saved === null) {
+      localStorage.setItem("water-intake", "0");
+      return 0;
+    }
+    return Number(saved) || 0;
   });
 
   const [hourlyWater, setHourlyWater] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem("hourly-water") || "null");
-      if (Array.isArray(saved) && saved.length === 5) return saved;
+      if (Array.isArray(saved) && saved.length === 5) {
+        // Reset legacy dummy values (250, 300, 250, 200, 0) to 0
+        if (saved[0]?.amount === 250 && saved[1]?.amount === 300) {
+          const clean = [
+            { hour: "9", amount: 0 },
+            { hour: "12", amount: 0 },
+            { hour: "15", amount: 0 },
+            { hour: "18", amount: 0 },
+            { hour: "21", amount: 0 }
+          ];
+          localStorage.setItem("hourly-water", JSON.stringify(clean));
+          return clean;
+        }
+        return saved;
+      }
     } catch (_) {}
     return [
-      { hour: "9", amount: 250 },
-      { hour: "12", amount: 300 },
-      { hour: "15", amount: 250 },
-      { hour: "18", amount: 200 },
+      { hour: "9", amount: 0 },
+      { hour: "12", amount: 0 },
+      { hour: "15", amount: 0 },
+      { hour: "18", amount: 0 },
       { hour: "21", amount: 0 }
     ];
   });
@@ -2171,14 +2267,22 @@ export default function Island() {
     localStorage.setItem("hourly-water", JSON.stringify(fresh));
   };
 
-  // 4. File Shelf (Temporary Drag-and-Drop Stash) State
+  // 4. File Shelf (Temporary Drag-and-Drop Stash) State - Starts completely empty
   const [shelfFiles, setShelfFiles] = useState(() => {
     try {
       const saved = localStorage.getItem("shelf-files");
-      return saved ? JSON.parse(saved) : [
-        { name: "Project-Brief.pdf", size: "1.4 MB", type: "pdf" },
-        { name: "Screenshot-Design.png", size: "820 KB", type: "img" }
-      ];
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          // Filter out legacy dummy placeholder files
+          const clean = parsed.filter(f => f.name !== "Project-Brief.pdf" && f.name !== "Screenshot-Design.png");
+          if (clean.length !== parsed.length) {
+            localStorage.setItem("shelf-files", JSON.stringify(clean));
+          }
+          return clean;
+        }
+      }
+      return [];
     } catch (_) {
       return [];
     }
@@ -2195,9 +2299,28 @@ export default function Island() {
   useEffect(() => {
     if (!window.electronAPI?.onObstructionStatus) return;
     const unsub = window.electronAPI.onObstructionStatus((data) => {
-      setIsObstructed(Boolean(data?.isObstructed));
+      const nextObstructed = Boolean(data?.isObstructed);
+      setIsObstructed(nextObstructed);
+      if (!nextObstructed) {
+        setForceReveal(false);
+      }
     });
     return () => unsub?.();
+  }, []);
+
+  useEffect(() => {
+    if (window.electronAPI?.getSmartBrowserAvoidance) {
+      window.electronAPI.getSmartBrowserAvoidance().then(val => {
+        if (typeof val === "boolean") setSmartBrowserAvoidance(val);
+      }).catch(() => {});
+    }
+    if (window.electronAPI?.onSmartBrowserAvoidanceChange) {
+      const unsub = window.electronAPI.onSmartBrowserAvoidanceChange((val) => {
+        setSmartBrowserAvoidance(val);
+        localStorage.setItem("smart-browser-avoidance", String(val));
+      });
+      return () => unsub?.();
+    }
   }, []);
 
   useEffect(() => {
@@ -2581,6 +2704,14 @@ export default function Island() {
             type: f.name.split('.').pop()?.toLowerCase() || 'file'
           };
         });
+
+        // Pre-cache 32x32 drag icons for native startDrag
+        newFiles.forEach(f => {
+          if (f.path && window.electronAPI?.cacheFileIcon) {
+            window.electronAPI.cacheFileIcon(f.path).catch(() => {});
+          }
+        });
+
         setShelfFiles(prev => {
           const updated = [...newFiles, ...prev];
           localStorage.setItem("shelf-files", JSON.stringify(updated.slice(0, 20)));
@@ -2624,6 +2755,7 @@ export default function Island() {
     if (!window.electronAPI?.shortcuts?.onOpenTabInstant) return;
     const unsub = window.electronAPI.shortcuts.onOpenTabInstant((targetId) => {
       const tabNum = Number(targetId);
+      setForceReveal(true);
       setMode("large");
       setTabState([tabNum, tabNum > currentTabId ? 1 : -1]);
     });
@@ -2631,6 +2763,19 @@ export default function Island() {
       if (typeof unsub === "function") unsub();
     };
   }, [currentTabId]);
+
+  // Synchronize dynamic shortcuts updates from Main/Settings
+  useEffect(() => {
+    if (!window.electronAPI?.shortcuts?.onShortcutsUpdated) return;
+    const unsub = window.electronAPI.shortcuts.onShortcutsUpdated((updated) => {
+      if (updated && typeof updated === "object") {
+        setTabShortcuts((prev) => ({ ...prev, ...updated }));
+      }
+    });
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
+  }, []);
 
   // Interactive Tab Shortcut Keydown Recorder
   useEffect(() => {
@@ -3232,7 +3377,36 @@ export default function Island() {
     (activeHudToast && (activeHudToast.title || activeHudToast.type || activeHudToast.subtext)) ||
     (notificationAlert && mode !== "large" && (notificationAlert.title || notificationAlert.message || notificationAlert.appName || notificationAlert.body))
   );
-  const isMicroMode = !isHovered && mode !== "large" && !isHudActive && (isObstructed || minimalNotch);
+  const effectiveObstructed = smartBrowserAvoidance && isObstructed;
+  const isMicroMode = !isHovered && mode !== "large" && !isHudActive && !forceReveal && (effectiveObstructed || minimalNotch);
+
+  const handleToggleMinimalNotchForce = useCallback(() => {
+    if (isMicroMode) {
+      setForceReveal(true);
+      setMinimalNotch(false);
+      localStorage.setItem("minimal-notch", "false");
+      if (window.electronAPI?.setMinimalNotch) {
+        window.electronAPI.setMinimalNotch(false).catch(() => {});
+      }
+    } else {
+      setForceReveal(false);
+      setMinimalNotch(true);
+      localStorage.setItem("minimal-notch", "true");
+      if (window.electronAPI?.setMinimalNotch) {
+        window.electronAPI.setMinimalNotch(true).catch(() => {});
+      }
+    }
+  }, [isMicroMode]);
+
+  useEffect(() => {
+    if (!window.electronAPI?.onToggleMinimalNotchHotkey) return;
+    const unsub = window.electronAPI.onToggleMinimalNotchHotkey(() => {
+      handleToggleMinimalNotchForce();
+    });
+    return () => {
+      if (typeof unsub === "function") unsub();
+    };
+  }, [handleToggleMinimalNotchForce]);
 
   // Multi-Stage Spring Shell Dimensions (Nusa Motion Reference Engine)
   // 1. micro-strip: 96px x 5px (radius 6px)
@@ -3242,7 +3416,23 @@ export default function Island() {
   // 5. expanded-standard: 430px x 150px (radius 28px)
   // 6. expanded-wide: 510px x 150px (radius 28px)
   const isLyricsWide = mode === "large" && currentTab === 3 && lyricsOpen;
-  const isIdleMascot = mode !== "large" && !isHudActive && !isMicroMode && Boolean(mascotMode && !isPlaying && timerSeconds === 0 && !pomodoroState.isRunning);
+
+  const pendingTasksCount = useMemo(() => {
+    if (!Array.isArray(tasks)) return 0;
+    return tasks.filter(t => (typeof t === "object" ? !(t.completed || t.done) : true)).length;
+  }, [tasks]);
+
+  const activeMascotMood = useMemo(() => {
+    if (pomodoroState?.isRunning) return "focusing";
+    if (isPlaying) return "vibing";
+    if (charging) return "charging";
+    if (percent !== null && percent < 25) return "low-battery";
+    if (pendingTasksCount > 0 || (Array.isArray(shelfFiles) && shelfFiles.length > 0)) return "busy-tasks";
+    if (waterIntake > 0 && waterIntake < 1500) return "thirsty";
+    return "chill";
+  }, [waterIntake, pomodoroState?.isRunning, isPlaying, charging, percent, pendingTasksCount, shelfFiles]);
+
+  const isIdleMascot = mode !== "large" && !isHudActive && !isMicroMode && Boolean(mascotMode && timerSeconds === 0);
 
   const width = isHudActive
     ? 310
@@ -3849,65 +4039,87 @@ export default function Island() {
     }
   }
 
-  // Clipboard 
+  // Clipboard
+  function formatRelativeTime(timestamp) {
+    if (!timestamp) return "Just now";
+    const diff = Math.floor((Date.now() - timestamp) / 1000);
+    if (diff < 15) return "Just now";
+    if (diff < 60) return `${diff}s ago`;
+    const mins = Math.floor(diff / 60);
+    if (mins < 60) return `${mins}m ago`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return `${Math.floor(hours / 24)}d ago`;
+  }
+
   const clearAllClipboard = () => {
-    if (window.electronAPI?.clearClipboard) {
+    if (window.electronAPI?.clipboard?.clear) {
+      window.electronAPI.clipboard.clear();
+    } else if (window.electronAPI?.clearClipboard) {
       window.electronAPI.clearClipboard();
-    } else if (window.electronAPI?.writeClipboardText) {
-      window.electronAPI.writeClipboardText("");
     }
     setClipboard([]);
   };
 
-  const removeClipboardItem = (indexToRemove) => {
-    setClipboard((prev) => {
-      const updated = prev.filter((_, i) => i !== indexToRemove);
-      if (indexToRemove === 0) {
-        if (window.electronAPI?.clearClipboard) {
-          window.electronAPI.clearClipboard();
-        } else if (window.electronAPI?.writeClipboardText) {
-          window.electronAPI.writeClipboardText("");
-        }
-      }
-      return updated;
-    });
+  const copyClipboardItem = (item, idOrIdx) => {
+    const textToCopy = typeof item === "object" ? (item.text || "") : String(item || "");
+    if (!textToCopy) return;
+
+    if (window.electronAPI?.clipboard?.write) {
+      window.electronAPI.clipboard.write(textToCopy);
+    } else if (window.electronAPI?.writeClipboardText) {
+      window.electronAPI.writeClipboardText(textToCopy);
+    } else if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(textToCopy);
+    }
+
+    setCopiedClipboardId(idOrIdx);
+    setTimeout(() => {
+      setCopiedClipboardId(prev => prev === idOrIdx ? null : prev);
+    }, 1500);
   };
 
-  async function getClipboard() {
-    try {
+  useEffect(() => {
+    // Initial fetch from main process active clipboard history
+    if (window.electronAPI?.clipboard?.getHistory) {
+      window.electronAPI.clipboard.getHistory().then(history => {
+        if (Array.isArray(history) && history.length > 0) {
+          setClipboard(history);
+        }
+      }).catch(() => {});
+    }
+
+    // Real-time listener for updates broadcasted by main process
+    if (window.electronAPI?.clipboard?.onUpdate) {
+      const unsub = window.electronAPI.clipboard.onUpdate((history) => {
+        if (Array.isArray(history)) {
+          setClipboard(history);
+        }
+      });
+      return unsub;
+    }
+
+    // Fallback polling for web browser preview or older preload
+    const fallbackPoll = async () => {
       let text = "";
       if (window.electronAPI?.getClipboardText) {
         text = await window.electronAPI.getClipboardText();
-      } else if (navigator.clipboard && navigator.clipboard.readText) {
-        text = await navigator.clipboard.readText();
+      } else if (navigator.clipboard?.readText) {
+        text = await navigator.clipboard.readText().catch(() => "");
       }
       if (!text || !text.trim()) return;
 
-      setClipboard((prevClipboard) => {
-        if (prevClipboard[0] === text) {
-          return prevClipboard;
-        }
-        const filtered = prevClipboard.filter(item => item && item !== text && item.trim().length > 0);
-        return [text, ...filtered].slice(0, 50);
+      setClipboard(prev => {
+        const first = prev[0];
+        const firstText = typeof first === "object" ? first.text : first;
+        if (firstText === text.trim()) return prev;
+        const newItem = { id: Date.now(), text: text.trim(), timestamp: Date.now() };
+        return [newItem, ...prev.filter(i => (typeof i === "object" ? i.text : i) !== text.trim())].slice(0, 15);
       });
-    } catch (error) {
-      console.log(
-        `Error reading clipboard: ${error.toString()}`,
-      );
-    }
-  }
-
-  useEffect(() => {
-    let inflightClipboard = false;
-    const pollGetClipboard = async () => {
-      if (inflightClipboard) return;
-      inflightClipboard = true;
-      await getClipboard();
-      inflightClipboard = false;
     };
-    pollGetClipboard();
-    const pollInterval = currentTab === 7 ? 2000 : 3500; // Poll faster when Clipboard tab (7) is active
-    const interval = setInterval(pollGetClipboard, pollInterval);
+
+    fallbackPoll();
+    const interval = setInterval(fallbackPoll, currentTab === 7 ? 600 : 1500);
     return () => clearInterval(interval);
   }, [currentTab]);
 
@@ -4548,17 +4760,21 @@ export default function Island() {
         moveTab(1);
       } else if (e.key === "ArrowLeft") {
         moveTab(-1);
-      } else if (e.altKey && e.shiftKey && (e.key === "M" || e.key === "m")) {
+      } else if (!e.ctrlKey && !e.metaKey && (() => {
+        const minimalShortcut = (tabShortcuts && tabShortcuts["minimal-notch"]) || "Alt+Shift+M";
+        const minParts = minimalShortcut.toUpperCase().split("+");
+        const minKey = minParts[minParts.length - 1];
+        const minHasAlt = minParts.includes("ALT");
+        const minHasShift = minParts.includes("SHIFT");
+        return (
+          Boolean(e.altKey) === minHasAlt &&
+          Boolean(e.shiftKey) === minHasShift &&
+          e.key &&
+          e.key.toUpperCase() === minKey
+        );
+      })()) {
         e.preventDefault();
-        if (window.electronAPI?.toggleMinimalNotch) {
-          window.electronAPI.toggleMinimalNotch();
-        } else {
-          setMinimalNotch(prev => {
-            const next = !prev;
-            localStorage.setItem("minimal-notch", String(next));
-            return next;
-          });
-        }
+        handleToggleMinimalNotchForce();
         return;
       } else if (e.altKey && !e.ctrlKey && !e.metaKey && e.key && e.key !== "Alt" && e.key !== "Shift") {
         const keyChar = e.key.toUpperCase();
@@ -4578,7 +4794,7 @@ export default function Island() {
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [moveTab, visibleTabs, currentTabId, tabShortcuts, recordingTabId, updateMouseIgnore, setHoverState]);
+  }, [moveTab, visibleTabs, currentTabId, tabShortcuts, recordingTabId, updateMouseIgnore, setHoverState, handleToggleMinimalNotchForce]);
 
   // Smart auto-collapse on outside click
   useEffect(() => {
@@ -5230,13 +5446,21 @@ export default function Island() {
               );
             })() : isMicroMode ? (
               /* Micro-Strip State (96x5) */
-              <div className="notch-stage notch-stage-micro optical-blur-in">
-                <div style={{ width: 48, height: 2, borderRadius: 1, background: 'rgba(255, 255, 255, 0.28)' }} />
+              <div
+                className="notch-stage notch-stage-micro optical-blur-in"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleToggleMinimalNotchForce();
+                }}
+                style={{ cursor: 'pointer', width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                title="Click to expand notch (or toggle with shortcut)"
+              >
+                <div style={{ width: 48, height: 2, borderRadius: 1, background: 'rgba(255, 255, 255, 0.4)' }} />
               </div>
             ) : isIdleMascot ? (
               /* Mascot Idle Mode (140x32): Glowing White Pill Eyes + Purple-Blue Glow */
               <div className="notch-stage notch-stage-idle-mascot optical-blur-in">
-                <MascotEyes />
+                <MascotEyes mood={activeMascotMood} isPlaying={isPlaying} charging={charging} percent={percent} />
               </div>
             ) : (
               /* Default Idle Clock (154x32): Animated Green Ring — Bold Time — 5-Bar Waveform */
@@ -6052,7 +6276,11 @@ export default function Island() {
                                     setTimeout(() => {
                                       isOutboundDragging.current = false;
                                       setIsDragOverShelf(false);
-                                    }, 400);
+                                    }, 300);
+                                  }}
+                                  onDragEnd={() => {
+                                    isOutboundDragging.current = false;
+                                    setIsDragOverShelf(false);
                                   }}
                                   onClick={() => {
                                     if (file.path && window.electronAPI?.openExternal) {
@@ -6112,7 +6340,7 @@ export default function Island() {
                   );
                 })()}
 
-                {/* Tab 8: To-Do List (Quick Tasks) */}
+                {/* Tab 8: To-Do List (Nusa 2-Column Clean Style) */}
                 {currentTab === 8 && (() => {
                   const completedCount = tasks.filter(t => (typeof t === 'object' ? (t.completed || t.done) : false)).length;
                   const totalCount = tasks.length;
@@ -6152,64 +6380,122 @@ export default function Island() {
                   };
 
                   return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: '0 4px', userSelect: 'none' }}>
-                      {/* Left Column: Ratio & Quick Add */}
-                      <div style={{ width: 125, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '0 4px', userSelect: 'none', boxSizing: 'border-box' }}>
+                      {/* Kolom Kiri (135px): Angka besar 24px bold, Task Done Today, kapsul + Add Task */}
+                      <div style={{
+                        width: 135,
+                        flexShrink: 0,
+                        height: 84,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between'
+                      }}>
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                            {ratio} Done
+                          <div style={{
+                            fontSize: 24,
+                            fontWeight: 800,
+                            color: '#ffffff',
+                            lineHeight: 1,
+                            letterSpacing: '-0.5px',
+                            fontFamily: 'OpenRunde, system-ui, sans-serif'
+                          }}>
+                            {ratio}
                           </div>
-                          <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.5)' }}>
-                            Tasks for today
+                          <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.5)', marginTop: 3 }}>
+                            Task Done Today
                           </div>
                         </div>
-                        {/* Quick Add Input */}
-                        <div style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                          background: 'rgba(255,255,255,0.08)',
-                          border: '1px solid rgba(255,255,255,0.12)',
-                          borderRadius: 6,
-                          padding: '2px 6px',
-                          marginTop: 2
-                        }}>
-                          <input
-                            placeholder="+ Add task..."
-                            value={taskText}
-                            onChange={(e) => setTaskText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.preventDefault();
-                                addNewTask();
-                              }
-                            }}
+
+                        {/* Capsule + Add Task Button / Modern Inline Input Field */}
+                        {isAddingTask ? (
+                          <div style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            background: 'rgba(255,255,255,0.08)',
+                            border: '1px solid rgba(255,255,255,0.22)',
+                            borderRadius: 14,
+                            padding: '3px 8px'
+                          }}>
+                            <input
+                              autoFocus
+                              placeholder="New task..."
+                              value={taskText}
+                              onChange={(e) => setTaskText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') {
+                                  e.preventDefault();
+                                  addNewTask();
+                                  setIsAddingTask(false);
+                                } else if (e.key === 'Escape') {
+                                  setIsAddingTask(false);
+                                  setTaskText("");
+                                }
+                              }}
+                              onBlur={() => {
+                                if (taskText.trim()) {
+                                  addNewTask();
+                                }
+                                setIsAddingTask(false);
+                              }}
+                              style={{
+                                width: '100%',
+                                background: 'none',
+                                border: 'none',
+                                outline: 'none',
+                                fontSize: 10,
+                                color: '#ffffff',
+                                padding: 0
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setIsAddingTask(true)}
                             style={{
-                              width: '100%',
-                              background: 'none',
-                              border: 'none',
-                              outline: 'none',
-                              fontSize: 10,
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 4,
+                              background: 'rgba(255,255,255,0.08)',
+                              border: '1px solid rgba(255,255,255,0.14)',
+                              borderRadius: 14,
+                              padding: '4px 10px',
                               color: '#ffffff',
-                              padding: 0
+                              fontSize: 10,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              width: 'fit-content',
+                              transition: 'all 0.15s ease'
                             }}
-                          />
-                        </div>
+                          >
+                            <span>+ Add Task</span>
+                          </button>
+                        )}
                       </div>
 
-                      {/* Right Column: Scrollable Task List */}
+                      {/* Kolom Kanan (flex: 1): Daftar tugas scrollable dengan circular green checkbox dan hover delete */}
                       <div style={{
                         flex: 1,
-                        height: 78,
+                        height: 84,
                         overflowY: 'auto',
                         display: 'flex',
                         flexDirection: 'column',
                         gap: 4,
-                        paddingRight: 2
+                        paddingRight: 2,
+                        scrollbarWidth: 'none'
                       }}>
                         {tasks.length === 0 ? (
-                          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textAlign: 'center', marginTop: 24 }}>
-                            No tasks yet. Press Enter to add.
+                          <div style={{
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            opacity: 0.45
+                          }}>
+                            <span style={{ fontSize: 10, color: '#ffffff' }}>No tasks yet</span>
+                            <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.6)' }}>Click + Add Task to create</span>
                           </div>
                         ) : (
                           tasks.map((task, idx) => {
@@ -6219,24 +6505,42 @@ export default function Island() {
                             return (
                               <div
                                 key={idx}
+                                className="todo-row"
                                 style={{
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'space-between',
                                   background: 'rgba(255,255,255,0.04)',
-                                  borderRadius: 6,
-                                  padding: '3px 6px',
+                                  borderRadius: 7,
+                                  padding: '4px 8px',
                                   gap: 6
                                 }}
                               >
                                 <div
                                   onClick={() => toggleTaskIdx(idx)}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1, minWidth: 0 }}
+                                  style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', flex: 1, minWidth: 0 }}
                                 >
                                   {isDone ? (
-                                    <CheckSquare size={13} color="#22c55e" style={{ flexShrink: 0 }} />
+                                    <div style={{
+                                      width: 14,
+                                      height: 14,
+                                      borderRadius: '50%',
+                                      background: '#22c55e',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      flexShrink: 0
+                                    }}>
+                                      <Check size={9} color="#ffffff" strokeWidth={3} />
+                                    </div>
                                   ) : (
-                                    <Square size={13} color="rgba(255,255,255,0.4)" style={{ flexShrink: 0 }} />
+                                    <div style={{
+                                      width: 14,
+                                      height: 14,
+                                      borderRadius: '50%',
+                                      border: '1.5px solid rgba(255,255,255,0.3)',
+                                      flexShrink: 0
+                                    }} />
                                   )}
                                   <span style={{
                                     fontSize: 10.5,
@@ -6251,9 +6555,18 @@ export default function Island() {
                                 </div>
                                 <button
                                   onClick={() => removeTaskIdx(idx)}
-                                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.3)', cursor: 'pointer', padding: 0 }}
+                                  className="todo-delete-btn"
+                                  style={{
+                                    background: 'none',
+                                    border: 'none',
+                                    color: 'rgba(255,255,255,0.4)',
+                                    cursor: 'pointer',
+                                    padding: 2,
+                                    display: 'flex',
+                                    alignItems: 'center'
+                                  }}
                                 >
-                                  <Trash2 size={10} />
+                                  <X size={11} />
                                 </button>
                               </div>
                             );
@@ -6430,32 +6743,38 @@ export default function Island() {
                 })()}
 
 
-                {/* Tab 2: Overview / StandBy Clock */}
-                {currentTab === 2 && (() => {
-                  const now = new Date();
-                  const dayName = now.toLocaleDateString([], { weekday: 'short' });
-                  const dateNum = now.getDate();
-                  const monthName = now.toLocaleDateString([], { month: 'short' });
-
-                  return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', userSelect: 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ fontSize: 28, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif', letterSpacing: '-0.5px' }}>
-                          {time}
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#22c55e' }}>{dayName}</span>
-                          <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.5)' }}>{dateNum} {monthName}</span>
-                        </div>
-                      </div>
-
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 8, padding: '4px 8px' }}>
-                        <Battery size={14} color="#22c55e" />
-                        <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff' }}>{percent}%</span>
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* Tab 2: Overview / Interactive Mascot Standby Hub */}
+                {currentTab === 2 && (
+                  <MascotStandbyHub
+                    time={time}
+                    percent={percent}
+                    charging={charging}
+                    systemStats={systemStats}
+                    spotifyTrack={spotifyTrack}
+                    isPlaying={isPlaying}
+                    pomodoroState={pomodoroState}
+                    waterIntake={waterIntake}
+                    waterGoal={1500}
+                    onAddWater={addWaterDrink}
+                    tasks={tasks}
+                    shelfFiles={shelfFiles}
+                    onSwitchTab={(targetId) => {
+                      setTabState([targetId, targetId > currentTabId ? 1 : -1]);
+                    }}
+                    onToggleMedia={() => {
+                      if (window.electronAPI?.controlSystemMedia) {
+                        window.electronAPI.controlSystemMedia('playPause');
+                      }
+                    }}
+                    onTogglePomodoro={() => {
+                      setPomodoroState(prev => ({ ...prev, isRunning: !prev.isRunning }));
+                    }}
+                    onOpenLyrics={() => {
+                      setLyricsOpen(true);
+                      setTabState([3, 1]);
+                    }}
+                  />
+                )}
 
                 {/* Tab 11: Battery Hub */}
                 {currentTab === 11 && (
@@ -6475,23 +6794,10 @@ export default function Island() {
                   </div>
                 )}
 
-                {/* Tab 4: Calendar */}
-                {currentTab === 4 && (() => {
-                  const d = calendarDate || new Date();
-                  return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', userSelect: 'none' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(244, 63, 94, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <CalendarIcon size={20} color="#f43f5e" />
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff' }}>{d.toLocaleDateString([], { weekday: 'long' })}</span>
-                          <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.5)' }}>{d.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* Tab 4: Calendar (Authentic macOS Style) */}
+                {currentTab === 4 && (
+                  <CalendarModule />
+                )}
 
                 {/* Tab 5: Notifications (Summary View + Scrollable List View) */}
                 {currentTab === 5 && (() => {
@@ -6772,17 +7078,148 @@ export default function Island() {
                   </div>
                 )}
 
-                {/* Tab 7: Clipboard */}
-                {currentTab === 7 && (
-                  <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 12px', userSelect: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                      <List size={16} color="#38bdf8" style={{ flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {clipboard?.[0]?.text || "Clipboard is empty"}
-                      </span>
+                {/* Tab 7: Clipboard History */}
+                {currentTab === 7 && (() => {
+                  const items = Array.isArray(clipboard) ? clipboard : [];
+                  return (
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                      padding: '2px 4px',
+                      userSelect: 'none',
+                      boxSizing: 'border-box'
+                    }}>
+                      {/* Header Row: Title & Item Count on Left, Clear button on Right */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        padding: '0 4px',
+                        flexShrink: 0
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Clipboard size={12} color="#38bdf8" />
+                          <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff' }}>Clipboard History</span>
+                          <span style={{
+                            fontSize: 9,
+                            padding: '1px 6px',
+                            borderRadius: 10,
+                            background: 'rgba(255,255,255,0.08)',
+                            color: 'rgba(255,255,255,0.6)',
+                            fontWeight: 600
+                          }}>
+                            {items.length}
+                          </span>
+                        </div>
+                        {items.length > 0 && (
+                          <button
+                            onClick={clearAllClipboard}
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              color: '#ef4444',
+                              fontSize: 9.5,
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              padding: '2px 6px',
+                              borderRadius: 4
+                            }}
+                          >
+                            Clear
+                          </button>
+                        )}
+                      </div>
+
+                      {/* Scrollable list of compact cards (smooth scroll, fits within 150px shell) */}
+                      <div style={{
+                        flex: 1,
+                        overflowY: 'auto',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 4,
+                        paddingRight: 2,
+                        maxHeight: 88,
+                        scrollbarWidth: 'none'
+                      }}>
+                        {items.length === 0 ? (
+                          <div style={{
+                            height: 60,
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                            opacity: 0.45
+                          }}>
+                            <Clipboard size={18} color="rgba(255,255,255,0.6)" />
+                            <span style={{ fontSize: 10.5, color: '#ffffff' }}>Clipboard is empty</span>
+                          </div>
+                        ) : (
+                          items.map((item, idx) => {
+                            const itemText = typeof item === 'object' ? (item.text || "") : String(item || "");
+                            const itemId = typeof item === 'object' ? (item.id || idx) : idx;
+                            const timeAgo = typeof item === 'object' ? formatRelativeTime(item.timestamp) : "Just now";
+                            const isCopied = copiedClipboardId === itemId;
+
+                            return (
+                              <div
+                                key={itemId}
+                                onClick={() => copyClipboardItem(item, itemId)}
+                                className="clipboard-item-row"
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  gap: 8,
+                                  padding: '5px 8px',
+                                  borderRadius: 7,
+                                  background: isCopied ? 'rgba(34, 197, 94, 0.12)' : 'rgba(255,255,255,0.06)',
+                                  border: isCopied ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255,255,255,0.08)',
+                                  cursor: 'pointer'
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
+                                  <Copy size={11} color={isCopied ? '#22c55e' : 'rgba(255,255,255,0.4)'} style={{ flexShrink: 0 }} />
+                                  <span style={{
+                                    fontSize: 10.5,
+                                    color: '#ffffff',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    lineHeight: 1.3
+                                  }}>
+                                    {itemText}
+                                  </span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                                  {isCopied ? (
+                                    <span style={{
+                                      fontSize: 8.5,
+                                      fontWeight: 700,
+                                      color: '#22c55e',
+                                      background: 'rgba(34, 197, 94, 0.2)',
+                                      padding: '1px 5px',
+                                      borderRadius: 4
+                                    }}>
+                                      Copied!
+                                    </span>
+                                  ) : (
+                                    <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.4)', fontVariantNumeric: 'tabular-nums' }}>
+                                      {timeAgo}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {/* Fallback if currentTab does not match any known tab */}
                 {![0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15].includes(currentTab) && (

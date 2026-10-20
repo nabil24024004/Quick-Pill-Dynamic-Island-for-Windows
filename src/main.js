@@ -194,9 +194,33 @@ function savePrivacyDotsPreference(val) {
   } catch (_) {}
 }
 
+function loadSmartBrowserAvoidancePreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.smartBrowserAvoidance === "boolean") return data.smartBrowserAvoidance;
+    }
+  } catch (_) {}
+  return true;
+}
+
+function saveSmartBrowserAvoidancePreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.smartBrowserAvoidance = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
 let mascotModeEnabled = loadMascotModePreference();
 let minimalNotchEnabled = loadMinimalNotchPreference();
 let privacyDotsEnabled = loadPrivacyDotsPreference();
+let smartBrowserAvoidanceEnabled = loadSmartBrowserAvoidancePreference();
 alwaysOnTopEnabled = loadAlwaysOnTopPreference();
 
 function loadHiddenTabsPreference() {
@@ -309,7 +333,8 @@ const DEFAULT_TAB_SHORTCUTS = {
   6: "Alt+G",   // Game / Stats
   7: "Alt+V",   // Clipboard
   8: "Alt+T",   // Tasks
-  10: "Alt+R"   // Timer
+  10: "Alt+R",  // Timer
+  "minimal-notch": "Alt+Shift+M" // Minimal Notch Toggle
 };
 
 let registeredTabShortcuts = [];
@@ -379,6 +404,29 @@ function registerGlobalTabShortcuts(shortcutsMap) {
       logToFile(`Refusing to register shortcut with Ctrl: ${accel}`);
       continue;
     }
+
+    if (tabId === "minimal-notch") {
+      try {
+        const ok = globalShortcut.register(accel, () => {
+          minimalNotchEnabled = !minimalNotchEnabled;
+          saveMinimalNotchPreference(minimalNotchEnabled);
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+            mainWindow.webContents.send("toggle-minimal-notch-hotkey");
+          }
+          updateTrayMenu();
+        });
+        if (ok) {
+          registeredTabShortcuts.push(accel);
+        } else {
+          logToFile(`Global shortcut conflict/in-use for ${accel} (minimal-notch)`);
+        }
+      } catch (err) {
+        logToFile(`Error registering global shortcut ${accel}:`, err);
+      }
+      continue;
+    }
+
     try {
       const ok = globalShortcut.register(accel, () => {
         openTabInstant(parseInt(tabId, 10));
@@ -393,21 +441,25 @@ function registerGlobalTabShortcuts(shortcutsMap) {
     }
   }
 
-  // Global shortcut to toggle Minimal Notch (Alt+Shift+M)
-  try {
-    const ok = globalShortcut.register("Alt+Shift+M", () => {
-      minimalNotchEnabled = !minimalNotchEnabled;
-      saveMinimalNotchPreference(minimalNotchEnabled);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+  // Fallback: If minimal-notch wasn't in map and not yet registered, register Alt+Shift+M
+  const minimalAccel = map["minimal-notch"] || "Alt+Shift+M";
+  if (!registeredTabShortcuts.includes(minimalAccel)) {
+    try {
+      const ok = globalShortcut.register(minimalAccel, () => {
+        minimalNotchEnabled = !minimalNotchEnabled;
+        saveMinimalNotchPreference(minimalNotchEnabled);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+          mainWindow.webContents.send("toggle-minimal-notch-hotkey");
+        }
+        updateTrayMenu();
+      });
+      if (ok) {
+        registeredTabShortcuts.push(minimalAccel);
       }
-      updateTrayMenu();
-    });
-    if (ok) {
-      registeredTabShortcuts.push("Alt+Shift+M");
+    } catch (err) {
+      logToFile("Error registering fallback global shortcut for minimal notch:", err);
     }
-  } catch (err) {
-    logToFile("Error registering global shortcut Alt+Shift+M:", err);
   }
 }
 
@@ -730,9 +782,20 @@ ipcMain.handle("toggle-minimal-notch", () => {
   saveMinimalNotchPreference(minimalNotchEnabled);
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+    mainWindow.webContents.send("toggle-minimal-notch-hotkey");
   }
   updateTrayMenu();
   return minimalNotchEnabled;
+});
+
+ipcMain.handle("get-smart-browser-avoidance", () => smartBrowserAvoidanceEnabled);
+ipcMain.handle("set-smart-browser-avoidance", (event, val) => {
+  smartBrowserAvoidanceEnabled = Boolean(val);
+  saveSmartBrowserAvoidancePreference(smartBrowserAvoidanceEnabled);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("settings:smart-browser-avoidance-changed", smartBrowserAvoidanceEnabled);
+  }
+  return smartBrowserAvoidanceEnabled;
 });
 
 ipcMain.handle("get-hidden-tabs", () => hiddenTabsList);
@@ -774,38 +837,76 @@ ipcMain.on("settings-window:close", () => {
   }
 });
 
-async function executeStartDrag(sender, filePath) {
+// --- File Shelf Drag-and-Drop & Pre-cached Icons ---
+const FALLBACK_FILE_ICON_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAMklEQVRYhe3OQQ0AIAwEwbf/h1GChwW0U4E2Z9Yk1fN7kG65AwAAAAAAAAAAAAAAwP8AO6kBX7K4Xy0AAAAASUVORK5CYII=";
+let fallbackNativeIcon = null;
+try {
+  const fallbackPath = getIconPath("png");
+  if (fs.existsSync(fallbackPath)) {
+    fallbackNativeIcon = nativeImage.createFromPath(fallbackPath).resize({ width: 32, height: 32 });
+  }
+} catch (_) {}
+if (!fallbackNativeIcon || fallbackNativeIcon.isEmpty()) {
+  try {
+    fallbackNativeIcon = nativeImage.createFromDataURL(FALLBACK_FILE_ICON_DATA_URL).resize({ width: 32, height: 32 });
+  } catch (_) {
+    fallbackNativeIcon = nativeImage.createEmpty();
+  }
+}
+
+const cachedShelfIcons = new Map();
+
+async function cacheShelfIcon(filePath) {
+  try {
+    if (!filePath || typeof filePath !== "string") return null;
+    const resolvedPath = path.resolve(filePath);
+    if (!fs.existsSync(resolvedPath)) return null;
+
+    if (cachedShelfIcons.has(resolvedPath)) {
+      const existing = cachedShelfIcons.get(resolvedPath);
+      return existing && !existing.isEmpty() ? existing.toDataURL() : null;
+    }
+
+    let icon = null;
+    try {
+      if (typeof nativeImage.createThumbnailFromPath === "function") {
+        icon = await nativeImage.createThumbnailFromPath(resolvedPath, { width: 32, height: 32 });
+      }
+    } catch (_) {}
+
+    if (!icon || icon.isEmpty()) {
+      try {
+        if (typeof app.getFileIcon === "function") {
+          icon = await app.getFileIcon(resolvedPath, { size: "normal" });
+          if (icon && !icon.isEmpty()) {
+            icon = icon.resize({ width: 32, height: 32 });
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!icon || icon.isEmpty()) {
+      icon = fallbackNativeIcon;
+    }
+
+    cachedShelfIcons.set(resolvedPath, icon);
+    return icon && !icon.isEmpty() ? icon.toDataURL() : null;
+  } catch (err) {
+    logToFile("cacheShelfIcon error:", err);
+    return null;
+  }
+}
+
+// Strictly synchronous startDrag execution to prevent Windows OLE crashpad crashes
+function executeStartDragSync(sender, filePath) {
   try {
     if (!filePath || typeof filePath !== "string") return false;
     const resolvedPath = path.resolve(filePath);
     if (!fs.existsSync(resolvedPath)) return false;
 
-    let dragIcon = null;
-    try {
-      if (typeof nativeImage.createThumbnailFromPath === "function") {
-        dragIcon = await nativeImage.createThumbnailFromPath(resolvedPath, { width: 48, height: 48 });
-      }
-    } catch (_) {}
-
+    let dragIcon = cachedShelfIcons.get(resolvedPath);
     if (!dragIcon || (typeof dragIcon.isEmpty === "function" && dragIcon.isEmpty())) {
-      try {
-        if (typeof app.getFileIcon === "function") {
-          dragIcon = await app.getFileIcon(resolvedPath, { size: "normal" });
-        }
-      } catch (_) {}
-    }
-
-    if (!dragIcon || (typeof dragIcon.isEmpty === "function" && dragIcon.isEmpty())) {
-      try {
-        const fallbackPath = getIconPath("png");
-        if (fs.existsSync(fallbackPath)) {
-          dragIcon = nativeImage.createFromPath(fallbackPath).resize({ width: 48, height: 48 });
-        }
-      } catch (_) {}
-    }
-
-    if (!dragIcon || (typeof dragIcon.isEmpty === "function" && dragIcon.isEmpty())) {
-      dragIcon = nativeImage.createEmpty();
+      dragIcon = fallbackNativeIcon;
     }
 
     sender.startDrag({
@@ -814,17 +915,25 @@ async function executeStartDrag(sender, filePath) {
     });
     return true;
   } catch (err) {
-    logToFile("executeStartDrag error:", err);
+    logToFile("executeStartDragSync error:", err);
     return false;
   }
 }
 
-ipcMain.on("ondragstart", (event, filePath) => {
-  executeStartDrag(event.sender, filePath);
+ipcMain.on("shelf:start-drag", (event, filePath) => {
+  executeStartDragSync(event.sender, filePath);
 });
 
-ipcMain.handle("start-drag", async (event, filePath) => {
-  return await executeStartDrag(event.sender, filePath);
+ipcMain.on("ondragstart", (event, filePath) => {
+  executeStartDragSync(event.sender, filePath);
+});
+
+ipcMain.handle("start-drag", (event, filePath) => {
+  return executeStartDragSync(event.sender, filePath);
+});
+
+ipcMain.handle("shelf:cache-icon", async (event, filePath) => {
+  return await cacheShelfIcon(filePath);
 });
 
 // ==========================================
@@ -1146,12 +1255,28 @@ ipcMain.handle("shortcuts:set-tab-shortcuts", (event, newShortcuts) => {
   const merged = { ...DEFAULT_TAB_SHORTCUTS, ...sanitized };
   saveTabShortcutsPreference(merged);
   registerGlobalTabShortcuts(merged);
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("shortcuts:updated", merged);
+  }
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send("shortcuts:updated", merged);
+  }
+
   return { success: true, shortcuts: merged };
 });
 
 ipcMain.handle("shortcuts:reset-tab-shortcuts", () => {
   saveTabShortcutsPreference(DEFAULT_TAB_SHORTCUTS);
   registerGlobalTabShortcuts(DEFAULT_TAB_SHORTCUTS);
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("shortcuts:updated", DEFAULT_TAB_SHORTCUTS);
+  }
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send("shortcuts:updated", DEFAULT_TAB_SHORTCUTS);
+  }
+
   return { success: true, shortcuts: DEFAULT_TAB_SHORTCUTS };
 });
 
@@ -2053,9 +2178,7 @@ function startObstructionDetection() {
 
     let isObstructed = false;
 
-    if (minimalNotchEnabled) {
-      isObstructed = true;
-    } else if (user32Lib) {
+    if (user32Lib) {
       try {
         const fgHwnd = user32Lib.GetForegroundWindow();
         if (fgHwnd && fgHwnd !== 0) {
@@ -2066,12 +2189,20 @@ function startObstructionDetection() {
           // Ignore Windows desktop and taskbar
           const isDesktop = cls === "Progman" || cls === "WorkerW" || cls === "Shell_TrayWnd" || cls === "Shell_SecondaryTrayWnd";
 
-          // Ignore our own mainWindow
+          // Ignore our own mainWindow and settingsWindow
           let isOwnWindow = false;
           try {
             const mainBuf = mainWindow.getNativeWindowHandle();
             if (mainBuf.readBigInt64LE && mainBuf.readBigInt64LE(0) === BigInt(fgHwnd)) {
               isOwnWindow = true;
+            }
+          } catch (_) {}
+          try {
+            if (settingsWindow && !settingsWindow.isDestroyed()) {
+              const setBuf = settingsWindow.getNativeWindowHandle();
+              if (setBuf.readBigInt64LE && setBuf.readBigInt64LE(0) === BigInt(fgHwnd)) {
+                isOwnWindow = true;
+              }
             }
           } catch (_) {}
 
@@ -2092,25 +2223,9 @@ function startObstructionDetection() {
             if (rect.left <= 0 && rect.top <= 0 && rect.right >= screenW && rect.bottom >= screenH && !isZoomed) {
               isObstructed = true;
             }
-            // Nusa Rule 2: Maximized Browser / App Obstruction
-            else if (isZoomed || (rect.top <= 8 && winW >= screenW * 0.90 && winH >= screenH * 0.85)) {
-              const isBrowser = cls === "Chrome_WidgetWin_1" || cls === "MozillaWindowClass";
-              if (isBrowser) {
-                // Read title to see if user has 5+ tabs (e.g. Chrome format "and 5 more tabs")
-                const titleBuf = Buffer.alloc(512);
-                user32Lib.GetWindowTextA(fgHwnd, titleBuf, 512);
-                const title = titleBuf.toString("utf8").replace(/\0.*$/, "").trim();
-                const manyTabsMatch = title.match(/and\s+([5-9]|\d{2,})\s+more\s+tabs/i);
-
-                if (manyTabsMatch) {
-                  // Tabs have reached top-center zone (>= 5 tabs)
-                  isObstructed = true;
-                } else {
-                  // Browser with <= 4 tabs has empty titlebar at top-center (unobstructed)
-                  isObstructed = false;
-                }
-              } else {
-                // Non-browser maximized application occupies top titlebar/menu
+            // Nusa Rule 2: Maximized Window / Browser / App Obstruction
+            else if (isZoomed || (rect.top <= 8 && winW >= screenW * 0.90)) {
+              if (smartBrowserAvoidanceEnabled) {
                 isObstructed = true;
               }
             } else {
@@ -2128,7 +2243,7 @@ function startObstructionDetection() {
         mainWindow.webContents.send("desktop:obstruction-status", { isObstructed });
       }
     }
-  }, 300);
+  }, 250);
 }
 
 app.whenReady().then(() => {
@@ -2138,6 +2253,7 @@ app.whenReady().then(() => {
   startKeyLockPolling();
   startUSBPolling();
   startObstructionDetection();
+  startClipboardPolling();
   registerGlobalTabShortcuts();
   getLauncherEngine().getCatalog().catch((err) => logToFile("Failed to warm launcher catalog:", err));
   app.on("activate", () => {
@@ -2641,6 +2757,66 @@ ipcMain.handle("get-system-metrics", async () => {
   };
 });
 
+// --- Active System Clipboard Polling & History ---
+let clipboardHistory = [];
+let lastPolledClipboardText = "";
+
+function startClipboardPolling() {
+  try {
+    const initialText = clipboard.readText().trim();
+    if (initialText) {
+      lastPolledClipboardText = initialText;
+      clipboardHistory.push({
+        id: "clip-" + Date.now(),
+        text: initialText,
+        timestamp: Date.now()
+      });
+    }
+  } catch (_) {}
+
+  setInterval(() => {
+    try {
+      const text = clipboard.readText().trim();
+      if (text && text !== lastPolledClipboardText) {
+        lastPolledClipboardText = text;
+        const newEntry = {
+          id: "clip-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+          text,
+          timestamp: Date.now()
+        };
+        clipboardHistory = [newEntry, ...clipboardHistory.filter(item => item.text !== text)].slice(0, 15);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("clipboard:update", clipboardHistory);
+        }
+      }
+    } catch (_) {}
+  }, 600);
+}
+
+ipcMain.handle("clipboard:get-history", () => {
+  return clipboardHistory;
+});
+
+ipcMain.on("clipboard:write", (event, text) => {
+  try {
+    if (text) {
+      lastPolledClipboardText = String(text).trim();
+      clipboard.writeText(String(text));
+    }
+  } catch (_) {}
+});
+
+ipcMain.on("clipboard:clear", () => {
+  try {
+    clipboardHistory = [];
+    lastPolledClipboardText = "";
+    clipboard.clear();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("clipboard:update", []);
+    }
+  } catch (_) {}
+});
+
 ipcMain.handle("get-clipboard-text", async () => {
   try {
     return clipboard.readText();
@@ -2652,7 +2828,8 @@ ipcMain.handle("get-clipboard-text", async () => {
 ipcMain.handle("write-clipboard-text", async (event, text) => {
   try {
     if (text) {
-      clipboard.writeText(text);
+      lastPolledClipboardText = String(text).trim();
+      clipboard.writeText(String(text));
     } else {
       clipboard.clear();
     }
@@ -2664,7 +2841,12 @@ ipcMain.handle("write-clipboard-text", async (event, text) => {
 
 ipcMain.handle("clear-clipboard", async () => {
   try {
+    clipboardHistory = [];
+    lastPolledClipboardText = "";
     clipboard.clear();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("clipboard:update", []);
+    }
     return true;
   } catch {
     return false;
