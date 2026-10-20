@@ -1,0 +1,806 @@
+/* Quick Pill Global Stylesheet & Spring Transitions */
+@import "./App.css";
+
+/* =========================================================================
+   1. APPLE DYNAMIC ISLAND BLUR-MORPH TRANSITION ENGINE
+   ========================================================================= */
+
+#Island,
+.notch-shell {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0 auto;
+  background-color: #000000 !important;
+  overflow: hidden !important;
+  will-change: width, height, border-radius, transform, box-shadow;
+  transition: width 360ms cubic-bezier(0.16, 1, 0.3, 1), 
+              height 360ms cubic-bezier(0.16, 1, 0.3, 1), 
+              border-radius 360ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 360ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Ambient bottom inner glow for expanded and toast shells */
+.notch-glow-ambient {
+  box-shadow: inset 0 -12px 24px -10px rgba(100, 130, 255, 0.18), 
+              inset 0 -1px 0 rgba(255, 255, 255, 0.12), 
+              0 8px 24px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* =========================================================================
+   2. DECOUPLED FIXED-WIDTH NOTCH STAGES
+   Prevents flex items and text from wrapping or squishing while shell resizes
+   ========================================================================= */
+
+.notch-stage {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  pointer-events: auto;
+  user-select: none;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+.notch-stage-micro {
+  width: 96px;
+  justify-content: center;
+}
+
+.notch-stage-idle-clock {
+  width: 154px;
+  padding: 0 10px;
+  justify-content: space-between;
+}
+
+.notch-stage-idle-mascot {
+  width: 140px;
+  justify-content: center;
+}
+
+.notch-stage-toast {
+  width: 310px;
+  padding: 0 14px;
+  justify-content: space-between;
+}
+
+.notch-stage-expanded {
+  width: 430px;
+  height: 150px;
+  padding: 10px 14px;
+}
+
+.notch-stage-expanded-wide {
+  width: 510px;
+  height: 150px;
+  padding: 10px 16px;
+}
+
+/* =========================================================================
+   3. RIPPLE-STYLE CINEMATIC GAUSSIAN OPTICAL BLUR TAB TRANSITION
+   ========================================================================= */
+
+@keyframes opticalBlurEnter {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.96);
+    filter: blur(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes opticalBlurExit {
+  0% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.96);
+    filter: blur(12px);
+  }
+}
+
+/* Standalone Tab / Module crossfade keyframes (220ms cubic-bezier(0.22, 1, 0.36, 1)) */
+@keyframes tabModuleEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: blur(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes tabModuleExit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+    filter: blur(12px);
+  }
+}
+
+.optical-blur-in {
+  animation: opticalBlurEnter 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.optical-blur-out {
+  animation: opticalBlurExit 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.tab-module-crossfade-in {
+  animation: tabModuleEnter 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.tab-module-crossfade-out {
+  animation: tabModuleExit 220ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* =========================================================================
+   4. RICH TOAST HUD MICRO-ANIMATIONS (AirBuds Ripple & Battery Progress)
+   ========================================================================= */
+
+@keyframes ripplePulse {
+  0% {
+    transform: scale(1.0);
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1.45);
+    opacity: 0;
+  }
+}
+
+.ripple-circle-wrap {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ripple-ring {
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 1.5px solid #0ea5e9;
+  pointer-events: none;
+}
+
+.ripple-ring-1 {
+  animation: ripplePulse 1.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+
+.ripple-ring-2 {
+  animation: ripplePulse 1.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+  animation-delay: 0.6s;
+}
+
+/* =========================================================================
+   5. IDLE CLOCK & 5-BAR EQUALIZER WAVEFORM
+   ========================================================================= */
+
+.notch-live-eq-5 {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.eq-bar-5 {
+  width: 2px;
+  border-radius: 1px;
+  background: #22c55e;
+  transform-origin: bottom;
+}
+
+@keyframes eqAnim1 { 0%, 100% { height: 4px; } 50% { height: 12px; } }
+@keyframes eqAnim2 { 0%, 100% { height: 11px; } 50% { height: 5px; } }
+@keyframes eqAnim3 { 0%, 100% { height: 6px; } 50% { height: 14px; } }
+@keyframes eqAnim4 { 0%, 100% { height: 13px; } 50% { height: 4px; } }
+@keyframes eqAnim5 { 0%, 100% { height: 5px; } 50% { height: 10px; } }
+
+.eq-bar-5:nth-child(1) { animation: eqAnim1 0.75s ease-in-out infinite; }
+.eq-bar-5:nth-child(2) { animation: eqAnim2 0.85s ease-in-out infinite; }
+.eq-bar-5:nth-child(3) { animation: eqAnim3 0.65s ease-in-out infinite; }
+.eq-bar-5:nth-child(4) { animation: eqAnim4 0.90s ease-in-out infinite; }
+.eq-bar-5:nth-child(5) { animation: eqAnim5 0.70s ease-in-out infinite; }
+
+.eq-bar-5.paused {
+  animation: none !important;
+  height: 3px !important;
+  background: rgba(255, 255, 255, 0.3) !important;
+}
+
+/* =========================================================================
+   6. IDLE MASCOT MODE (Glowing Pill Eyes & Purple-Blue Radial Glow)
+   ========================================================================= */
+
+.mascot-ambient-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(circle at 50% 100%, rgba(120, 119, 255, 0.35), transparent 70%);
+  pointer-events: none;
+}
+
+.mascot-pill-eyes {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mascot-eye-pill {
+  width: 6px;
+  height: 11px;
+  border-radius: 999px;
+  background: #ffffff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+  transition: height 120ms ease, transform 180ms ease;
+}
+
+.mascot-eye-pill.blink {
+  height: 2px !important;
+}
+
+/* =========================================================================
+   7. ELASTIC BOTTOM PAGINATION DOTS
+   ========================================================================= */
+
+.elastic-pagination {
+  position: absolute;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  z-index: 30;
+  pointer-events: auto;
+}
+
+.elastic-dot {
+  height: 4px;
+  border-radius: 999px;
+  transition: all 250ms cubic-bezier(0.22, 1, 0.36, 1);
+  cursor: pointer;
+}
+
+.elastic-dot.active {
+  width: 14px;
+  background: #ffffff;
+}
+
+.elastic-dot.inactive {
+  width: 4px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.elastic-dot.inactive:hover {
+  background: rgba(255, 255, 255, 0.6);
+}
+
+/* Circular Edge Navigation Buttons */
+.edge-nav-circle-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 180ms ease;
+  user-select: none;
+}
+
+.edge-nav-circle-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  transform: scale(1.08);
+}
+
+/* =========================================================================
+   8. FILE SHELF OVERLAY & NUSA SPRING POP-IN ENGINE
+   ========================================================================= */
+
+/* Nusa Spring pop-in for stashed files: scale(0.82) -> scale(1) over 240ms cubic-bezier(0.22, 1, 0.36, 1) */
+@keyframes shelfPopIn {
+  0% {
+    transform: scale(0.82);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.0);
+    opacity: 1;
+  }
+}
+
+.shelf-popin-item {
+  animation: shelfPopIn 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Elastic spring pop-in for Toast HUDs: scale(0.9) -> scale(1.03) -> scale(1.0) over 250ms */
+@keyframes toastElasticPopIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.9);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.03);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.0);
+    filter: blur(0px);
+  }
+}
+
+.toast-popin,
+.notch-stage-toast {
+  animation: toastElasticPopIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Nusa-Style Translucent Drag-Over Overlay: smoothly fades in over 160ms ease */
+@keyframes nusaDropOverlayFade {
+  0% {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.shelf-drag-overlay,
+.nusa-shelf-drag-overlay {
+  position: absolute;
+  inset: 12px 28px 22px 28px;
+  box-sizing: border-box;
+  overflow: hidden;
+  border: 1.5px dashed rgba(255, 255, 255, 0.28);
+  border-radius: 18px;
+  background: rgba(14, 165, 233, 0.16);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  z-index: 25;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: nusaDropOverlayFade 160ms ease forwards;
+}
+
+/* Nusa Stashed File Tile Hover Badge */
+.shelf-tile-wrap {
+  position: relative;
+  width: 68px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.shelf-tile-remove-badge {
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.shelf-tile-wrap:hover .shelf-tile-remove-badge {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* =========================================================================
+   9. RIPPLE-STYLE TO-DO & CLIPBOARD MINIMALIST MONOCHROME ENGINE
+   ========================================================================= */
+
+.ripple-clipboard-card {
+  background: #121212;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 46px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ripple-clipboard-card:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  background: #161616;
+}
+
+.ripple-todo-row {
+  background: #121212;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.ripple-todo-row:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: #161616;
+}
+
+.todo-row {
+  transition: background 0.15s ease;
+}
+
+.todo-row .todo-delete-btn {
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease;
+}
+
+.todo-row:hover .todo-delete-btn {
+  opacity: 1;
+}
+
+.todo-delete-btn:hover {
+  color: #ef4444 !important;
+}
+
+.clipboard-item-row {
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.clipboard-item-row:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+/* =========================================================================
+   10. MASCOT STANDBY HUB & INTERACTIVE COMPANION ANIMATIONS
+   ========================================================================= */
+
+@keyframes mascotJellyPoke {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.15, 0.85); }
+  50% { transform: scale(0.92, 1.08); }
+  75% { transform: scale(1.05, 0.95); }
+  100% { transform: scale(1); }
+}
+
+.mascot-jelly-poked {
+  animation: mascotJellyPoke 480ms cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+@keyframes mascotHeadBob {
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-3.5px) rotate(-1.5deg); }
+  100% { transform: translateY(1px) rotate(1.5deg); }
+}
+
+@keyframes mascotSweatDrop {
+  0% { transform: translateY(0px) scale(0.7); opacity: 0; }
+  35% { transform: translateY(2px) scale(1); opacity: 1; }
+  85% { transform: translateY(7px) scale(0.95); opacity: 0.9; }
+  100% { transform: translateY(11px) scale(0.6); opacity: 0; }
+}
+
+.mascot-sweat-drop {
+  animation: mascotSweatDrop 1600ms infinite cubic-bezier(0.4, 0, 0.2, 1);
+  transform-origin: center;
+}
+
+@keyframes mascotNoteFloat1 {
+  0% { transform: translate(0, 0) scale(0.8); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translate(-8px, -18px) scale(1.1); opacity: 0; }
+}
+
+@keyframes mascotNoteFloat2 {
+  0% { transform: translate(0, 0) scale(0.8); opacity: 0; }
+  30% { opacity: 1; }
+  100% { transform: translate(8px, -20px) scale(1.1); opacity: 0; }
+}
+
+.mascot-note-1 {
+  animation: mascotNoteFloat1 1800ms infinite ease-out;
+}
+
+.mascot-note-2 {
+  animation: mascotNoteFloat2 2100ms infinite ease-out 400ms;
+}
+
+@keyframes mascotZzzFloat {
+  0% { transform: translate(0, 0) scale(0.7); opacity: 0; }
+  40% { opacity: 0.9; transform: translate(4px, -6px) scale(1); }
+  100% { transform: translate(12px, -16px) scale(1.15); opacity: 0; }
+}
+
+.mascot-zzz {
+  animation: mascotZzzFloat 2400ms infinite ease-out;
+}
+
+@keyframes mascotParticleFloat {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  25% { opacity: 1; transform: translate(-4px, -8px) scale(1.2); }
+  100% { transform: translate(6px, -26px) scale(0.9); opacity: 0; }
+}
+
+.mascot-particle-heart,
+.mascot-particle-sparkle {
+  animation: mascotParticleFloat 1100ms forwards ease-out;
+}
+
+/* Obsidian Visor-Cat Floating Levitation */
+@keyframes mascotFloat {
+  0%, 100% {
+    transform: translateY(-2.5px);
+  }
+  50% {
+    transform: translateY(2.5px);
+  }
+}
+
+.mascot-floating-body {
+  animation: mascotFloat 2.8s ease-in-out infinite;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  z-index: 2;
+}
+
+/* Glowing Radial Aura Pulse Underneath (replaces feet/legs) */
+@keyframes mascotAuraPulse {
+  0%, 100% {
+    transform: translateX(-50%) scale(0.92);
+    opacity: 0.65;
+  }
+  50% {
+    transform: translateX(-50%) scale(1.12);
+    opacity: 1;
+  }
+}
+
+.mascot-underglow-aura {
+  animation: mascotAuraPulse 2.8s ease-in-out infinite;
+}
+
+/* Thirsty Sliding Sweat Droplet on Visor Screen */
+@keyframes catSweatSlide {
+  0% {
+    transform: translateY(-3px);
+    opacity: 0;
+  }
+  25% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+}
+
+.cat-sweat-droplet {
+  animation: catSweatSlide 1600ms infinite ease-in;
+}
+
+/* Tasks Mood Floating Holographic Checklist */
+@keyframes checklistHover {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2.5px);
+  }
+}
+
+.floating-checklist {
+  animation: checklistHover 2200ms infinite ease-in-out;
+}
+
+/* Floating Gulping +250ml Badge on Drink Action */
+@keyframes floatBadge {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(0.85);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -6px) scale(1.05);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(-50%, -12px) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -18px) scale(0.9);
+  }
+}
+
+.mascot-gulp-badge {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(56, 189, 248, 0.22);
+  border: 1px solid rgba(56, 189, 248, 0.5);
+  color: #38bdf8;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  pointer-events: none;
+  z-index: 20;
+  backdrop-filter: blur(8px);
+  box-shadow: 0 4px 12px rgba(56, 189, 248, 0.3);
+  animation: floatBadge 1500ms forwards ease-out;
+}
+
+/* Clean Standby Typography Block & Borderless Action Link */
+.mascot-text-block {
+  cursor: pointer;
+  transition: opacity 160ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mascot-text-block:hover {
+  opacity: 0.8;
+}
+
+.mascot-text-block:active {
+  opacity: 0.65;
+}
+
+.mascot-action-link {
+  background: none;
+  border: none;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 150ms ease, transform 150ms ease;
+  user-select: none;
+  line-height: 1;
+}
+
+.mascot-action-link:hover {
+  opacity: 0.75;
+  transform: translateX(1px);
+}
+
+.mascot-action-link:active {
+  opacity: 0.55;
+  transform: translateX(0);
+}
+
+
+
+/* Collapsed Idle Mascot Reactivity Enhancements */
+@keyframes idleBeatBounce {
+  0% { transform: translateY(0px) scale(1); }
+  50% { transform: translateY(-2px) scale(1.05); }
+  100% { transform: translateY(0px) scale(1); }
+}
+
+.idle-mascot-vibing {
+  animation: idleBeatBounce 600ms infinite alternate ease-in-out;
+}
+
+.idle-mascot-droplet {
+  animation: mascotSweatDrop 1800ms infinite ease-out;
+}
+
+/* Borderless Nusa Minimalist Soft-Pill Action */
+.nusa-minimal-pill {
+  height: 24px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 160ms cubic-bezier(0.16, 1, 0.3, 1);
+  user-select: none;
+  line-height: 1;
+  box-sizing: border-box;
+}
+
+.nusa-minimal-pill:hover {
+  background: rgba(255, 255, 255, 0.16);
+  transform: translateY(-1px);
+}
+
+.nusa-minimal-pill:active {
+  transform: translateY(0px) scale(0.98);
+}
+
+/* =========================================================================
+   11. ASK AI (JARVIS) COMPONENT STYLES & ANIMATIONS
+   ========================================================================= */
+.ai-scrollable {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.ai-scrollable::-webkit-scrollbar {
+  width: 4px;
+}
+
+.ai-scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.ai-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.ai-scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.35);
+}
+
+@keyframes aiPulseSpin {
+  0% { transform: scale(1) rotate(0deg); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0.4); }
+  50% { transform: scale(1.08) rotate(180deg); box-shadow: 0 0 12px 3px rgba(168, 85, 247, 0.3); }
+  100% { transform: scale(1) rotate(360deg); box-shadow: 0 0 0 0 rgba(168, 85, 247, 0); }
+}
+
+@keyframes aiDotsAnim {
+  0%, 20% { opacity: 0; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
+}
+
+.ai-dots {
+  display: inline-block;
+  animation: aiDotsAnim 1.4s infinite alternate;
+}
+
+
+

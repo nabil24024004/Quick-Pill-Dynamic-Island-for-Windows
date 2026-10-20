@@ -1,7 +1,9 @@
 import { createRoot } from 'react-dom/client';
 import Island from './Island';
+import SettingsWindow from './components/SettingsWindow';
 import ErrorBoundary from './components/ErrorBoundary';
 import './App.css';
+import './index.css';
 
 // Emergency global error handler ensuring mouse events do not lock the user's screen
 window.addEventListener('error', (event) => {
@@ -31,7 +33,20 @@ window.addEventListener('unhandledrejection', (event) => {
   } catch (_) {}
 });
 
+const isSettingsRoute = typeof window !== 'undefined' && (
+  window.location.hash === '#settings' || 
+  window.location.search.includes('settings')
+);
+
 const App = () => {
+  if (isSettingsRoute) {
+    return (
+      <ErrorBoundary fallback={<div style={{ color: '#fff', padding: 20 }}>Settings failed to load.</div>}>
+        <SettingsWindow />
+      </ErrorBoundary>
+    );
+  }
+
   return (
     <ErrorBoundary
       fallback={

@@ -16,7 +16,7 @@ class AppFocusProvider {
       const appId = notif.applicationId || notif.applicationName;
       if (typeof this.focusAppFn === "function" && appId) {
         try {
-          const focused = await this.focusAppFn(appId);
+          const focused = await this.focusAppFn(appId, notif.applicationName);
           if (focused) return { success: true };
         } catch (_) {}
       }

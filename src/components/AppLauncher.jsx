@@ -1,506 +1,104 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
-import {
-  Search,
-  Star,
-  Compass,
-  Layers,
-  Monitor,
-  Play,
-  Check,
-  X,
-  RefreshCw,
-  AlertCircle,
-  ExternalLink,
-  Plus,
-  Sparkles,
-  Trash2,
-  ChevronRight,
-  Pencil,
-  Globe,
-  FolderPlus
-} from "lucide-react";
+import React, { useState, useEffect, useCallback } from "react";
+import { Globe, Folder, Play, ExternalLink, Settings as SettingsIcon } from "lucide-react";
 
-const WORKSPACE_COLORS = [
-  "#3B82F6",
-  "#10B981",
-  "#8B5CF6",
-  "#F59E0B",
-  "#F43F5E",
-  "#06B6D4",
-  "#EC4899",
-  "#64748B"
+export const DEFAULT_LAUNCHER_SHORTCUTS = [
+  {
+    id: "chrome",
+    type: "app",
+    name: "Chrome",
+    target: "chrome.exe",
+    icon: "https://www.google.com/chrome/static/images/chrome-logo.svg"
+  },
+  {
+    id: "explorer",
+    type: "app",
+    name: "Explorer",
+    target: "explorer.exe",
+    icon: null
+  },
+  {
+    id: "github",
+    type: "url",
+    name: "GitHub",
+    target: "https://github.com",
+    icon: "https://github.githubassets.com/favicons/favicon.png"
+  },
+  {
+    id: "youtube",
+    type: "url",
+    name: "YouTube",
+    target: "https://youtube.com",
+    icon: "https://www.youtube.com/s/desktop/f681da00/img/favicon.ico"
+  }
 ];
-
-// Module-level caches to make tab switches and re-renders 0ms instant
-let _memoryCatalogCache = null;
-let _memoryFavoritesCache = null;
-let _memoryRunningWindowsCache = null;
-let _memoryWorkspacesCache = null;
 
 export default function AppLauncher({
   onClose,
-  accentColor = "#0070f3",
+  accentColor = "#38bdf8",
   textColor = "#ffffff"
 }) {
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState("all"); // 'all' | 'favorites' | 'windows' | 'workspaces'
-  const [catalog, setCatalog] = useState(() => {
-    if (Array.isArray(_memoryCatalogCache) && _memoryCatalogCache.length > 0) {
-      return _memoryCatalogCache;
-    }
+  const [shortcuts, setShortcuts] = useState(() => {
     try {
-      const stored = localStorage.getItem("qp_launcher_catalog_cache");
+      const stored = localStorage.getItem("qp_curated_shortcuts");
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          _memoryCatalogCache = parsed;
-          return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return DEFAULT_LAUNCHER_SHORTCUTS;
+  });
+
+  const loadShortcuts = useCallback(() => {
+    try {
+      const stored = localStorage.getItem("qp_curated_shortcuts");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setShortcuts(parsed);
+          return;
         }
       }
     } catch (_) {}
-    return [];
-  });
-  const [searchResults, setSearchResults] = useState([]);
-  const [favorites, setFavorites] = useState(() => _memoryFavoritesCache || []);
-  const [runningWindows, setRunningWindows] = useState(() => _memoryRunningWindowsCache || []);
-  const [workspaces, setWorkspaces] = useState(() => _memoryWorkspacesCache || []);
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState(() => localStorage.getItem("active-workspace-id") || "dev");
-  const [isLoading, setIsLoading] = useState(() => {
-    return !(_memoryCatalogCache && _memoryCatalogCache.length > 0);
-  });
-  const [isReindexing, setIsReindexing] = useState(false);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const [statusMessage, setStatusMessage] = useState(null);
-  const [launchPreviewModal, setLaunchPreviewModal] = useState(null); // workspace object to preview
-  const [workspaceModal, setWorkspaceModal] = useState(null); // { mode: 'create'|'edit', ws: {...}, appPickerOpen, ... }
-  const [quickAddMenu, setQuickAddMenu] = useState(null); // { item }
-
-  const searchInputRef = useRef(null);
-  const listContainerRef = useRef(null);
-
-  // Show auto-dismissing status banner
-  const showStatus = useCallback((msg, duration = 3000) => {
-    setStatusMessage(msg);
-    setTimeout(() => {
-      setStatusMessage(prev => prev === msg ? null : prev);
-    }, duration);
-  }, []);
-
-  // Fetch initial data (catalog, favorites, running windows, workspaces)
-  const loadData = useCallback(async () => {
-    const hasCached = Array.isArray(_memoryCatalogCache) && _memoryCatalogCache.length > 0;
-    if (!hasCached) {
-      setIsLoading(true);
-    }
-    try {
-      if (window.electronAPI?.launcher) {
-        // Fast paths: getCatalog, getFavorites, getWorkspaces
-        const [cats, favs, ws] = await Promise.all([
-          window.electronAPI.launcher.getCatalog().catch(() => []),
-          window.electronAPI.launcher.getFavorites().catch(() => []),
-          window.electronAPI.launcher.getWorkspaces().catch(() => [])
-        ]);
-
-        if (Array.isArray(cats) && cats.length > 0) {
-          setCatalog(cats);
-          _memoryCatalogCache = cats;
-          try {
-            localStorage.setItem("qp_launcher_catalog_cache", JSON.stringify(cats));
-          } catch (_) {}
-        }
-        if (Array.isArray(favs)) {
-          setFavorites(favs);
-          _memoryFavoritesCache = favs;
-        }
-        if (Array.isArray(ws)) {
-          setWorkspaces(ws);
-          _memoryWorkspacesCache = ws;
-        }
-
-        // Running windows in background so slow PowerShell execution doesn't freeze launcher
-        window.electronAPI.launcher.getRunningWindows().then(wins => {
-          if (Array.isArray(wins)) {
-            setRunningWindows(wins);
-            _memoryRunningWindowsCache = wins;
-          }
-        }).catch(() => {});
-      }
-    } catch (err) {
-      console.error("Failed to load launcher data:", err);
-    } finally {
-      setIsLoading(false);
-    }
+    setShortcuts(DEFAULT_LAUNCHER_SHORTCUTS);
   }, []);
 
   useEffect(() => {
-    loadData();
-    // Auto focus search field immediately when opened
-    setTimeout(() => {
-      searchInputRef.current?.focus();
-    }, 50);
-  }, [loadData]);
-
-  // Periodic refresh for running windows
-  useEffect(() => {
-    if (filter === "windows" && window.electronAPI?.launcher?.getRunningWindows) {
-      const interval = setInterval(() => {
-        window.electronAPI.launcher.getRunningWindows().then(wins => {
-          if (Array.isArray(wins)) setRunningWindows(wins);
-        }).catch(() => {});
-      }, 2500);
-      return () => clearInterval(interval);
-    }
-  }, [filter]);
-
-  // Trigger search whenever query or filter changes
-  useEffect(() => {
-    let active = true;
-    if (!query.trim()) {
-      setSearchResults([]);
-      setSelectedIndex(0);
-      return;
-    }
-
-    if (window.electronAPI?.launcher?.searchApps) {
-      window.electronAPI.launcher.searchApps(query.trim(), {
-        includeWindows: filter === "all" || filter === "windows",
-        maxResults: 30
-      }).then(res => {
-        if (active && Array.isArray(res)) {
-          setSearchResults(res);
-          setSelectedIndex(0);
-        }
-      }).catch(() => {});
-    }
-
-    return () => { active = false; };
-  }, [query, filter]);
-
-  // Visible items based on active filter and query
-  const displayedItems = useMemo(() => {
-    const safeSearchResults = Array.isArray(searchResults) ? searchResults : [];
-    const safeCatalog = Array.isArray(catalog) ? catalog : [];
-    const safeFavorites = Array.isArray(favorites) ? favorites : [];
-    const safeRunningWindows = Array.isArray(runningWindows) ? runningWindows : [];
-    const safeWorkspaces = Array.isArray(workspaces) ? workspaces : [];
-
-    if (query.trim().length > 0) {
-      const q = query.toLowerCase();
-      if (filter === "favorites") {
-        return safeSearchResults.filter(item => item && safeFavorites.includes(item.id || item.target));
-      }
-      if (filter === "windows") {
-        return safeSearchResults.filter(item => item && (item.itemType === "window" || item.type === "window" || item.hWnd));
-      }
-      if (filter === "workspaces") {
-        return safeWorkspaces.filter(w => w && typeof w.name === "string" && w.name.toLowerCase().includes(q));
-      }
-      return safeSearchResults.filter(Boolean);
-    }
-
-    if (filter === "favorites") {
-      return safeCatalog.filter(app => app && safeFavorites.includes(app.id || app.target));
-    }
-    if (filter === "windows") {
-      return safeRunningWindows.filter(Boolean);
-    }
-    if (filter === "workspaces") {
-      return safeWorkspaces.filter(Boolean);
-    }
-
-    // Default 'all': favorites first, then all discovered apps
-    const favApps = safeCatalog.filter(app => app && safeFavorites.includes(app.id || app.target));
-    const otherApps = safeCatalog.filter(app => app && !safeFavorites.includes(app.id || app.target));
-    return [...favApps, ...otherApps];
-  }, [query, filter, searchResults, catalog, favorites, runningWindows, workspaces]);
-
-  // Launch application
-  const handleLaunchApp = useCallback(async (app) => {
-    if (!app) return;
-    try {
-      showStatus(`Launching ${app.name}...`);
-      if (window.electronAPI?.launcher?.launchApp) {
-        const res = await window.electronAPI.launcher.launchApp(app.target || app.launch || app.name);
-        if (res?.success) {
-          showStatus(`✓ ${app.name} launched`);
-        } else {
-          showStatus(`⚠ Could not launch: ${res?.error || "Check path"}`, 4000);
-        }
-      }
-    } catch (err) {
-      showStatus(`Error launching: ${err.message}`, 4000);
-    }
-  }, [showStatus]);
-
-  // Activate running window
-  const handleActivateWindow = useCallback(async (win) => {
-    if (!win?.hWnd) return;
-    try {
-      showStatus(`Switching to ${win.title || win.processName}...`);
-      if (window.electronAPI?.launcher?.activateWindow) {
-        const res = await window.electronAPI.launcher.activateWindow(win.hWnd);
-        if (res?.success) {
-          showStatus(`✓ Activated ${win.processName || win.title}`);
-        } else {
-          showStatus(`⚠ Activation restricted by Windows: ${res?.error || "Requires focus permission"}`, 4500);
-        }
-      }
-    } catch (err) {
-      showStatus(`Window activation error: ${err.message}`, 4500);
-    }
-  }, [showStatus]);
-
-  // Toggle favorite
-  const handleToggleFavorite = useCallback(async (e, app) => {
-    e.stopPropagation();
-    const id = app.id || app.target;
-    if (!id) return;
-
-    const newFavs = favorites.includes(id)
-      ? favorites.filter(f => f !== id)
-      : [...favorites, id];
-
-    setFavorites(newFavs);
-    if (window.electronAPI?.launcher?.setFavorites) {
-      try {
-        await window.electronAPI.launcher.setFavorites(newFavs);
-      } catch (_) {}
-    }
-  }, [favorites]);
-
-  // Set active workspace
-  const handleSelectWorkspace = useCallback((ws) => {
-    setActiveWorkspaceId(ws.id);
-    localStorage.setItem("active-workspace-id", ws.id);
-    showStatus(`Active Workspace: ${ws.name}`);
-  }, [showStatus]);
-
-  // Open workspace creator modal
-  const handleOpenCreateWorkspace = useCallback(() => {
-    setWorkspaceModal({
-      mode: "create",
-      ws: {
-        id: `ws-${Date.now()}`,
-        name: "",
-        color: "#3B82F6",
-        icon: "Layers",
-        pinnedApps: [],
-        launchProfile: []
-      },
-      appPickerOpen: false,
-      urlInputName: "",
-      urlInputTarget: "",
-      pickerQuery: ""
-    });
-  }, []);
-
-  // Open workspace editor modal
-  const handleOpenEditWorkspace = useCallback((ws, e) => {
-    if (e) e.stopPropagation();
-    setWorkspaceModal({
-      mode: "edit",
-      ws: JSON.parse(JSON.stringify(ws)),
-      appPickerOpen: false,
-      urlInputName: "",
-      urlInputTarget: "",
-      pickerQuery: ""
-    });
-  }, []);
-
-  // Save workspace from modal
-  const handleSaveWorkspaceModal = useCallback(async () => {
-    if (!workspaceModal?.ws) return;
-    const name = (workspaceModal.ws.name || "").trim();
-    if (!name) {
-      showStatus("⚠ Please enter a workspace name", 3000);
-      return;
-    }
-
-    const payload = {
-      ...workspaceModal.ws,
-      name,
-      launchProfile: (workspaceModal.ws.launchProfile || []).filter(t => t && t.target)
+    window.addEventListener("storage", loadShortcuts);
+    window.addEventListener("qp_shortcuts_updated", loadShortcuts);
+    return () => {
+      window.removeEventListener("storage", loadShortcuts);
+      window.removeEventListener("qp_shortcuts_updated", loadShortcuts);
     };
+  }, [loadShortcuts]);
 
+  const handleLaunch = async (item) => {
     try {
-      if (window.electronAPI?.workspaces?.saveWorkspace) {
-        const res = await window.electronAPI.workspaces.saveWorkspace(payload);
-        const savedWs = res?.workspace || payload;
-        setWorkspaces(prev => {
-          const idx = prev.findIndex(w => w.id === savedWs.id);
-          let next;
-          if (idx >= 0) {
-            next = [...prev];
-            next[idx] = savedWs;
-          } else {
-            next = [...prev, savedWs];
-          }
-          _memoryWorkspacesCache = next;
-          return next;
-        });
-        showStatus(`✓ Workspace "${name}" saved`);
-      }
-    } catch (err) {
-      showStatus("Error saving workspace: " + err.message, 4000);
-    }
-    setWorkspaceModal(null);
-  }, [workspaceModal, showStatus]);
-
-  // Delete workspace
-  const handleDeleteWorkspaceModal = useCallback(async (wsId) => {
-    if (!wsId) return;
-    if (workspaces.length <= 1) {
-      showStatus("Cannot delete the only workspace", 3000);
-      return;
-    }
-
-    try {
-      if (window.electronAPI?.workspaces?.deleteWorkspace) {
-        await window.electronAPI.workspaces.deleteWorkspace(wsId);
-        setWorkspaces(prev => {
-          const next = prev.filter(w => w.id !== wsId);
-          _memoryWorkspacesCache = next;
-          if (activeWorkspaceId === wsId && next.length > 0) {
-            setActiveWorkspaceId(next[0].id);
-            localStorage.setItem("active-workspace-id", next[0].id);
-          }
-          return next;
-        });
-        showStatus("✓ Workspace deleted");
-      }
-    } catch (err) {
-      showStatus("Error deleting workspace: " + err.message, 4000);
-    }
-    setWorkspaceModal(null);
-  }, [workspaces.length, activeWorkspaceId, showStatus]);
-
-  // Quick add app to a workspace
-  const handleQuickAddToWorkspace = useCallback(async (app, wsId) => {
-    const targetWs = workspaces.find(w => w.id === wsId);
-    if (!targetWs) return;
-
-    const newTarget = {
-      id: `target-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      name: app.name,
-      type: "app",
-      target: app.target || app.launch || app.name,
-      args: [],
-      enabled: true
-    };
-
-    const updatedWs = {
-      ...targetWs,
-      launchProfile: [...(targetWs.launchProfile || []), newTarget]
-    };
-
-    try {
-      if (window.electronAPI?.workspaces?.saveWorkspace) {
-        await window.electronAPI.workspaces.saveWorkspace(updatedWs);
-        setWorkspaces(prev => {
-          const next = prev.map(w => w.id === wsId ? updatedWs : w);
-          _memoryWorkspacesCache = next;
-          return next;
-        });
-        showStatus(`✓ Added ${app.name} to ${targetWs.name}`);
-      }
-    } catch (err) {
-      showStatus("Failed to add: " + err.message, 4000);
-    }
-    setQuickAddMenu(null);
-  }, [workspaces, showStatus]);
-
-  // Open launch profile confirmation modal
-  const handlePromptLaunchWorkspace = useCallback((e, ws) => {
-    e.stopPropagation();
-    setLaunchPreviewModal(ws);
-  }, []);
-
-  // Confirm launching all applications in workspace profile
-  const handleExecuteWorkspaceLaunch = useCallback(async () => {
-    if (!launchPreviewModal) return;
-    const ws = launchPreviewModal;
-    setLaunchPreviewModal(null);
-    showStatus(`Launching profile for ${ws.name}...`);
-
-    try {
-      if (window.electronAPI?.workspaces?.launchWorkspace) {
-        const res = await window.electronAPI.workspaces.launchWorkspace(ws.id);
-        if (res?.success) {
-          showStatus(`✓ Launched ${res.launchedCount || ws.launchProfile?.length || 0} apps in ${ws.name}`);
+      if (item.type === "url") {
+        if (window.electronAPI?.launcher?.openUrl) {
+          await window.electronAPI.launcher.openUrl(item.target);
+        } else if (window.electronAPI?.openExternal) {
+          await window.electronAPI.openExternal(item.target);
         } else {
-          showStatus(`Partial launch: ${res?.message || "Some apps skipped"}`);
+          window.open(item.target, "_blank");
+        }
+      } else {
+        if (window.electronAPI?.launcher?.openApp) {
+          await window.electronAPI.launcher.openApp(item.target);
+        } else if (window.electronAPI?.launchApp) {
+          await window.electronAPI.launchApp(item.target);
         }
       }
     } catch (err) {
-      showStatus(`Launch profile error: ${err.message}`, 4000);
+      console.error("Failed to launch shortcut:", err);
     }
-  }, [launchPreviewModal, showStatus]);
-
-  // Reindex catalog
-  const handleReindex = useCallback(async () => {
-    setIsReindexing(true);
-    showStatus("Re-indexing installed applications...");
-    try {
-      if (window.electronAPI?.launcher?.reindexCatalog) {
-        const res = await window.electronAPI.launcher.reindexCatalog();
-        if (res && Array.isArray(res.catalog)) {
-          setCatalog(res.catalog);
-          showStatus(`✓ Catalog refreshed (${res.catalog.length} apps discovered)`);
-        }
-      }
-    } catch (err) {
-      showStatus("Re-indexing failed: " + err.message, 4000);
-    } finally {
-      setIsReindexing(false);
-    }
-  }, [showStatus]);
-
-  // Keyboard navigation inside launcher
-  const handleKeyDown = (e) => {
-    if (e.key === "ArrowDown") {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelectedIndex(prev => Math.min(prev + 1, displayedItems.length - 1));
-      scrollSelectedIntoView(selectedIndex + 1);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      e.stopPropagation();
-      setSelectedIndex(prev => Math.max(prev - 1, 0));
-      scrollSelectedIntoView(selectedIndex - 1);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      e.stopPropagation();
-      const item = displayedItems[selectedIndex];
-      if (item) {
-        if (filter === "windows" || item.itemType === "window" || item.hWnd) {
-          handleActivateWindow(item);
-        } else if (filter === "workspaces" || item.isWorkspace) {
-          handlePromptLaunchWorkspace(e, item);
-        } else {
-          handleLaunchApp(item);
-        }
-      }
-    } else if (e.key === "Escape") {
-      e.preventDefault();
-      e.stopPropagation();
-      if (query) {
-        setQuery("");
-      } else if (onClose) {
-        onClose();
-      }
-    }
+    if (onClose) onClose();
   };
 
-  const scrollSelectedIntoView = (index) => {
-    if (!listContainerRef.current) return;
-    const el = listContainerRef.current.children[index];
-    if (el) {
-      el.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  const openSettings = () => {
+    if (window.electronAPI?.openSettingsWindow) {
+      window.electronAPI.openSettingsWindow();
     }
   };
-
-  const safeWorkspaces = Array.isArray(workspaces) ? workspaces : [];
-  const activeWorkspace = safeWorkspaces.find(w => w?.id === activeWorkspaceId) || safeWorkspaces[0] || null;
 
   return (
     <div
@@ -508,1118 +106,158 @@ export default function AppLauncher({
         width: "100%",
         height: "100%",
         display: "flex",
-        flexDirection: "row",
         alignItems: "center",
-        justifyContent: "space-between",
-        padding: "10px 16px",
+        justifyContent: "center",
+        padding: "10px 24px 22px 24px",
         boxSizing: "border-box",
-        gap: 14,
-        userSelect: "none",
-        position: "relative"
+        userSelect: "none"
       }}
-      onKeyDown={handleKeyDown}
-      onClick={() => setQuickAddMenu(null)}
     >
-      {/* LEFT COLUMN: Sidebar summary, active workspace & filter tabs */}
-      <div
-        className="launcher-scrollable"
-        style={{
-          width: 195,
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          gap: 6,
-          flexShrink: 0,
-          overflowY: "auto",
-          overflowX: "hidden",
-          paddingRight: 4,
-          boxSizing: "border-box"
-        }}
-      >
-        {/* Top Header Card */}
+      {shortcuts.length === 0 ? (
         <div
           style={{
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: 12,
-            padding: "6px 8px",
             display: "flex",
             flexDirection: "column",
-            gap: 4,
-            flexShrink: 0
-          }}
-        >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Compass size={14} color="#38bdf8" />
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#ffffff", letterSpacing: "0.4px", textTransform: "uppercase" }}>
-                Launcher
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleReindex}
-              disabled={isReindexing}
-              title="Re-index installed applications"
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "2px",
-                display: "flex",
-                alignItems: "center",
-                color: isReindexing ? "#38bdf8" : "rgba(255, 255, 255, 0.45)"
-              }}
-            >
-              <RefreshCw size={12} className={isReindexing ? "spin-anim" : ""} />
-            </button>
-          </div>
-
-          {/* Active Workspace Pill */}
-          {activeWorkspace && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                background: "rgba(0, 0, 0, 0.25)",
-                padding: "3px 6px",
-                borderRadius: 6,
-                fontSize: 10,
-                color: "rgba(255, 255, 255, 0.8)"
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: activeWorkspace.color || "#38bdf8"
-                }}
-              />
-              <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {activeWorkspace.name}
-              </span>
-            </div>
-          )}
-
-          {/* Catalog & Window Counts */}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "rgba(255, 255, 255, 0.45)", marginTop: 2 }}>
-            <span>{Array.isArray(catalog) ? catalog.length : 0} apps</span>
-            <span>{Array.isArray(runningWindows) ? runningWindows.length : 0} windows</span>
-          </div>
-        </div>
-
-        {/* Filter Navigation Buttons */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0 }}>
-          {[
-            { id: "all", label: "All Apps", count: Array.isArray(catalog) ? catalog.length : 0 },
-            { id: "favorites", label: "Favorites", count: Array.isArray(favorites) ? favorites.length : 0 },
-            { id: "windows", label: "Windows", count: Array.isArray(runningWindows) ? runningWindows.length : 0 },
-            { id: "workspaces", label: "Workspaces", count: Array.isArray(workspaces) ? workspaces.length : 0 }
-          ].map(btn => {
-            const isActive = filter === btn.id;
-            return (
-              <button
-                key={btn.id}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFilter(btn.id);
-                  setSelectedIndex(0);
-                  searchInputRef.current?.focus();
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "4px 8px",
-                  borderRadius: 8,
-                  background: isActive ? "rgba(56, 189, 248, 0.16)" : "transparent",
-                  border: isActive ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid transparent",
-                  color: isActive ? "#38bdf8" : "rgba(255, 255, 255, 0.65)",
-                  fontSize: 11,
-                  fontWeight: isActive ? 700 : 500,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                  fontFamily: "OpenRunde, system-ui, sans-serif"
-                }}
-              >
-                <span>{btn.label}</span>
-                <span style={{ fontSize: 9.5, opacity: 0.6 }}>{btn.count}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* RIGHT COLUMN: Search Header + Scrollable Results */}
-      <div
-        style={{
-          flex: 1,
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-          overflow: "hidden"
-        }}
-      >
-        {/* Search Header Bar */}
-        <div
-          style={{
-            display: "flex",
             alignItems: "center",
+            justifyContent: "center",
             gap: 8,
-            background: "rgba(255, 255, 255, 0.06)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
-            borderRadius: 10,
-            padding: "5px 10px",
-            boxSizing: "border-box"
+            color: "rgba(255, 255, 255, 0.45)"
           }}
         >
-          <Search size={14} color="rgba(255, 255, 255, 0.5)" />
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={
-              filter === "windows"
-                ? "Search running windows..."
-                : filter === "workspaces"
-                ? "Search workspaces..."
-                : "Type to search applications..."
-            }
+          <span style={{ fontSize: 12 }}>No shortcuts configured yet</span>
+          <button
+            onClick={openSettings}
             style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              background: "rgba(255, 255, 255, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
               color: "#ffffff",
-              fontSize: 12,
-              fontFamily: "OpenRunde, system-ui, sans-serif"
+              fontSize: 11,
+              fontWeight: 600,
+              padding: "4px 12px",
+              borderRadius: 999,
+              cursor: "pointer"
             }}
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => { setQuery(""); searchInputRef.current?.focus(); }}
-              style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.4)", cursor: "pointer", padding: 0 }}
-            >
-              <X size={13} />
-            </button>
-          )}
-          {filter === "workspaces" && (
-            <button
-              type="button"
-              onClick={handleOpenCreateWorkspace}
-              title="Create new workspace"
-              style={{
-                background: "rgba(56, 189, 248, 0.2)",
-                border: "1px solid rgba(56, 189, 248, 0.4)",
-                borderRadius: 6,
-                padding: "3px 8px",
-                color: "#38bdf8",
-                fontSize: 10.5,
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 4,
-                whiteSpace: "nowrap"
-              }}
-            >
-              <Plus size={11} />
-              New
-            </button>
-          )}
+          >
+            <SettingsIcon size={12} />
+            Configure in Settings
+          </button>
         </div>
-
-        {/* Results List */}
+      ) : (
         <div
-          ref={listContainerRef}
           className="launcher-scrollable"
           style={{
-            flex: 1,
-            overflowY: "auto",
             display: "flex",
-            flexDirection: "column",
-            gap: 4,
-            paddingRight: 4
+            alignItems: "center",
+            justifyContent: shortcuts.length <= 5 ? "center" : "flex-start",
+            gap: 12,
+            width: "100%",
+            overflowX: "auto",
+            scrollbarWidth: "none",
+            padding: "4px 8px"
           }}
         >
-          {displayedItems.length === 0 ? (
+          {shortcuts.map((item, idx) => (
             <div
+              key={item.id || item.name + idx}
+              onClick={() => handleLaunch(item)}
+              title={`${item.name} (${item.target})`}
               style={{
-                flex: 1,
+                width: 68,
+                height: 78,
+                background: "#121212",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                borderRadius: 14,
+                padding: "8px 6px",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
-                justifyContent: "center",
-                gap: 6,
-                color: "rgba(255, 255, 255, 0.4)",
-                fontSize: 11
+                justifyContent: "space-between",
+                cursor: "pointer",
+                flexShrink: 0,
+                boxSizing: "border-box",
+                transition: "all 0.18s cubic-bezier(0.16, 1, 0.3, 1)"
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-2px) scale(1.04)";
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.25)";
+                e.currentTarget.style.background = "#181818";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0px) scale(1)";
+                e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.1)";
+                e.currentTarget.style.background = "#121212";
               }}
             >
-              <Sparkles size={18} opacity={0.4} />
-              <span>
-                {query ? `No results for "${query}"` : filter === "favorites" ? "No pinned favorites yet" : "No items found"}
-              </span>
-            </div>
-          ) : (
-            displayedItems.map((item, idx) => {
-              if (!item) return null;
-              const isSelected = idx === selectedIndex;
-              const isFav = Array.isArray(favorites) && favorites.includes(item.id || item.target);
-              const isWindowItem = filter === "windows" || item.itemType === "window" || Boolean(item.hWnd);
-              const isWorkspaceItem = filter === "workspaces" || Boolean(item.isWorkspace);
-
-              return (
-                <div
-                  key={item.id || item.hWnd || item.target || idx}
-                  onClick={() => {
-                    setSelectedIndex(idx);
-                    if (isWindowItem) handleActivateWindow(item);
-                    else if (isWorkspaceItem) handleSelectWorkspace(item);
-                    else handleLaunchApp(item);
-                  }}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "5px 8px",
-                    borderRadius: 8,
-                    background: isSelected ? "rgba(255, 255, 255, 0.12)" : "rgba(255, 255, 255, 0.03)",
-                    border: isSelected ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(255, 255, 255, 0.05)",
-                    cursor: "pointer",
-                    transition: "all 0.12s ease"
-                  }}
-                >
-                  {/* Left: Icon + Titles */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
-                    {/* App or Window Icon */}
-                    <div
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 6,
-                        background: "rgba(0, 0, 0, 0.35)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        overflow: "hidden",
-                        flexShrink: 0
-                      }}
-                    >
-                      {item.icon ? (
-                        <img
-                          src={item.icon}
-                          alt=""
-                          style={{ width: 18, height: 18, objectFit: "contain" }}
-                          onError={(e) => { e.currentTarget.style.display = "none"; }}
-                        />
-                      ) : isWindowItem ? (
-                        <Monitor size={14} color="#38bdf8" />
-                      ) : isWorkspaceItem ? (
-                        <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color || "#38bdf8" }} />
-                      ) : (
-                        <Compass size={14} color="rgba(255, 255, 255, 0.6)" />
-                      )}
-                    </div>
-
-                    {/* Texts */}
-                    <div style={{ display: "flex", flexDirection: "column", minWidth: 0, flex: 1 }}>
-                      <span
-                        style={{
-                          fontSize: 11.5,
-                          fontWeight: 600,
-                          color: "#ffffff",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis"
-                        }}
-                      >
-                        {item.name || item.title || item.processName || "Untitled"}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: 9.5,
-                          color: "rgba(255, 255, 255, 0.4)",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis"
-                        }}
-                      >
-                        {isWindowItem
-                          ? `${item.processName || "Window"} • Active`
-                          : isWorkspaceItem
-                          ? `${item.launchProfile?.length || item.apps?.length || 0} items in profile`
-                          : (item.publisher || item.target || "Application")}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Right Actions */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0, marginLeft: 8 }}>
-                    {isWindowItem ? (
-                      <span
-                        style={{
-                          fontSize: 9.5,
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          background: "rgba(56, 189, 248, 0.2)",
-                          color: "#38bdf8",
-                          fontWeight: 600
-                        }}
-                      >
-                        Switch
-                      </span>
-                    ) : isWorkspaceItem ? (
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        {item.id === activeWorkspaceId && (
-                          <span
-                            style={{
-                              fontSize: 9,
-                              padding: "2px 5px",
-                              borderRadius: 4,
-                              background: "rgba(56, 189, 248, 0.2)",
-                              color: "#38bdf8",
-                              fontWeight: 700
-                            }}
-                          >
-                            Active
-                          </span>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => handlePromptLaunchWorkspace(e, item)}
-                          title="Launch all apps in this workspace"
-                          style={{
-                            background: "rgba(56, 189, 248, 0.2)",
-                            border: "none",
-                            borderRadius: 4,
-                            padding: "2px 6px",
-                            color: "#38bdf8",
-                            fontSize: 9.5,
-                            fontWeight: 700,
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 3
-                          }}
-                        >
-                          <Play size={10} fill="currentColor" />
-                          Launch
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => handleOpenEditWorkspace(item, e)}
-                          title="Configure / Edit workspace"
-                          style={{
-                            background: "rgba(255, 255, 255, 0.08)",
-                            border: "none",
-                            borderRadius: 4,
-                            padding: "3px 5px",
-                            color: "rgba(255, 255, 255, 0.7)",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center"
-                          }}
-                        >
-                          <Pencil size={11} />
-                        </button>
-                        {workspaces.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDeleteWorkspaceModal(item.id);
-                            }}
-                            title="Delete workspace"
-                            style={{
-                              background: "transparent",
-                              border: "none",
-                              borderRadius: 4,
-                              padding: "3px 4px",
-                              color: "rgba(239, 68, 68, 0.6)",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center"
-                            }}
-                          >
-                            <Trash2 size={11} />
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <div style={{ display: "flex", alignItems: "center", gap: 3, position: "relative" }}>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setQuickAddMenu(prev => prev?.item?.id === item.id ? null : { item });
-                          }}
-                          title="Add to workspace..."
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "3px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: quickAddMenu?.item?.id === item.id ? "#38bdf8" : "rgba(255, 255, 255, 0.35)"
-                          }}
-                        >
-                          <FolderPlus size={13} />
-                        </button>
-                        {quickAddMenu?.item?.id === item.id && (
-                          <div
-                            onClick={(e) => e.stopPropagation()}
-                            style={{
-                              position: "absolute",
-                              top: 24,
-                              right: 0,
-                              background: "#0f172a",
-                              border: "1px solid rgba(255, 255, 255, 0.15)",
-                              borderRadius: 8,
-                              padding: 4,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 2,
-                              minWidth: 140,
-                              zIndex: 50,
-                              boxShadow: "0 8px 20px rgba(0,0,0,0.7)"
-                            }}
-                          >
-                            <span style={{ fontSize: 9, color: "rgba(255, 255, 255, 0.4)", padding: "3px 6px", fontWeight: 700, textTransform: "uppercase" }}>
-                              Add to Workspace
-                            </span>
-                            {workspaces.map(ws => (
-                              <button
-                                key={ws.id}
-                                type="button"
-                                onClick={() => handleQuickAddToWorkspace(item, ws.id)}
-                                style={{
-                                  background: "transparent",
-                                  border: "none",
-                                  borderRadius: 4,
-                                  padding: "4px 6px",
-                                  color: "#ffffff",
-                                  fontSize: 10.5,
-                                  cursor: "pointer",
-                                  textAlign: "left",
-                                  display: "flex",
-                                  alignItems: "center",
-                                  gap: 6
-                                }}
-                                onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.08)"; }}
-                                onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                              >
-                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: ws.color || "#38bdf8" }} />
-                                <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{ws.name}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleFavorite(e, item)}
-                          title={isFav ? "Unpin favorite" : "Pin to favorites"}
-                          style={{
-                            background: "transparent",
-                            border: "none",
-                            cursor: "pointer",
-                            padding: "3px",
-                            display: "flex",
-                            alignItems: "center",
-                            color: isFav ? "#eab308" : "rgba(255, 255, 255, 0.25)"
-                          }}
-                        >
-                          <Star size={13} fill={isFav ? "#eab308" : "none"} />
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </div>
-
-      {/* Floating Status Toast */}
-      {statusMessage && (
-        <div
-          style={{
-            position: "absolute",
-            bottom: 6,
-            left: "50%",
-            transform: "translateX(-50%)",
-            background: "rgba(15, 23, 42, 0.95)",
-            border: "1px solid rgba(56, 189, 248, 0.4)",
-            borderRadius: 6,
-            padding: "4px 10px",
-            fontSize: 10,
-            fontWeight: 600,
-            color: "#ffffff",
-            boxShadow: "0 4px 12px rgba(0, 0, 0, 0.5)",
-            zIndex: 100,
-            pointerEvents: "none"
-          }}
-        >
-          {statusMessage}
-        </div>
-      )}
-
-      {/* Launch Profile Preview Modal */}
-      {launchPreviewModal && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(0, 0, 0, 0.75)",
-            backdropFilter: "blur(6px)",
-            borderRadius: 14,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 200,
-            padding: 16,
-            boxSizing: "border-box"
-          }}
-        >
-          <div
-            style={{
-              width: 360,
-              background: "#111827",
-              border: "1px solid rgba(255, 255, 255, 0.15)",
-              borderRadius: 12,
-              padding: 14,
-              display: "flex",
-              flexDirection: "column",
-              gap: 10,
-              boxShadow: "0 8px 24px rgba(0, 0, 0, 0.6)"
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: launchPreviewModal.color || "#38bdf8" }} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: "#ffffff" }}>
-                  Launch {launchPreviewModal.name}?
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setLaunchPreviewModal(null)}
-                style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.5)", cursor: "pointer" }}
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            <div style={{ fontSize: 11, color: "rgba(255, 255, 255, 0.7)" }}>
-              The following applications will be launched:
-            </div>
-
-            <div
-              style={{
-                maxHeight: 110,
-                overflowY: "auto",
-                background: "rgba(0, 0, 0, 0.3)",
-                borderRadius: 6,
-                padding: "6px 8px",
-                display: "flex",
-                flexDirection: "column",
-                gap: 4
-              }}
-            >
-              {(launchPreviewModal.launchProfile || launchPreviewModal.apps || []).map((targetItem, i) => (
-                <div key={i} style={{ fontSize: 10.5, color: "rgba(255, 255, 255, 0.9)", display: "flex", alignItems: "center", gap: 5 }}>
-                  <ChevronRight size={10} color="#38bdf8" />
-                  <span>{typeof targetItem === "object" ? (targetItem.name || targetItem.target) : targetItem}</span>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-              <button
-                type="button"
-                onClick={() => setLaunchPreviewModal(null)}
+              <div
                 style={{
-                  background: "rgba(255, 255, 255, 0.1)",
-                  border: "none",
-                  borderRadius: 6,
-                  padding: "5px 10px",
-                  color: "#ffffff",
-                  fontSize: 11,
-                  fontWeight: 600,
-                  cursor: "pointer"
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleExecuteWorkspaceLaunch}
-                style={{
-                  background: "#0284c7",
-                  border: "none",
-                  borderRadius: 6,
-                  padding: "5px 12px",
-                  color: "#ffffff",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  cursor: "pointer",
+                  width: 38,
+                  height: 38,
+                  borderRadius: 10,
+                  background: "rgba(255, 255, 255, 0.05)",
                   display: "flex",
                   alignItems: "center",
-                  gap: 4
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  flexShrink: 0
                 }}
               >
-                <Play size={11} fill="currentColor" />
-                Launch All
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Workspace Editor & Creator Modal */}
-      {workspaceModal && (
-        <div
-          style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(0, 0, 0, 0.78)",
-            backdropFilter: "blur(8px)",
-            borderRadius: 14,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 250,
-            padding: 10,
-            boxSizing: "border-box"
-          }}
-        >
-          <div
-            style={{
-              width: 400,
-              maxHeight: "94%",
-              background: "#0f172a",
-              border: "1px solid rgba(255, 255, 255, 0.16)",
-              borderRadius: 12,
-              padding: 12,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              boxShadow: "0 12px 32px rgba(0, 0, 0, 0.7)",
-              overflow: "hidden"
-            }}
-          >
-            {/* Modal Header */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: workspaceModal.ws.color || "#38bdf8" }} />
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: "#ffffff" }}>
-                  {workspaceModal.mode === "create" ? "Create Workspace" : "Edit Workspace"}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setWorkspaceModal(null)}
-                style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.5)", cursor: "pointer", padding: 2 }}
-              >
-                <X size={14} />
-              </button>
-            </div>
-
-            {/* Modal Body - Scrollable */}
-            <div className="launcher-scrollable" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingRight: 2 }}>
-              {/* Workspace Name Input */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-                <label style={{ fontSize: 9.5, color: "rgba(255, 255, 255, 0.5)", fontWeight: 600, textTransform: "uppercase" }}>
-                  Workspace Name
-                </label>
-                <input
-                  type="text"
-                  value={workspaceModal.ws.name}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setWorkspaceModal(prev => ({
-                      ...prev,
-                      ws: { ...prev.ws, name: val }
-                    }));
-                  }}
-                  placeholder="e.g. Creative Studio, Gaming, Finance"
-                  style={{
-                    background: "rgba(255, 255, 255, 0.06)",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    borderRadius: 6,
-                    padding: "5px 8px",
-                    color: "#ffffff",
-                    fontSize: 11.5,
-                    outline: "none"
-                  }}
-                />
-              </div>
-
-              {/* Accent Color Selection */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <label style={{ fontSize: 9.5, color: "rgba(255, 255, 255, 0.5)", fontWeight: 600, textTransform: "uppercase" }}>
-                  Accent Color
-                </label>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  {WORKSPACE_COLORS.map(col => {
-                    const isSelected = workspaceModal.ws.color === col;
-                    return (
-                      <button
-                        key={col}
-                        type="button"
-                        onClick={() => setWorkspaceModal(prev => ({ ...prev, ws: { ...prev.ws, color: col } }))}
-                        style={{
-                          width: 18,
-                          height: 18,
-                          borderRadius: "50%",
-                          background: col,
-                          border: isSelected ? "2px solid #ffffff" : "2px solid transparent",
-                          cursor: "pointer",
-                          transform: isSelected ? "scale(1.15)" : "scale(1)",
-                          transition: "transform 0.1s ease",
-                          boxShadow: isSelected ? `0 0 8px ${col}` : "none"
-                        }}
-                      />
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Launch Profile Items */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                  <label style={{ fontSize: 9.5, color: "rgba(255, 255, 255, 0.5)", fontWeight: 600, textTransform: "uppercase" }}>
-                    Launch Profile ({workspaceModal.ws.launchProfile?.length || 0} items)
-                  </label>
-                  <span style={{ fontSize: 8.5, color: "rgba(255, 255, 255, 0.4)" }}>Auto-launched together</span>
-                </div>
-
+                {item.icon ? (
+                  <img
+                    src={item.icon}
+                    alt={item.name}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      objectFit: "contain",
+                      borderRadius: 6
+                    }}
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none";
+                      if (e.currentTarget.nextSibling) {
+                        e.currentTarget.nextSibling.style.display = "flex";
+                      }
+                    }}
+                  />
+                ) : null}
                 <div
                   style={{
-                    maxHeight: 110,
-                    overflowY: "auto",
-                    background: "rgba(0, 0, 0, 0.35)",
-                    borderRadius: 6,
-                    padding: "4px 6px",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 3
+                    display: item.icon ? "none" : "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: "100%",
+                    height: "100%"
                   }}
                 >
-                  {(workspaceModal.ws.launchProfile || []).length === 0 ? (
-                    <span style={{ fontSize: 9.5, color: "rgba(255, 255, 255, 0.35)", textAlign: "center", padding: "6px 0" }}>
-                      No apps or links added yet. Add below!
-                    </span>
+                  {item.type === "url" ? (
+                    <Globe size={20} color={accentColor} />
+                  ) : item.name.toLowerCase().includes("explorer") ? (
+                    <Folder size={20} color="#f59e0b" />
                   ) : (
-                    workspaceModal.ws.launchProfile.map((target, idx) => (
-                      <div
-                        key={target.id || idx}
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "space-between",
-                          padding: "3px 6px",
-                          borderRadius: 4,
-                          background: "rgba(255, 255, 255, 0.04)"
-                        }}
-                      >
-                        <div style={{ display: "flex", alignItems: "center", gap: 5, overflow: "hidden", flex: 1 }}>
-                          {target.type === "url" ? (
-                            <Globe size={11} color="#38bdf8" style={{ flexShrink: 0 }} />
-                          ) : (
-                            <Monitor size={11} color="#a78bfa" style={{ flexShrink: 0 }} />
-                          )}
-                          <span style={{ fontSize: 10, color: "#ffffff", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {target.name}
-                          </span>
-                          <span style={{ fontSize: 8.5, color: "rgba(255, 255, 255, 0.35)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {target.target}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setWorkspaceModal(prev => ({
-                              ...prev,
-                              ws: {
-                                ...prev.ws,
-                                launchProfile: (prev.ws.launchProfile || []).filter((_, i) => i !== idx)
-                              }
-                            }));
-                          }}
-                          style={{ background: "transparent", border: "none", color: "rgba(239, 68, 68, 0.6)", cursor: "pointer", padding: "2px" }}
-                        >
-                          <Trash2 size={10} />
-                        </button>
-                      </div>
-                    ))
+                    <Play size={18} color="#ffffff" />
                   )}
                 </div>
-
-                {/* Add Target Controls */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 2 }}>
-                  <button
-                    type="button"
-                    onClick={() => setWorkspaceModal(prev => ({ ...prev, appPickerOpen: !prev.appPickerOpen }))}
-                    style={{
-                      background: workspaceModal.appPickerOpen ? "rgba(56, 189, 248, 0.2)" : "rgba(255, 255, 255, 0.06)",
-                      border: "1px solid rgba(255, 255, 255, 0.12)",
-                      borderRadius: 5,
-                      padding: "4px 8px",
-                      color: "#38bdf8",
-                      fontSize: 10,
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 4
-                    }}
-                  >
-                    <Plus size={10} />
-                    {workspaceModal.appPickerOpen ? "Close App Selector" : "Add App from Catalog"}
-                  </button>
-
-                  {/* App Picker Drawer */}
-                  {workspaceModal.appPickerOpen && (
-                    <div
-                      style={{
-                        background: "rgba(0, 0, 0, 0.45)",
-                        border: "1px solid rgba(255, 255, 255, 0.12)",
-                        borderRadius: 6,
-                        padding: 6,
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 4
-                      }}
-                    >
-                      <input
-                        type="text"
-                        value={workspaceModal.pickerQuery || ""}
-                        onChange={(e) => {
-                          const q = e.target.value;
-                          setWorkspaceModal(prev => ({ ...prev, pickerQuery: q }));
-                        }}
-                        placeholder="Search apps to add..."
-                        style={{
-                          background: "rgba(255, 255, 255, 0.08)",
-                          border: "none",
-                          borderRadius: 4,
-                          padding: "3px 6px",
-                          color: "#ffffff",
-                          fontSize: 10,
-                          outline: "none"
-                        }}
-                      />
-                      <div className="launcher-scrollable" style={{ maxHeight: 60, overflowY: "auto", display: "flex", flexDirection: "column", gap: 2 }}>
-                        {catalog
-                          .filter(app => {
-                            if (!workspaceModal.pickerQuery) return true;
-                            return (app.name || "").toLowerCase().includes(workspaceModal.pickerQuery.toLowerCase());
-                          })
-                          .slice(0, 20)
-                          .map(app => (
-                            <button
-                              key={app.id || app.target}
-                              type="button"
-                              onClick={() => {
-                                const newTarget = {
-                                  id: `target-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                                  name: app.name,
-                                  type: "app",
-                                  target: app.target || app.launch || app.name,
-                                  args: [],
-                                  enabled: true
-                                };
-                                setWorkspaceModal(prev => ({
-                                  ...prev,
-                                  ws: {
-                                    ...prev.ws,
-                                    launchProfile: [...(prev.ws.launchProfile || []), newTarget]
-                                  },
-                                  appPickerOpen: false,
-                                  pickerQuery: ""
-                                }));
-                              }}
-                              style={{
-                                background: "transparent",
-                                border: "none",
-                                borderRadius: 3,
-                                padding: "3px 6px",
-                                color: "#ffffff",
-                                fontSize: 9.5,
-                                textAlign: "left",
-                                cursor: "pointer",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: 6
-                              }}
-                              onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"; }}
-                              onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
-                            >
-                              <ChevronRight size={9} color="#38bdf8" />
-                              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{app.name}</span>
-                            </button>
-                          ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Add Web URL inputs */}
-                  <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-                    <input
-                      type="text"
-                      placeholder="Title (e.g. GitHub)"
-                      value={workspaceModal.urlInputName || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setWorkspaceModal(prev => ({ ...prev, urlInputName: val }));
-                      }}
-                      style={{
-                        width: "35%",
-                        background: "rgba(255, 255, 255, 0.06)",
-                        border: "1px solid rgba(255, 255, 255, 0.1)",
-                        borderRadius: 5,
-                        padding: "3px 6px",
-                        color: "#ffffff",
-                        fontSize: 10,
-                        outline: "none"
-                      }}
-                    />
-                    <input
-                      type="text"
-                      placeholder="URL (e.g. github.com)"
-                      value={workspaceModal.urlInputTarget || ""}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setWorkspaceModal(prev => ({ ...prev, urlInputTarget: val }));
-                      }}
-                      style={{
-                        flex: 1,
-                        background: "rgba(255, 255, 255, 0.06)",
-                        border: "1px solid rgba(255, 255, 255, 0.1)",
-                        borderRadius: 5,
-                        padding: "3px 6px",
-                        color: "#ffffff",
-                        fontSize: 10,
-                        outline: "none"
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        let rawUrl = (workspaceModal.urlInputTarget || "").trim();
-                        if (!rawUrl) return;
-                        if (!/^https?:\/\//i.test(rawUrl)) {
-                          rawUrl = "https://" + rawUrl;
-                        }
-                        let linkTitle = (workspaceModal.urlInputName || "").trim();
-                        if (!linkTitle) {
-                          try { linkTitle = new URL(rawUrl).hostname.replace(/^www\./, ""); } catch (_) { linkTitle = rawUrl; }
-                        }
-                        const newTarget = {
-                          id: `target-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-                          name: linkTitle,
-                          type: "url",
-                          target: rawUrl,
-                          args: [],
-                          enabled: true
-                        };
-                        setWorkspaceModal(prev => ({
-                          ...prev,
-                          ws: {
-                            ...prev.ws,
-                            launchProfile: [...(prev.ws.launchProfile || []), newTarget]
-                          },
-                          urlInputName: "",
-                          urlInputTarget: ""
-                        }));
-                      }}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.08)",
-                        border: "none",
-                        borderRadius: 5,
-                        padding: "3px 8px",
-                        color: "#38bdf8",
-                        fontSize: 10,
-                        fontWeight: 600,
-                        cursor: "pointer"
-                      }}
-                    >
-                      + Link
-                    </button>
-                  </div>
-                </div>
               </div>
-            </div>
 
-            {/* Modal Footer */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 4 }}>
-              {workspaceModal.mode === "edit" && workspaces.length > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    handleDeleteWorkspaceModal(workspaceModal.ws.id);
-                  }}
-                  style={{
-                    background: "rgba(239, 68, 68, 0.15)",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 8px",
-                    color: "#ef4444",
-                    fontSize: 10.5,
-                    fontWeight: 600,
-                    cursor: "pointer"
-                  }}
-                >
-                  Delete
-                </button>
-              ) : <div />}
-
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => setWorkspaceModal(null)}
-                  style={{
-                    background: "rgba(255, 255, 255, 0.08)",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 10px",
-                    color: "#ffffff",
-                    fontSize: 10.5,
-                    cursor: "pointer"
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveWorkspaceModal}
-                  style={{
-                    background: "#0284c7",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 12px",
-                    color: "#ffffff",
-                    fontSize: 10.5,
-                    fontWeight: 700,
-                    cursor: "pointer"
-                  }}
-                >
-                  Save Workspace
-                </button>
-              </div>
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "#ffffff",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  maxWidth: "100%",
+                  textAlign: "center",
+                  letterSpacing: "0.01em"
+                }}
+              >
+                {item.name}
+              </span>
             </div>
-          </div>
+          ))}
         </div>
       )}
     </div>

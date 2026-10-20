@@ -19,6 +19,22 @@ app.commandLine.appendSwitch("disable-background-timer-throttling");
 app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
 app.commandLine.appendSwitch("disable-renderer-backgrounding");
 
+// Ensure single instance lock so running Quick Pill again restores the existing instance
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  app.quit();
+} else {
+  app.on("second-instance", () => {
+    if (typeof restoreAndShowQuickPill === "function") {
+      restoreAndShowQuickPill();
+    } else if (mainWindow && !mainWindow.isDestroyed()) {
+      if (!mainWindow.isVisible()) mainWindow.show();
+      mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
+}
+
 const path = require("node:path");
 const fs = require("fs");
 const os = require("os");
@@ -125,7 +141,194 @@ function saveUpdaterPreference(key, val) {
   } catch (_) {}
 }
 
+function loadMascotModePreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.mascotMode === "boolean") return data.mascotMode;
+    }
+  } catch (_) {}
+  return true;
+}
+
+function saveMascotModePreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.mascotMode = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+function loadMinimalNotchPreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.minimalNotch === "boolean") return data.minimalNotch;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function saveMinimalNotchPreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.minimalNotch = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+function loadPrivacyDotsPreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.privacyDots === "boolean") return data.privacyDots;
+    }
+  } catch (_) {}
+  return false;
+}
+
+function savePrivacyDotsPreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.privacyDots = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+function loadSmartBrowserAvoidancePreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (typeof data.smartBrowserAvoidance === "boolean") return data.smartBrowserAvoidance;
+    }
+  } catch (_) {}
+  return true;
+}
+
+function saveSmartBrowserAvoidancePreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.smartBrowserAvoidance = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+let mascotModeEnabled = loadMascotModePreference();
+let minimalNotchEnabled = loadMinimalNotchPreference();
+let privacyDotsEnabled = loadPrivacyDotsPreference();
+let smartBrowserAvoidanceEnabled = loadSmartBrowserAvoidancePreference();
 alwaysOnTopEnabled = loadAlwaysOnTopPreference();
+
+function loadHiddenTabsPreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (Array.isArray(data.hiddenTabs)) return data.hiddenTabs;
+    }
+  } catch (_) {}
+  return [6];
+}
+
+function saveHiddenTabsPreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.hiddenTabs = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+const DEFAULT_TAB_ORDER = [2, 11, 12, 13, 14, 15, 16, 4, 5, 6, 7, 8, 10, 0, 1, 3];
+
+function loadTabOrderPreference() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      if (Array.isArray(data.tabOrder) && data.tabOrder.length > 0) return data.tabOrder;
+    }
+  } catch (_) {}
+  return [...DEFAULT_TAB_ORDER];
+}
+
+function saveTabOrderPreference(val) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    data.tabOrder = val;
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+  } catch (_) {}
+}
+
+let hiddenTabsList = loadHiddenTabsPreference();
+let tabOrderList = loadTabOrderPreference();
+
+const DEFAULT_JARVIS_ENDPOINT = "http://127.0.0.1:8765/api/process";
+
+function loadJarvisConfig() {
+  try {
+    const p = getSettingsPath();
+    if (fs.existsSync(p)) {
+      const data = JSON.parse(fs.readFileSync(p, "utf8"));
+      let ep = typeof data.jarvisEndpoint === "string" && data.jarvisEndpoint.trim() ? data.jarvisEndpoint.trim() : DEFAULT_JARVIS_ENDPOINT;
+      // Upgrade legacy default if previously set to 5000
+      if (ep === "http://localhost:5000/api/ask") {
+        ep = DEFAULT_JARVIS_ENDPOINT;
+      }
+      return {
+        enabled: typeof data.jarvisEnabled === "boolean" ? data.jarvisEnabled : true,
+        endpoint: ep
+      };
+    }
+  } catch (_) {}
+  return {
+    enabled: true,
+    endpoint: DEFAULT_JARVIS_ENDPOINT
+  };
+}
+
+function saveJarvisConfig(cfg) {
+  try {
+    const p = getSettingsPath();
+    let data = {};
+    if (fs.existsSync(p)) {
+      try { data = JSON.parse(fs.readFileSync(p, "utf8")); } catch (_) {}
+    }
+    if (typeof cfg?.enabled === "boolean") data.jarvisEnabled = cfg.enabled;
+    if (typeof cfg?.endpoint === "string" && cfg.endpoint.trim()) data.jarvisEndpoint = cfg.endpoint.trim();
+    fs.writeFileSync(p, JSON.stringify(data, null, 2), "utf8");
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
 
 function ensureAlwaysOnTop() {
   if (!alwaysOnTopEnabled) return;
@@ -206,6 +409,7 @@ const DEFAULT_TAB_SHORTCUTS = {
   13: "Alt+P",  // Progress Island
   14: "Alt+L",  // App Launcher
   15: "Alt+Q",  // Quick Notes
+  16: "Alt+I",  // Ask AI
   3: "Alt+M",   // Now Playing
   4: "Alt+C",   // Calendar
   5: "Alt+N",   // Notifications
@@ -213,7 +417,7 @@ const DEFAULT_TAB_SHORTCUTS = {
   7: "Alt+V",   // Clipboard
   8: "Alt+T",   // Tasks
   10: "Alt+R",  // Timer
-  9: "Alt+S"    // Settings
+  "minimal-notch": "Alt+Shift+M" // Minimal Notch Toggle
 };
 
 let registeredTabShortcuts = [];
@@ -248,6 +452,10 @@ function saveTabShortcutsPreference(shortcuts) {
 }
 
 function openTabInstant(tabId) {
+  if (Number(tabId) === 9) {
+    openSettingsWindow();
+    return;
+  }
   if (!mainWindow || mainWindow.isDestroyed()) return;
   try {
     if (!mainWindow.isVisible()) {
@@ -279,6 +487,29 @@ function registerGlobalTabShortcuts(shortcutsMap) {
       logToFile(`Refusing to register shortcut with Ctrl: ${accel}`);
       continue;
     }
+
+    if (tabId === "minimal-notch") {
+      try {
+        const ok = globalShortcut.register(accel, () => {
+          minimalNotchEnabled = !minimalNotchEnabled;
+          saveMinimalNotchPreference(minimalNotchEnabled);
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+            mainWindow.webContents.send("toggle-minimal-notch-hotkey");
+          }
+          updateTrayMenu();
+        });
+        if (ok) {
+          registeredTabShortcuts.push(accel);
+        } else {
+          logToFile(`Global shortcut conflict/in-use for ${accel} (minimal-notch)`);
+        }
+      } catch (err) {
+        logToFile(`Error registering global shortcut ${accel}:`, err);
+      }
+      continue;
+    }
+
     try {
       const ok = globalShortcut.register(accel, () => {
         openTabInstant(parseInt(tabId, 10));
@@ -290,6 +521,27 @@ function registerGlobalTabShortcuts(shortcutsMap) {
       }
     } catch (err) {
       logToFile(`Error registering global shortcut ${accel}:`, err);
+    }
+  }
+
+  // Fallback: If minimal-notch wasn't in map and not yet registered, register Alt+Shift+M
+  const minimalAccel = map["minimal-notch"] || "Alt+Shift+M";
+  if (!registeredTabShortcuts.includes(minimalAccel)) {
+    try {
+      const ok = globalShortcut.register(minimalAccel, () => {
+        minimalNotchEnabled = !minimalNotchEnabled;
+        saveMinimalNotchPreference(minimalNotchEnabled);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+          mainWindow.webContents.send("toggle-minimal-notch-hotkey");
+        }
+        updateTrayMenu();
+      });
+      if (ok) {
+        registeredTabShortcuts.push(minimalAccel);
+      }
+    } catch (err) {
+      logToFile("Error registering fallback global shortcut for minimal notch:", err);
     }
   }
 }
@@ -547,9 +799,14 @@ ipcMain.handle("log-renderer-error", (event, errorData) => {
   logToFile(`[RENDERER ERROR] Unhandled Renderer Exception ${JSON.stringify(errorData)}`);
 });
 
+let lastIgnoreMouseState = null;
 ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
+      if (lastIgnoreMouseState === ignore) {
+        return;
+      }
+      lastIgnoreMouseState = ignore;
       if (ignore) {
         const useForward = forward !== undefined ? forward : true;
         mainWindow.setIgnoreMouseEvents(true, { forward: useForward });
@@ -557,9 +814,7 @@ ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
         mainWindow.setIgnoreMouseEvents(false);
         ensureAlwaysOnTop();
       }
-      logToFile(`setIgnoreMouseEvents(${ignore}, forward=${forward}) executed`);
     } catch (e) {
-      logToFile("Error in setIgnoreMouseEvents, falling back to forward=true", e);
       try {
         mainWindow.setIgnoreMouseEvents(true, { forward: true });
       } catch (_) {}
@@ -585,6 +840,218 @@ ipcMain.handle("focus-window", () => {
 
 ipcMain.handle("open-external", async (event, url) => {
   await shell.openExternal(url);
+});
+
+ipcMain.handle("get-mascot-mode", () => mascotModeEnabled);
+ipcMain.handle("set-mascot-mode", (event, val) => {
+  mascotModeEnabled = Boolean(val);
+  saveMascotModePreference(mascotModeEnabled);
+  updateTrayMenu();
+  return mascotModeEnabled;
+});
+
+ipcMain.handle("get-minimal-notch", () => minimalNotchEnabled);
+ipcMain.handle("set-minimal-notch", (event, val) => {
+  minimalNotchEnabled = Boolean(val);
+  saveMinimalNotchPreference(minimalNotchEnabled);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+  }
+  updateTrayMenu();
+  return minimalNotchEnabled;
+});
+ipcMain.handle("toggle-minimal-notch", () => {
+  minimalNotchEnabled = !minimalNotchEnabled;
+  saveMinimalNotchPreference(minimalNotchEnabled);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+    mainWindow.webContents.send("toggle-minimal-notch-hotkey");
+  }
+  updateTrayMenu();
+  return minimalNotchEnabled;
+});
+
+ipcMain.handle("get-smart-browser-avoidance", () => smartBrowserAvoidanceEnabled);
+ipcMain.handle("set-smart-browser-avoidance", (event, val) => {
+  smartBrowserAvoidanceEnabled = Boolean(val);
+  saveSmartBrowserAvoidancePreference(smartBrowserAvoidanceEnabled);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("settings:smart-browser-avoidance-changed", smartBrowserAvoidanceEnabled);
+  }
+  return smartBrowserAvoidanceEnabled;
+});
+
+ipcMain.handle("get-hidden-tabs", () => hiddenTabsList);
+ipcMain.handle("set-hidden-tabs", (event, val) => {
+  if (Array.isArray(val)) {
+    hiddenTabsList = val;
+    saveHiddenTabsPreference(hiddenTabsList);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("settings:hidden-tabs-changed", hiddenTabsList);
+    }
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send("settings:hidden-tabs-changed", hiddenTabsList);
+    }
+  }
+  return hiddenTabsList;
+});
+
+ipcMain.handle("get-tab-order", () => tabOrderList);
+ipcMain.handle("set-tab-order", (event, val) => {
+  if (Array.isArray(val)) {
+    tabOrderList = val;
+    saveTabOrderPreference(tabOrderList);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("settings:tab-order-changed", tabOrderList);
+    }
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send("settings:tab-order-changed", tabOrderList);
+    }
+  }
+  return tabOrderList;
+});
+
+ipcMain.handle("get-privacy-dots", () => privacyDotsEnabled);
+ipcMain.handle("set-privacy-dots", (event, val) => {
+  privacyDotsEnabled = Boolean(val);
+  savePrivacyDotsPreference(privacyDotsEnabled);
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("settings:privacy-dots-changed", privacyDotsEnabled);
+  }
+  return privacyDotsEnabled;
+});
+
+ipcMain.handle("open-settings-window", () => {
+  openSettingsWindow();
+  return true;
+});
+
+ipcMain.on("settings-window:minimize", () => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.minimize();
+  }
+});
+
+ipcMain.on("settings-window:close", () => {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.close();
+  }
+});
+
+// --- File Shelf Drag-and-Drop & Pre-cached Icons ---
+const FALLBACK_FILE_ICON_DATA_URL = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAMklEQVRYhe3OQQ0AIAwEwbf/h1GChwW0U4E2Z9Yk1fN7kG65AwAAAAAAAAAAAAAAwP8AO6kBX7K4Xy0AAAAASUVORK5CYII=";
+let fallbackNativeIcon = null;
+
+function getFallbackDragIcon() {
+  if (fallbackNativeIcon && typeof fallbackNativeIcon.isEmpty === "function" && !fallbackNativeIcon.isEmpty()) {
+    return fallbackNativeIcon;
+  }
+  try {
+    const fallbackPng = path.resolve(app.getAppPath ? app.getAppPath() : process.cwd(), "src/assets/icons/icon.png");
+    if (fs.existsSync(fallbackPng)) {
+      fallbackNativeIcon = nativeImage.createFromPath(fallbackPng).resize({ width: 32, height: 32 });
+      if (!fallbackNativeIcon.isEmpty()) return fallbackNativeIcon;
+    }
+  } catch (_) {}
+  try {
+    const iconP = getIconPath("png");
+    if (fs.existsSync(iconP)) {
+      fallbackNativeIcon = nativeImage.createFromPath(iconP).resize({ width: 32, height: 32 });
+      if (!fallbackNativeIcon.isEmpty()) return fallbackNativeIcon;
+    }
+  } catch (_) {}
+  try {
+    fallbackNativeIcon = nativeImage.createFromDataURL(FALLBACK_FILE_ICON_DATA_URL).resize({ width: 32, height: 32 });
+  } catch (_) {}
+  return fallbackNativeIcon;
+}
+
+const cachedShelfIcons = new Map();
+
+async function cacheShelfIcon(filePath) {
+  try {
+    if (!filePath || typeof filePath !== "string") return null;
+    const resolvedPath = path.resolve(filePath);
+    if (!fs.existsSync(resolvedPath)) return null;
+
+    if (cachedShelfIcons.has(resolvedPath)) {
+      const existing = cachedShelfIcons.get(resolvedPath);
+      return existing && !existing.isEmpty() ? existing.toDataURL() : null;
+    }
+
+    let icon = null;
+    try {
+      if (typeof nativeImage.createThumbnailFromPath === "function") {
+        icon = await nativeImage.createThumbnailFromPath(resolvedPath, { width: 32, height: 32 });
+      }
+    } catch (_) {}
+
+    if (!icon || icon.isEmpty()) {
+      try {
+        if (typeof app.getFileIcon === "function") {
+          icon = await app.getFileIcon(resolvedPath, { size: "normal" });
+          if (icon && !icon.isEmpty()) {
+            icon = icon.resize({ width: 32, height: 32 });
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!icon || icon.isEmpty()) {
+      icon = getFallbackDragIcon();
+    }
+
+    cachedShelfIcons.set(resolvedPath, icon);
+    return icon && !icon.isEmpty() ? icon.toDataURL() : null;
+  } catch (err) {
+    logToFile("cacheShelfIcon error:", err);
+    return null;
+  }
+}
+
+// Strictly synchronous startDrag execution to prevent Windows OLE crashpad crashes
+function executeStartDragSync(sender, filePath) {
+  try {
+    if (!sender || typeof sender.startDrag !== "function") return false;
+    if (!filePath || typeof filePath !== "string") return false;
+    const resolvedPath = path.resolve(filePath);
+    if (!fs.existsSync(resolvedPath)) return false;
+
+    let dragIcon = cachedShelfIcons.get(resolvedPath);
+    if (!dragIcon || (typeof dragIcon.isEmpty === "function" && dragIcon.isEmpty())) {
+      dragIcon = getFallbackDragIcon();
+    }
+
+    if (!dragIcon || (typeof dragIcon.isEmpty === "function" && dragIcon.isEmpty())) {
+      logToFile("executeStartDragSync: no valid icon available, skipping startDrag to prevent crash");
+      return false;
+    }
+
+    sender.startDrag({
+      file: resolvedPath,
+      icon: dragIcon
+    });
+    return true;
+  } catch (err) {
+    logToFile("executeStartDragSync error:", err);
+    return false;
+  }
+}
+
+ipcMain.on("shelf:start-drag", (event, filePath) => {
+  executeStartDragSync(event.sender, filePath);
+});
+
+ipcMain.on("ondragstart", (event, filePath) => {
+  executeStartDragSync(event.sender, filePath);
+});
+
+ipcMain.handle("start-drag", (event, filePath) => {
+  return executeStartDragSync(event.sender, filePath);
+});
+
+ipcMain.handle("shelf:cache-icon", async (event, filePath) => {
+  return await cacheShelfIcon(filePath);
 });
 
 // ==========================================
@@ -682,6 +1149,83 @@ ipcMain.handle("launcher:set-favorites", async (event, favorites) => {
   } catch (err) {
     logToFile("Error in launcher:set-favorites:", err);
     return { success: false };
+  }
+});
+
+// Curated Shortcut Actions: Open App, Open URL, Select Executable
+ipcMain.handle("launcher:open-app", async (event, targetPath) => {
+  try {
+    if (!targetPath) return { success: false, error: "No target specified" };
+    // Try via shell.openPath first
+    const openErr = await shell.openPath(targetPath);
+    if (!openErr) return { success: true };
+    // Fallback to launcherEngine launchApp
+    return await getLauncherEngine().launchApp(targetPath);
+  } catch (err) {
+    logToFile("Error in launcher:open-app:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.on("launcher:open-app", async (event, targetPath) => {
+  try {
+    if (!targetPath) return;
+    const openErr = await shell.openPath(targetPath);
+    if (openErr) {
+      await getLauncherEngine().launchApp(targetPath);
+    }
+  } catch (err) {
+    logToFile("Error in launcher:open-app (event):", err);
+  }
+});
+
+ipcMain.handle("launcher:open-url", async (event, url) => {
+  try {
+    if (!url) return { success: false, error: "No URL specified" };
+    let finalUrl = String(url).trim();
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = "https://" + finalUrl;
+    }
+    await shell.openExternal(finalUrl);
+    return { success: true };
+  } catch (err) {
+    logToFile("Error in launcher:open-url:", err);
+    return { success: false, error: err.message };
+  }
+});
+
+ipcMain.on("launcher:open-url", async (event, url) => {
+  try {
+    if (!url) return;
+    let finalUrl = String(url).trim();
+    if (!/^https?:\/\//i.test(finalUrl)) {
+      finalUrl = "https://" + finalUrl;
+    }
+    await shell.openExternal(finalUrl);
+  } catch (err) {
+    logToFile("Error in launcher:open-url (event):", err);
+  }
+});
+
+ipcMain.handle("launcher:select-file", async () => {
+  try {
+    const result = await dialog.showOpenDialog({
+      title: "Select Application or Shortcut",
+      properties: ["openFile"],
+      filters: [
+        { name: "Applications & Shortcuts", extensions: ["exe", "lnk", "bat", "cmd"] },
+        { name: "All Files", extensions: ["*"] }
+      ]
+    });
+    if (!result.canceled && result.filePaths.length > 0) {
+      const selectedPath = result.filePaths[0];
+      const baseName = path.basename(selectedPath, path.extname(selectedPath));
+      return { canceled: false, filePath: selectedPath, name: baseName };
+    }
+    return { canceled: true };
+  } catch (err) {
+    logToFile("Error in launcher:select-file:", err);
+    return { canceled: true, error: err.message };
   }
 });
 
@@ -906,13 +1450,221 @@ ipcMain.handle("shortcuts:set-tab-shortcuts", (event, newShortcuts) => {
   const merged = { ...DEFAULT_TAB_SHORTCUTS, ...sanitized };
   saveTabShortcutsPreference(merged);
   registerGlobalTabShortcuts(merged);
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("shortcuts:updated", merged);
+  }
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send("shortcuts:updated", merged);
+  }
+
   return { success: true, shortcuts: merged };
 });
 
 ipcMain.handle("shortcuts:reset-tab-shortcuts", () => {
   saveTabShortcutsPreference(DEFAULT_TAB_SHORTCUTS);
   registerGlobalTabShortcuts(DEFAULT_TAB_SHORTCUTS);
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("shortcuts:updated", DEFAULT_TAB_SHORTCUTS);
+  }
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send("shortcuts:updated", DEFAULT_TAB_SHORTCUTS);
+  }
+
   return { success: true, shortcuts: DEFAULT_TAB_SHORTCUTS };
+});
+
+// ==========================================
+// JARVIS AI Integration Bridge
+// ==========================================
+function safeIpcHandle(channel, handler) {
+  try {
+    ipcMain.removeHandler(channel);
+  } catch (_) {}
+  ipcMain.handle(channel, handler);
+}
+
+safeIpcHandle("jarvis:ask", async (_, promptText) => {
+  if (!promptText || typeof promptText !== "string" || !promptText.trim()) {
+    return { success: false, error: "Empty prompt provided." };
+  }
+
+  const config = loadJarvisConfig();
+  if (!config.enabled) {
+    return { success: false, error: "JARVIS integration is currently disabled in Settings." };
+  }
+
+  const endpoint = config.endpoint || DEFAULT_JARVIS_ENDPOINT;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 45000); // 45s for local LLM inference
+
+    // Payload formatted for both D:/JARVIS (uses 'text') and standard LLM APIs (uses 'prompt')
+    const payload = {
+      text: promptText.trim(),
+      prompt: promptText.trim(),
+      audio_target: "laptop"
+    };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/plain, */*"
+      },
+      body: JSON.stringify(payload),
+      signal: controller.signal
+    });
+
+    clearTimeout(timeout);
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      return {
+        success: false,
+        error: `JARVIS responded with error ${res.status}: ${errText || res.statusText}`
+      };
+    }
+
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      const data = await res.json();
+      const reply = data.reply || data.response || data.text || data.message || data.answer || data.output || data.result || (typeof data === "string" ? data : JSON.stringify(data));
+      return { success: true, response: reply, raw: data };
+    } else {
+      const text = await res.text();
+      return { success: true, response: text };
+    }
+  } catch (err) {
+    if (err.name === "AbortError") {
+      return {
+        success: false,
+        error: "JARVIS query timed out (45s). Your local model may be busy."
+      };
+    }
+    return {
+      success: false,
+      error: "JARVIS local server offline. Make sure D:/JARVIS is running."
+    };
+  }
+});
+
+safeIpcHandle("jarvis:testConnection", async (_, targetEndpoint) => {
+  const config = loadJarvisConfig();
+  const endpoint = targetEndpoint || config.endpoint || DEFAULT_JARVIS_ENDPOINT;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 4000);
+
+    let reachable = false;
+    let statusDetail = "";
+
+    // 1. Try D:/JARVIS status endpoint first
+    try {
+      const u = new URL(endpoint);
+      const statusUrl = `${u.origin}/api/status`;
+      const res = await fetch(statusUrl, { method: "GET", signal: controller.signal });
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data && data.name) {
+          reachable = true;
+          statusDetail = `${data.name} v${data.version || "2.5"} (${data.model || "Online"})`;
+        } else if (res.status < 500) {
+          reachable = true;
+          statusDetail = `Online (${res.status})`;
+        }
+      }
+    } catch (_) {}
+
+    // 2. If status URL didn't resolve, probe target endpoint directly with ping
+    if (!reachable) {
+      try {
+        const res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: "ping", prompt: "ping" }),
+          signal: controller.signal
+        });
+        if (res.status < 500) {
+          reachable = true;
+          statusDetail = `HTTP ${res.status}`;
+        }
+      } catch (_) {
+        try {
+          const u = new URL(endpoint);
+          const res = await fetch(u.origin, { method: "GET", signal: controller.signal });
+          if (res.status < 500) {
+            reachable = true;
+            statusDetail = `Host online (${res.status})`;
+          }
+        } catch (e2) {
+          throw e2;
+        }
+      }
+    }
+
+    clearTimeout(timeout);
+    return { success: true, connected: reachable, details: statusDetail };
+  } catch (err) {
+    return { success: false, connected: false, error: err.message || "Cannot reach server" };
+  }
+});
+
+safeIpcHandle("jarvis:getConfig", async () => {
+  return loadJarvisConfig();
+});
+
+safeIpcHandle("jarvis:setConfig", async (_, newConfig) => {
+  saveJarvisConfig(newConfig);
+  const updated = loadJarvisConfig();
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send("jarvis:configUpdated", updated);
+  }
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send("jarvis:configUpdated", updated);
+  }
+  return { success: true, config: updated };
+});
+
+safeIpcHandle("jarvis:stopServer", async () => {
+  try {
+    // 1. Send graceful shutdown request to JARVIS Remote IPC Gateway
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 1500);
+      await fetch("http://127.0.0.1:8765/api/shutdown", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal
+      }).catch(() => null);
+      clearTimeout(timeout);
+    } catch (_) {}
+
+    // 2. Also run stop_jarvis.bat if available for complete process cleanup
+    const stopBat = "D:\\JARVIS\\stop_jarvis.bat";
+    if (fs.existsSync(stopBat)) {
+      exec(`cmd /c "${stopBat}"`, { cwd: "D:\\JARVIS" });
+    }
+    return { success: true, message: "JARVIS stopped and resources freed." };
+  } catch (err) {
+    return { success: false, error: err.message || "Failed to stop JARVIS" };
+  }
+});
+
+safeIpcHandle("jarvis:launchServer", async () => {
+  const batPath = "D:\\JARVIS\\run_gui.bat";
+  try {
+    if (fs.existsSync(batPath)) {
+      exec(`cmd /c "${batPath}"`, { cwd: "D:\\JARVIS" });
+      return { success: true, message: "JARVIS launch initiated." };
+    }
+  } catch (err) {
+    return { success: false, error: err.message || "Failed to launch run_gui.bat" };
+  }
+  return { success: false, error: "D:\\JARVIS\\run_gui.bat not found." };
 });
 
 // Legacy backward compatibility channels
@@ -944,8 +1696,11 @@ ipcMain.handle("set-display", (event, displayId) => {
       displays.find((d) => d.id.toString() === displayId.toString()) ||
       screen.getPrimaryDisplay();
 
-    const { x, y, width, height } = targetDisplay.bounds;
-    mainWindow.setBounds({ x, y, width, height });
+    const winWidth = 560;
+    const winHeight = 180;
+    const winX = Math.round(targetDisplay.bounds.x + (targetDisplay.bounds.width - winWidth) / 2);
+    const winY = targetDisplay.bounds.y;
+    mainWindow.setBounds({ x: winX, y: winY, width: winWidth, height: winHeight });
     mainWindow.show();
     ensureAlwaysOnTop();
   }
@@ -966,8 +1721,53 @@ ipcMain.handle("set-auto-launch", (event, enable) => {
     if (!enable) {
       cleanLegacyStartupEntries();
     }
+    updateTrayMenu();
+    if (settingsWindow && !settingsWindow.isDestroyed()) {
+      settingsWindow.webContents.send("settings:auto-launch-changed", enable);
+    }
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("settings:auto-launch-changed", enable);
+    }
   } catch (e) {
     console.error("Failed to set login item settings on Windows:", e);
+  }
+});
+
+ipcMain.handle("get-auto-launch", () => {
+  try {
+    return app.getLoginItemSettings().openAtLogin;
+  } catch (e) {
+    return false;
+  }
+});
+
+ipcMain.handle("create-desktop-shortcut", () => {
+  try {
+    const desktopPath = app.getPath("desktop");
+    const shortcutPath = path.join(desktopPath, "Quick Pill.lnk");
+    const exePath = process.execPath || app.getPath("exe");
+    let iconPath = getIconPath("ico");
+    if (!fs.existsSync(iconPath)) {
+      iconPath = getIconPath("png");
+    }
+
+    const shortcutOptions = {
+      target: exePath,
+      cwd: path.dirname(exePath),
+      description: "Quick Pill - Dynamic Island for Windows",
+      appUserModelId: "com.neosparkx.quickpill",
+    };
+
+    if (fs.existsSync(iconPath)) {
+      shortcutOptions.icon = iconPath;
+      shortcutOptions.iconIndex = 0;
+    }
+
+    const success = shell.writeShortcutLink(shortcutPath, "create", shortcutOptions);
+    return { success, path: shortcutPath };
+  } catch (err) {
+    logToFile("create-desktop-shortcut error:", err);
+    return { success: false, error: err?.message || String(err) };
   }
 });
 
@@ -985,6 +1785,7 @@ function cleanLegacyStartupEntries() {
 
 // --- Native Auto-Updater Engine ---
 const DEFAULT_MANIFEST_URLS = [
+  "https://raw.githubusercontent.com/pikri-beep/Quick-Pill-Dynamic-Island-for-Windows/main/web%20app/public/version.json",
   "https://raw.githubusercontent.com/nabil24024004/Quick-Pill/main/web%20app/public/version.json",
   "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/version.json",
   "https://raw.githubusercontent.com/nabil24024004/Ripple/main/web%20app/public/version.json"
@@ -994,7 +1795,7 @@ class AppUpdater extends EventEmitter {
   constructor() {
     super();
     this.manifestUrls = [...DEFAULT_MANIFEST_URLS];
-    this.currentVersion = app ? app.getVersion() : "5.5.1";
+    this.currentVersion = app ? app.getVersion() : "5.5.2";
     this.status = "idle";
     this.updateInfo = null;
     this.downloadedFilePath = null;
@@ -1379,11 +2180,15 @@ class AppUpdater extends EventEmitter {
     const filePath = this.downloadedFilePath;
 
     try {
-      const child = spawn(filePath, ["/S"], {
+      // In Windows, launching the setup executable after releasing locks:
+      // Use cmd.exe /c start to spawn independent detached installer process,
+      // giving current electron app time to close and free file handles.
+      const cmd = `timeout /t 1 /nobreak >nul && start "" "${filePath}"`;
+      spawn("cmd.exe", ["/c", cmd], {
         detached: true,
         stdio: "ignore",
-      });
-      child.unref();
+        windowsHide: false,
+      }).unref();
 
       setTimeout(() => {
         if (app) {
@@ -1392,7 +2197,7 @@ class AppUpdater extends EventEmitter {
         } else {
           process.exit(0);
         }
-      }, 300);
+      }, 400);
       return true;
     } catch (err) {
       this.emit("error", `Failed to launch installer: ${err.message}`);
@@ -1407,6 +2212,9 @@ const autoUpdater = new AppUpdater();
 function sendUpdaterEvent(eventName, data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("update-event", { event: eventName, data });
+  }
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.webContents.send("update-event", { event: eventName, data });
   }
 }
 
@@ -1434,6 +2242,15 @@ ipcMain.handle("cancel-update-download", () => {
 
 ipcMain.handle("install-update", () => {
   return autoUpdater.installAndRelaunch();
+});
+
+ipcMain.handle("get-updater-state", () => {
+  return {
+    status: autoUpdater.status,
+    updateInfo: autoUpdater.updateInfo,
+    downloadedFilePath: autoUpdater.downloadedFilePath,
+    currentVersion: autoUpdater.currentVersion
+  };
 });
 
 ipcMain.handle("get-app-version", () => {
@@ -1531,9 +2348,10 @@ const createWindow = () => {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { x, y, width, height } = primaryDisplay.bounds;
 
-  const winWidth = width;
-  const winHeight = height;
-  const winX = x;
+  // Fixed Transparent Overlay Window (560px x 180px): accommodates expanded-wide (510px) without clipping
+  const winWidth = 560;
+  const winHeight = 180;
+  const winX = Math.round(x + (width - winWidth) / 2);
   const winY = y;
 
   mainWindow = new BrowserWindow({
@@ -1655,33 +2473,143 @@ const createWindow = () => {
   }
 };
 
+let settingsWindow = null;
+function openSettingsWindow() {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+  settingsWindow = new BrowserWindow({
+    width: 680,
+    height: 560,
+    title: "Quick Pill Settings",
+    backgroundColor: "#121212",
+    autoHideMenuBar: true,
+    resizable: true,
+    minimizable: true,
+    maximizable: false,
+    frame: false,
+    icon: getIconPath(),
+    webPreferences: {
+      preload: path.join(__dirname, "preload.js"),
+      devTools: !app.isPackaged,
+      backgroundThrottling: false,
+    },
+  });
+  if (typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== "undefined" && MAIN_WINDOW_VITE_DEV_SERVER_URL && !app.isPackaged) {
+    settingsWindow.loadURL(`${MAIN_WINDOW_VITE_DEV_SERVER_URL}#settings`);
+  } else if (!app.isPackaged && process.env.NODE_ENV === "development") {
+    settingsWindow.loadURL("http://localhost:5173#settings");
+  } else {
+    const candidatePaths = [
+      path.join(__dirname, "../renderer/main_window/index.html"),
+      path.join(app.getAppPath(), ".vite/renderer/main_window/index.html"),
+      path.join(app.getAppPath(), "dist/index.html"),
+      path.join(__dirname, "index.html"),
+      path.join(app.getAppPath(), "index.html")
+    ];
+    for (const p of candidatePaths) {
+      if (fs.existsSync(p)) {
+        settingsWindow.loadFile(p, { hash: "settings" });
+        break;
+      }
+    }
+  }
+  settingsWindow.on("closed", () => {
+    settingsWindow = null;
+  });
+}
+
+function restoreAndShowQuickPill() {
+  try {
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createWindow();
+      return;
+    }
+    if (!mainWindow.isVisible()) {
+      mainWindow.show();
+    }
+    mainWindow.restore();
+    ensureAlwaysOnTop();
+    mainWindow.focus();
+    // Signal renderer to expand / reveal notch if it was in micro/hidden state
+    mainWindow.webContents.send("toggle-minimal-notch-hotkey");
+  } catch (err) {
+    logToFile("restoreAndShowQuickPill error:", err);
+  }
+}
+
 function updateTrayMenu() {
   if (!tray || tray.isDestroyed()) return;
+  const isStartWithWindows = app.getLoginItemSettings().openAtLogin;
   const contextMenu = Menu.buildFromTemplate([
     {
-      label: "Show/Hide Quick Pill",
+      label: "Show Quick Pill",
       click: () => {
-        if (mainWindow) {
-          if (mainWindow.isVisible()) {
-            mainWindow.hide();
-          } else {
-            mainWindow.show();
-            ensureAlwaysOnTop();
-          }
-        }
-      },
-    },
-    {
-      label: "Always on Top",
-      type: "checkbox",
-      checked: alwaysOnTopEnabled,
-      click: (item) => {
-        setAlwaysOnTopState(item.checked);
+        restoreAndShowQuickPill();
       },
     },
     { type: "separator" },
     {
-      label: "Quit",
+      label: "Start with Windows",
+      type: "checkbox",
+      checked: isStartWithWindows,
+      click: (item) => {
+        try {
+          app.setLoginItemSettings({
+            openAtLogin: item.checked,
+            path: app.getPath("exe"),
+          });
+          if (!item.checked) {
+            cleanLegacyStartupEntries();
+          }
+          if (settingsWindow && !settingsWindow.isDestroyed()) {
+            settingsWindow.webContents.send("settings:auto-launch-changed", item.checked);
+          }
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send("settings:auto-launch-changed", item.checked);
+          }
+        } catch (_) {}
+        updateTrayMenu();
+      },
+    },
+    {
+      label: "Mascot Mode",
+      type: "checkbox",
+      checked: mascotModeEnabled,
+      click: (item) => {
+        mascotModeEnabled = item.checked;
+        saveMascotModePreference(mascotModeEnabled);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("settings:mascot-mode-changed", mascotModeEnabled);
+        }
+        updateTrayMenu();
+      },
+    },
+    {
+      label: "Minimal Notch",
+      type: "checkbox",
+      checked: minimalNotchEnabled,
+      click: (item) => {
+        minimalNotchEnabled = item.checked;
+        saveMinimalNotchPreference(minimalNotchEnabled);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("settings:minimal-notch-changed", minimalNotchEnabled);
+        }
+        updateTrayMenu();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Settings...",
+      click: () => {
+        openSettingsWindow();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Exit",
       click: () => {
         app.quit();
       },
@@ -1690,12 +2618,126 @@ function updateTrayMenu() {
   tray.setContextMenu(contextMenu);
 }
 
+// --- Smart Obstruction Detection (Lightweight Koffi Win32 Polling) ---
+let lastObstructedState = false;
+let user32Lib = null;
+let gdi32Lib = null;
+
+function initWin32Obstruction() {
+  if (process.platform !== "win32") return;
+  try {
+    const koffi = require("koffi");
+    const user32 = koffi.load("user32.dll");
+    const gdi32 = koffi.load("gdi32.dll");
+    const RECT = koffi.struct("RECT", {
+      left: "long",
+      top: "long",
+      right: "long",
+      bottom: "long",
+    });
+    user32Lib = {
+      GetForegroundWindow: user32.func("GetForegroundWindow", "intptr_t", []),
+      IsZoomed: user32.func("IsZoomed", "bool", ["intptr_t"]),
+      GetWindowRect: user32.func("GetWindowRect", "bool", ["intptr_t", koffi.out(koffi.pointer(RECT))]),
+      GetClassNameA: user32.func("GetClassNameA", "int", ["intptr_t", koffi.out(koffi.pointer("char")), "int"]),
+      GetWindowTextA: user32.func("GetWindowTextA", "int", ["intptr_t", koffi.out(koffi.pointer("char")), "int"]),
+      GetDC: user32.func("GetDC", "intptr_t", ["intptr_t"]),
+      ReleaseDC: user32.func("ReleaseDC", "int", ["intptr_t", "intptr_t"]),
+      GetKeyState: user32.func("GetKeyState", "int16_t", ["int"]),
+    };
+    gdi32Lib = {
+      GetPixel: gdi32.func("GetPixel", "uint32_t", ["intptr_t", "int", "int"]),
+    };
+  } catch (err) {
+    logToFile("[Obstruction] Koffi user32/gdi32 init failed, falling back:", err);
+  }
+}
+
+function startObstructionDetection() {
+  if (process.platform !== "win32") return;
+  initWin32Obstruction();
+
+  setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+
+    let isObstructed = false;
+
+    if (user32Lib) {
+      try {
+        const fgHwnd = user32Lib.GetForegroundWindow();
+        if (fgHwnd && fgHwnd !== 0) {
+          const buf = Buffer.alloc(256);
+          user32Lib.GetClassNameA(fgHwnd, buf, 256);
+          const cls = buf.toString("utf8").replace(/\0.*$/, "").trim();
+
+          // Ignore Windows desktop and taskbar
+          const isDesktop = cls === "Progman" || cls === "WorkerW" || cls === "Shell_TrayWnd" || cls === "Shell_SecondaryTrayWnd";
+
+          // Ignore our own mainWindow and settingsWindow
+          let isOwnWindow = false;
+          try {
+            const mainBuf = mainWindow.getNativeWindowHandle();
+            if (mainBuf.readBigInt64LE && mainBuf.readBigInt64LE(0) === BigInt(fgHwnd)) {
+              isOwnWindow = true;
+            }
+          } catch (_) {}
+          try {
+            if (settingsWindow && !settingsWindow.isDestroyed()) {
+              const setBuf = settingsWindow.getNativeWindowHandle();
+              if (setBuf.readBigInt64LE && setBuf.readBigInt64LE(0) === BigInt(fgHwnd)) {
+                isOwnWindow = true;
+              }
+            }
+          } catch (_) {}
+
+          if (!isDesktop && !isOwnWindow) {
+            const rect = {};
+            user32Lib.GetWindowRect(fgHwnd, rect);
+            const isZoomed = user32Lib.IsZoomed(fgHwnd);
+
+            const primaryDisplay = screen.getPrimaryDisplay();
+            const screenW = primaryDisplay.bounds.width;
+            const screenH = primaryDisplay.bounds.height;
+
+            const winW = (rect.right || 0) - (rect.left || 0);
+            const winH = (rect.bottom || 0) - (rect.top || 0);
+
+            // Nusa Rule 1: Fullscreen Apps (Games / Fullscreen Video F11)
+            // Window covers entire monitor with no taskbar
+            if (rect.left <= 0 && rect.top <= 0 && rect.right >= screenW && rect.bottom >= screenH && !isZoomed) {
+              isObstructed = true;
+            }
+            // Nusa Rule 2: Maximized Window / Browser / App Obstruction
+            else if (isZoomed || (rect.top <= 8 && winW >= screenW * 0.90)) {
+              if (smartBrowserAvoidanceEnabled) {
+                isObstructed = true;
+              }
+            } else {
+              // Nusa Rule 3: Normal window with top-center clear
+              isObstructed = false;
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (isObstructed !== lastObstructedState) {
+      lastObstructedState = isObstructed;
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("desktop:obstruction-status", { isObstructed });
+      }
+    }
+  }, 250);
+}
+
 app.whenReady().then(() => {
   app.setAppUserModelId("com.neosparkx.quickpill");
   cleanLegacyStartupEntries();
   createWindow();
   startKeyLockPolling();
   startUSBPolling();
+  startObstructionDetection();
+  startClipboardPolling();
   registerGlobalTabShortcuts();
   getLauncherEngine().getCatalog().catch((err) => logToFile("Failed to warm launcher catalog:", err));
   app.on("activate", () => {
@@ -1714,6 +2756,12 @@ app.whenReady().then(() => {
     const trayIcon = icon.isEmpty() ? iconPath : icon.resize({ width: 16, height: 16 });
     tray = new Tray(trayIcon);
     tray.setToolTip("Quick Pill");
+    tray.on("click", () => {
+      restoreAndShowQuickPill();
+    });
+    tray.on("double-click", () => {
+      restoreAndShowQuickPill();
+    });
     updateTrayMenu();
   } catch (e) {
     console.error("Failed to create tray:", e);
@@ -2199,6 +3247,66 @@ ipcMain.handle("get-system-metrics", async () => {
   };
 });
 
+// --- Active System Clipboard Polling & History ---
+let clipboardHistory = [];
+let lastPolledClipboardText = "";
+
+function startClipboardPolling() {
+  try {
+    const initialText = clipboard.readText().trim();
+    if (initialText) {
+      lastPolledClipboardText = initialText;
+      clipboardHistory.push({
+        id: "clip-" + Date.now(),
+        text: initialText,
+        timestamp: Date.now()
+      });
+    }
+  } catch (_) {}
+
+  setInterval(() => {
+    try {
+      const text = clipboard.readText().trim();
+      if (text && text !== lastPolledClipboardText) {
+        lastPolledClipboardText = text;
+        const newEntry = {
+          id: "clip-" + Date.now() + "-" + Math.random().toString(36).slice(2, 6),
+          text,
+          timestamp: Date.now()
+        };
+        clipboardHistory = [newEntry, ...clipboardHistory.filter(item => item.text !== text)].slice(0, 15);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("clipboard:update", clipboardHistory);
+        }
+      }
+    } catch (_) {}
+  }, 600);
+}
+
+ipcMain.handle("clipboard:get-history", () => {
+  return clipboardHistory;
+});
+
+ipcMain.on("clipboard:write", (event, text) => {
+  try {
+    if (text) {
+      lastPolledClipboardText = String(text).trim();
+      clipboard.writeText(String(text));
+    }
+  } catch (_) {}
+});
+
+ipcMain.on("clipboard:clear", () => {
+  try {
+    clipboardHistory = [];
+    lastPolledClipboardText = "";
+    clipboard.clear();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("clipboard:update", []);
+    }
+  } catch (_) {}
+});
+
 ipcMain.handle("get-clipboard-text", async () => {
   try {
     return clipboard.readText();
@@ -2210,7 +3318,8 @@ ipcMain.handle("get-clipboard-text", async () => {
 ipcMain.handle("write-clipboard-text", async (event, text) => {
   try {
     if (text) {
-      clipboard.writeText(text);
+      lastPolledClipboardText = String(text).trim();
+      clipboard.writeText(String(text));
     } else {
       clipboard.clear();
     }
@@ -2222,7 +3331,12 @@ ipcMain.handle("write-clipboard-text", async (event, text) => {
 
 ipcMain.handle("clear-clipboard", async () => {
   try {
+    clipboardHistory = [];
+    lastPolledClipboardText = "";
     clipboard.clear();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("clipboard:update", []);
+    }
     return true;
   } catch {
     return false;
@@ -2250,37 +3364,23 @@ $MediaKey::keybd_event(${vkCode}, 0, 2, [UIntPtr]::Zero)
   return false;
 });
 
-// --- Feature: Key Lock Alerts (CapsLock / NumLock) ---
-let lastCapsLock = null;
+// --- Feature: Key Lock Alerts (NumLock) ---
 let lastNumLock = null;
 
 function startKeyLockPolling() {
   if (process.platform !== "win32") return;
-  let keyLockInFlight = false;
   setInterval(() => {
     if (!mainWindow || mainWindow.isDestroyed()) return;
-    if (keyLockInFlight) return; // skip if previous call hasn't returned yet
-    keyLockInFlight = true;
-    exec('powershell -NoProfile -Command "[Console]::CapsLock; [Console]::NumberLock"', (err, stdout) => {
-      keyLockInFlight = false;
-      if (err || !stdout) return;
-      const lines = stdout.trim().split(/\r?\n/);
-      const capsLock = lines[0]?.trim().toLowerCase() === "true";
-      const numLock = lines[1]?.trim().toLowerCase() === "true";
-      if (lastCapsLock !== null && capsLock !== lastCapsLock) {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("key-lock-change", { key: "CapsLock", state: capsLock });
+    try {
+      if (user32Lib && user32Lib.GetKeyState) {
+        const num = (user32Lib.GetKeyState(0x90) & 1) !== 0;
+        if (lastNumLock !== null && num !== lastNumLock) {
+          mainWindow.webContents.send("key-lock-change", { key: "NumLock", state: num });
         }
+        lastNumLock = num;
       }
-      if (lastNumLock !== null && numLock !== lastNumLock) {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("key-lock-change", { key: "NumLock", state: numLock });
-        }
-      }
-      lastCapsLock = capsLock;
-      lastNumLock = numLock;
-    });
-  }, 2000); // 2s is plenty for key-lock detection; was 500ms which spawned 2 powershell/s
+    } catch (_) {}
+  }, 150);
 }
 
 // --- Feature: USB Drive Detection ---
@@ -2344,13 +3444,21 @@ function Await-Op($asyncOp, $type) {
     } catch { return $null }
 }
 
-function Get-AppIconBase64($appId) {
+function Get-AppIconBase64($appId, $appName) {
     try {
         $proc = $null
-        if ($appId) {
-            # Try to derive process name from AppId (e.g. "com.squirrel.Spotify.Spotify" -> "Spotify")
+        if ($appName) {
+            $proc = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and ($_.ProcessName -like "*$appName*" -or $_.MainWindowTitle -like "*$appName*") } | Select-Object -First 1
+        }
+        if (-not $proc -and $appId) {
             $cleanName = $appId.Split('!')[-1].Split('.')[-1].Replace('.exe','')
-            $proc = Get-Process | Where-Object { $_.ProcessName -eq $cleanName -or $_.ProcessName -like "*$cleanName*" } | Select-Object -First 1
+            if ($cleanName -and $cleanName -ne "App") {
+                $proc = Get-Process | Where-Object { $_.ProcessName -eq $cleanName -or $_.ProcessName -like "*$cleanName*" } | Select-Object -First 1
+            }
+        }
+        if (-not $proc -and $appId -match '\.([A-Za-z0-9]+)[_\!]') {
+            $extracted = $Matches[1]
+            $proc = Get-Process | Where-Object { $_.ProcessName -like "*$extracted*" } | Select-Object -First 1
         }
         if (-not $proc) { return "" }
         $exePath = $proc.MainModule.FileName
@@ -2413,7 +3521,7 @@ try {
                 $appName = $n.AppInfo.DisplayInfo.DisplayName
                 $appId = $n.AppInfo.AppUserModelId
             } catch {}
-            $icon = Get-AppIconBase64 $appId
+            $icon = Get-AppIconBase64 $appId $appName
             $results.Add([PSCustomObject]@{
                 Id = $n.Id
                 AppName = $appName
@@ -2503,15 +3611,157 @@ try {
   });
 }
 
-async function focusNotificationAppInternal(appIdOrName) {
-  if (process.platform !== "win32" || !appIdOrName) return false;
+async function focusNotificationAppInternal(appIdOrName, appNameHint) {
+  if (process.platform !== "win32" || (!appIdOrName && !appNameHint)) return false;
+
+  const rawAppId = (appIdOrName || "").trim();
+  const rawAppName = (appNameHint || "").trim();
+  logToFile(`focusNotificationApp: appId="${rawAppId}", appName="${rawAppName}"`);
+
+  // 1. Direct UWP AppUserModelId execution via Windows Shell (Instant & Native for Windows Store Apps like WhatsApp, Spotify, etc.)
+  if (rawAppId && (rawAppId.includes("!") || rawAppId.toLowerCase().startsWith("shell:appsfolder\\"))) {
+    try {
+      const target = rawAppId.toLowerCase().startsWith("shell:appsfolder\\")
+        ? rawAppId
+        : `shell:AppsFolder\\${rawAppId}`;
+      const child = spawn("explorer.exe", [target], { detached: true, stdio: "ignore" });
+      if (child && typeof child.unref === "function") child.unref();
+      return true;
+    } catch (e) {
+      logToFile("UWP explorer.exe launch failed:", e);
+    }
+  }
+
+  // 2. Resolve via LauncherEngine (matches Start Menu shortcuts, Windows catalog, and aliases)
+  try {
+    const launcher = typeof getLauncherEngine === "function" ? getLauncherEngine() : null;
+    if (launcher) {
+      if (rawAppName) {
+        const res = await launcher.launchApp(rawAppName);
+        if (res && res.success) return true;
+      }
+      if (rawAppId && rawAppId !== rawAppName) {
+        const res = await launcher.launchApp(rawAppId);
+        if (res && res.success) return true;
+      }
+
+      // Check running desktop windows and activate
+      if (typeof launcher.getRunningWindows === "function" && typeof launcher.activateWindow === "function") {
+        const windows = await launcher.getRunningWindows({ forceRefresh: true });
+        const queries = [rawAppName, rawAppId].filter(Boolean).map(q => q.toLowerCase());
+        const matched = windows.find(w => {
+          if (!w) return false;
+          const p = (w.processName || "").toLowerCase();
+          const t = (w.title || "").toLowerCase();
+          return queries.some(q => 
+            p === q || 
+            p.includes(q) || 
+            q.includes(p) || 
+            t.toLowerCase().includes(q)
+          );
+        });
+        if (matched && matched.hWnd) {
+          const actRes = await launcher.activateWindow(matched.hWnd);
+          if (actRes && actRes.success) return true;
+        }
+      }
+    }
+  } catch (err) {
+    logToFile("LauncherEngine resolution in focusNotificationApp failed:", err);
+  }
+
+  // 3. Known URI protocol fallbacks
+  const combined = `${rawAppName} ${rawAppId}`.toLowerCase();
+  try {
+    if (combined.includes("whatsapp")) {
+      await shell.openExternal("whatsapp://");
+      return true;
+    }
+    if (combined.includes("spotify")) {
+      await shell.openExternal("spotify://");
+      return true;
+    }
+    if (combined.includes("telegram")) {
+      await shell.openExternal("tg://");
+      return true;
+    }
+    if (combined.includes("discord")) {
+      await shell.openExternal("discord://");
+      return true;
+    }
+    if (combined.includes("slack")) {
+      await shell.openExternal("slack://");
+      return true;
+    }
+  } catch (e) {
+    logToFile("URI protocol fallback failed:", e);
+  }
+
+  // 4. Native Windows Shell fallback via PowerShell with simulated Alt unlock
   return new Promise((resolve) => {
-    const cleanName = appIdOrName.split("!")[0].split("_")[0].replace(/\./g, "");
+    const candidates = new Set();
+    [rawAppName, rawAppId].forEach(s => {
+      if (s) {
+        candidates.add(s);
+        s.split(/\s+/).forEach(w => { if (w.length > 2) candidates.add(w); });
+        const parts = s.split(/[._!\\\/]/).filter(p => p.length > 2 && !/^[0-9A-Fa-f]{8,}$/.test(p));
+        parts.forEach(p => candidates.add(p));
+      }
+    });
+
+    const tokenList = Array.from(candidates).filter(c => c && c.length >= 2);
+    const tokenRegex = tokenList.length > 0
+      ? tokenList.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")
+      : (rawAppName || rawAppId).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const safeAppId = rawAppId.replace(/'/g, "''");
+
     const script = `
-$type = '[DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);'
-$fw = Add-Type -MemberDefinition $type -Name "FW" -Namespace "WinAPI" -PassThru
-$procs = Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and ($_.ProcessName -match '${cleanName}' -or $_.MainWindowTitle -match '${cleanName}') } | Select-Object -First 1
-if ($procs) { [void]$fw::SetForegroundWindow($procs.MainWindowHandle); Write-Output "true" } else { Write-Output "false" }
+$type = @'
+using System;
+using System.Runtime.InteropServices;
+public class WinAPI {
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern void SwitchToThisWindow(IntPtr hWnd, bool fAltTab);
+    [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte bVk, byte bScan, uint dwFlags, int dwExtraInfo);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+}
+'@
+Add-Type -TypeDefinition $type -PassThru | Out-Null
+
+$matched = $false
+$pattern = '(?i)(${tokenRegex})'
+
+# Find by Process Name or Window Title
+$procs = Get-Process | Where-Object { 
+    $_.ProcessName -match $pattern -or $_.MainWindowTitle -match $pattern 
+} | Select-Object -First 1
+
+if ($procs -and $procs.MainWindowHandle -ne 0) {
+    $hwnd = $procs.MainWindowHandle
+    if ([WinAPI]::IsIconic($hwnd)) {
+        [void][WinAPI]::ShowWindow($hwnd, 9)
+    } else {
+        [void][WinAPI]::ShowWindow($hwnd, 5)
+    }
+    [WinAPI]::keybd_event(0x12, 0, 0, 0)
+    [WinAPI]::keybd_event(0x12, 0, 2, 0)
+    [void][WinAPI]::BringWindowToTop($hwnd)
+    [void][WinAPI]::SetForegroundWindow($hwnd)
+    [void][WinAPI]::SwitchToThisWindow($hwnd, $true)
+    $matched = $true
+}
+
+if (-not $matched -and '${safeAppId}') {
+    try {
+        Start-Process "explorer.exe" "shell:AppsFolder\\${safeAppId}"
+        $matched = $true
+    } catch {}
+}
+
+if ($matched) { Write-Output "true" } else { Write-Output "false" }
 `;
     const enc = getPowershellEncodedCommand(script);
     exec(`powershell -NoProfile -EncodedCommand ${enc}`, (err, stdout) => {
@@ -2531,6 +3781,9 @@ const notificationEngine = createNotificationEngine({
 notificationEngine.registry.on("change", (snapshot) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send("notification:update", snapshot);
+    try {
+      mainWindow.webContents.invalidate();
+    } catch (_) {}
   }
 });
 
@@ -2577,8 +3830,8 @@ ipcMain.handle("dismiss-notification", async (event, notifId) => {
   return Boolean(res?.success);
 });
 
-ipcMain.handle("focus-notification-app", async (event, appId) => {
-  return await focusNotificationAppInternal(appId);
+ipcMain.handle("focus-notification-app", async (event, appId, appName) => {
+  return await focusNotificationAppInternal(appId, appName);
 });
 
 // Smart Notification Actions IPC handlers
@@ -2642,6 +3895,15 @@ ipcMain.handle("notification:set-app-excluded", (event, appName, excluded) => {
 
 ipcMain.handle("notification:clear-history", () => {
   notificationEngine.clearHistory();
+  return true;
+});
+
+ipcMain.handle("window:invalidate", () => {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      mainWindow.webContents.invalidate();
+    } catch (_) {}
+  }
   return true;
 });
 
@@ -2801,7 +4063,10 @@ class AudioMixerManager {
     }
     if (this.child) {
       try {
-        this.child.stdin.write(JSON.stringify({ id: 0, cmd: 'shutdown' }) + '\n');
+        if (this.child.stdin && !this.child.stdin.destroyed) {
+          this.child.stdin.on('error', () => {});
+          this.child.stdin.write(JSON.stringify({ id: 0, cmd: 'shutdown' }) + '\n');
+        }
       } catch (_) {}
       setTimeout(() => {
         if (this.child) {
@@ -2892,4 +4157,4 @@ ipcMain.handle('audio-mixer:set-master-mute', async (event, payload = {}) => {
     logToFile('[audio-mixer:set-master-mute error]', err);
     return false;
   }
-});
+});

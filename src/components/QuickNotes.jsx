@@ -115,9 +115,10 @@ export default function QuickNotes({
     }
   }, [loadNotes]);
 
-  // Debounced autosave for active composer draft
+  // Debounced auto-save directly committing the active note
   useEffect(() => {
-    if (!draftContent.trim()) {
+    const trimmed = draftContent.trim();
+    if (!trimmed) {
       setDraftSaveStatus("saved");
       return;
     }
@@ -125,25 +126,124 @@ export default function QuickNotes({
     setDraftSaveStatus("dirty");
     if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
 
-    autosaveTimerRef.current = setTimeout(() => {
-      if (window.electronAPI?.notes?.saveDraft) {
-        setDraftSaveStatus("saving");
-        window.electronAPI.notes.saveDraft({
-          content: draftContent,
-          title: draftTitle,
-          noteId: activeEditingNoteId
-        }).then(() => {
-          setDraftSaveStatus("saved");
-        }).catch(() => {
-          setDraftSaveStatus("dirty");
+    autosaveTimerRef.current = setTimeout(async () => {
+      setDraftSaveStatus("saving");
+      try {
+        const autoTitle = draftTitle.trim() || trimmed.split("\n")[0].slice(0, 36) || "Untitled Note";
+        const payload = {
+          content: trimmed,
+          title: autoTitle
+        };
+        if (activeEditingNoteId) {
+          payload.id = activeEditingNoteId;
+        }
+
+        let savedNote = null;
+        if (window.electronAPI?.notes?.saveNote) {
+          savedNote = await window.electronAPI.notes.saveNote(payload);
+        }
+
+        if (!savedNote) {
+          savedNote = {
+            id: activeEditingNoteId || ("note_" + Date.now()),
+            title: autoTitle,
+            content: trimmed,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+        }
+
+        if (!activeEditingNoteId && savedNote?.id) {
+          setActiveEditingNoteId(savedNote.id);
+        }
+
+        setNotes(prev => {
+          const list = Array.isArray(prev) ? [...prev] : [];
+          const idx = list.findIndex(n => n.id === savedNote.id);
+          if (idx >= 0) {
+            list[idx] = { ...list[idx], ...savedNote };
+            return list;
+          }
+          return [savedNote, ...list];
         });
+
+        try {
+          const cached = localStorage.getItem("quick_pill_notes_cache");
+          const list = cached ? JSON.parse(cached) : [];
+          const idx = list.findIndex(n => n.id === savedNote.id);
+          if (idx >= 0) list[idx] = savedNote;
+          else list.unshift(savedNote);
+          localStorage.setItem("quick_pill_notes_cache", JSON.stringify(list));
+        } catch (_) {}
+
+        setDraftSaveStatus("saved");
+      } catch (err) {
+        console.error("Auto-save note error:", err);
+        setDraftSaveStatus("saved");
       }
-    }, 400);
+    }, 500);
 
     return () => {
       if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
     };
   }, [draftContent, draftTitle, activeEditingNoteId]);
+
+  const handleNewNote = useCallback(() => {
+    setActiveEditingNoteId(null);
+    setDraftTitle("");
+    setDraftContent("");
+    setDraftSaveStatus("saved");
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 50);
+  }, []);
+
+  const handlePasteClipboard = useCallback(async () => {
+    let text = "";
+    if (window.electronAPI?.getClipboardText) {
+      try { text = await window.electronAPI.getClipboardText(); } catch (_) {}
+    }
+    if (!text && navigator.clipboard?.readText) {
+      try { text = await navigator.clipboard.readText(); } catch (_) {}
+    }
+    if (text && text.trim()) {
+      setDraftContent(prev => prev ? `${prev}\n${text.trim()}` : text.trim());
+      showStatus("✓ Pasted from clipboard");
+    } else {
+      showStatus("Clipboard is empty");
+    }
+  }, [showStatus]);
+
+  const handleSelectNote = useCallback((note) => {
+    setActiveEditingNoteId(note.id);
+    setDraftTitle(note.title || "");
+    setDraftContent(note.content || "");
+    setDraftSaveStatus("saved");
+    setTimeout(() => {
+      textareaRef.current?.focus();
+    }, 50);
+  }, []);
+
+  const handleDeleteNoteQuick = useCallback(async (e, noteId) => {
+    e.stopPropagation();
+    if (activeEditingNoteId === noteId) {
+      setActiveEditingNoteId(null);
+      setDraftTitle("");
+      setDraftContent("");
+      setDraftSaveStatus("saved");
+    }
+    setNotes(prev => prev.filter(n => n.id !== noteId));
+    try {
+      const cached = localStorage.getItem("quick_pill_notes_cache");
+      if (cached) {
+        const list = JSON.parse(cached).filter(n => n.id !== noteId);
+        localStorage.setItem("quick_pill_notes_cache", JSON.stringify(list));
+      }
+    } catch (_) {}
+    if (window.electronAPI?.notes?.deleteNote) {
+      window.electronAPI.notes.deleteNote(noteId).catch(() => {});
+    }
+  }, [activeEditingNoteId]);
 
   // Handle Save Note (Commit)
   const handleSaveNote = useCallback(async () => {
@@ -415,571 +515,245 @@ export default function QuickNotes({
         flexDirection: "row",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "10px 16px",
+        padding: "8px 12px",
         boxSizing: "border-box",
-        gap: 14,
+        gap: 10,
         userSelect: "none",
         position: "relative"
       }}
     >
-      {/* LEFT COLUMN: Sidebar summary, View Toggles & Tags */}
+      {/* LEFT COLUMN: 130px width — Header with + New & Paste, plus Scrollable Notes List */}
       <div
-        className="notes-scrollable"
         style={{
-          width: 175,
+          width: 130,
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "flex-start",
           gap: 6,
           flexShrink: 0,
-          overflowY: "auto",
-          overflowX: "hidden",
-          paddingRight: 4,
           boxSizing: "border-box"
         }}
       >
-        {/* Top Header Card */}
+        {/* Left Header: Title + +New + Paste */}
         <div
           style={{
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: 12,
-            padding: "8px 10px",
             display: "flex",
-            flexDirection: "column",
-            gap: 6,
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 2px",
             flexShrink: 0
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <FileText size={14} color="#10b981" />
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#ffffff", letterSpacing: "0.4px", textTransform: "uppercase" }}>
-                Quick Notes
-              </span>
-            </div>
-            {/* View Mode Toggle Button */}
+          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+            <FileText size={12} color="#10b981" />
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: "#ffffff", letterSpacing: "0.2px" }}>
+              Notes
+            </span>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+            {/* + New Button */}
             <button
               type="button"
-              onClick={() => {
-                if (viewMode === "composer") {
-                  setViewMode("inbox");
-                } else {
-                  setViewMode("composer");
-                  setActiveEditingNoteId(null);
-                }
-              }}
-              title={viewMode === "composer" ? "View Notes Inbox" : "Compose New Note"}
+              onClick={handleNewNote}
+              title="Create new note"
               style={{
-                background: viewMode === "composer" ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.1)",
-                border: "none",
-                borderRadius: 6,
-                padding: "3px 6px",
-                color: viewMode === "composer" ? "#10b981" : "#ffffff",
-                fontSize: 10,
+                background: "rgba(16, 185, 129, 0.2)",
+                border: "1px solid rgba(16, 185, 129, 0.4)",
+                borderRadius: 4,
+                padding: "2px 5px",
+                color: "#10b981",
+                fontSize: 9,
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "flex",
                 alignItems: "center",
-                gap: 4
+                gap: 2
               }}
             >
-              {viewMode === "composer" ? (
-                <>
-                  <Archive size={11} />
-                  Inbox
-                </>
-              ) : (
-                <>
-                  <Plus size={11} />
-                  New
-                </>
-              )}
+              <Plus size={9} />
+              New
+            </button>
+
+            {/* Paste Button */}
+            <button
+              type="button"
+              onClick={handlePasteClipboard}
+              title="Paste from clipboard"
+              style={{
+                background: "rgba(255, 255, 255, 0.08)",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                borderRadius: 4,
+                padding: "2px 4px",
+                color: "rgba(255, 255, 255, 0.75)",
+                fontSize: 9,
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center"
+              }}
+            >
+              <Copy size={9} />
             </button>
           </div>
-
-          {/* Quick Contextual Capture Action */}
-          <button
-            type="button"
-            onClick={handleContextualCapture}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 5,
-              background: "rgba(16, 185, 129, 0.15)",
-              border: "1px solid rgba(16, 185, 129, 0.3)",
-              borderRadius: 6,
-              padding: "4px 8px",
-              color: "#10b981",
-              fontSize: 10,
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.15s ease"
-            }}
-          >
-            <Copy size={11} />
-            Capture Clipboard
-          </button>
-
-          {/* Stats Bar */}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "rgba(255, 255, 255, 0.45)" }}>
-            <span>{Array.isArray(notes) ? notes.length : 0} notes</span>
-            <span>{Array.isArray(tags) ? tags.length : 0} tags</span>
-          </div>
         </div>
 
-        {/* Filter Navigation (All / Recent / Pinned / Archived) */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 2, flexShrink: 0 }}>
-          {[
-            { id: "all", label: "All Notes" },
-            { id: "recent", label: "Recent" },
-            { id: "pinned", label: "Pinned" },
-            { id: "archived", label: "Archived" }
-          ].map(btn => {
-            const isActive = filter === btn.id && viewMode === "inbox" && !selectedTag;
-            return (
-              <button
-                key={btn.id}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFilter(btn.id);
-                  setSelectedTag(null);
-                  setViewMode("inbox");
-                }}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "5px 8px",
-                  borderRadius: 8,
-                  background: isActive ? "rgba(16, 185, 129, 0.16)" : "transparent",
-                  border: isActive ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid transparent",
-                  color: isActive ? "#10b981" : "rgba(255, 255, 255, 0.65)",
-                  fontSize: 11,
-                  fontWeight: isActive ? 700 : 500,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                  fontFamily: "OpenRunde, system-ui, sans-serif"
-                }}
-              >
-                <span>{btn.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Tag Filters Section */}
-        {Array.isArray(tags) && tags.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4, paddingBottom: 6, flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 4px" }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255, 255, 255, 0.4)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Tags
-              </span>
-              {selectedTag && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedTag(null);
-                  }}
-                  style={{ background: "transparent", border: "none", color: "#10b981", fontSize: 9, cursor: "pointer", padding: 0 }}
-                >
-                  Clear
-                </button>
-              )}
+        {/* Saved Notes Scrollable List */}
+        <div
+          className="notes-scrollable"
+          style={{
+            flex: 1,
+            maxHeight: 105,
+            overflowY: "auto",
+            overflowX: "hidden",
+            display: "flex",
+            flexDirection: "column",
+            gap: 3,
+            paddingRight: 2
+          }}
+        >
+          {notes.length === 0 ? (
+            <div
+              style={{
+                fontSize: 9.5,
+                color: "rgba(255, 255, 255, 0.4)",
+                textAlign: "center",
+                marginTop: 20
+              }}
+            >
+              No notes yet
             </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-              {tags.map(tagItem => {
-                const tagName = typeof tagItem === "string" ? tagItem : (tagItem.tag || tagItem.name);
-                const tagCount = typeof tagItem === "object" ? tagItem.count : null;
-                const isSelected = selectedTag === tagName;
-                return (
-                  <button
-                    key={tagName}
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedTag(isSelected ? null : tagName);
-                      setViewMode("inbox");
-                    }}
+          ) : (
+            notes.map((note) => {
+              const isSelected = activeEditingNoteId === note.id;
+              const title = note.title || (note.content ? note.content.split("\n")[0].slice(0, 24) : "Untitled Note");
+              return (
+                <div
+                  key={note.id}
+                  onClick={() => handleSelectNote(note)}
+                  className="note-item-row"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "3px 6px",
+                    borderRadius: 5,
+                    background: isSelected ? "rgba(16, 185, 129, 0.18)" : "rgba(255, 255, 255, 0.04)",
+                    border: isSelected ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid rgba(255, 255, 255, 0.05)",
+                    cursor: "pointer",
+                    gap: 4,
+                    transition: "all 0.12s ease"
+                  }}
+                >
+                  <span
                     style={{
-                      background: isSelected ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.05)",
-                      border: isSelected ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid rgba(255, 255, 255, 0.08)",
-                      borderRadius: 12,
-                      padding: "2px 6px",
-                      color: isSelected ? "#10b981" : "rgba(255, 255, 255, 0.6)",
-                      fontSize: 9.5,
-                      fontWeight: isSelected ? 700 : 500,
+                      fontSize: 10,
+                      fontWeight: isSelected ? 600 : 400,
+                      color: isSelected ? "#ffffff" : "rgba(255, 255, 255, 0.8)",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      flex: 1,
+                      minWidth: 0
+                    }}
+                    title={title}
+                  >
+                    {title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteNoteQuick(e, note.id)}
+                    title="Delete note"
+                    className="note-delete-btn"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "rgba(255, 255, 255, 0.35)",
                       cursor: "pointer",
+                      padding: 1,
                       display: "flex",
-                      alignItems: "center",
-                      gap: 3,
-                      transition: "all 0.15s ease"
+                      alignItems: "center"
                     }}
                   >
-                    <Tag size={9} />
-                    <span>#{tagName}</span>
-                    {tagCount !== null && (
-                      <span style={{ opacity: 0.6, fontSize: 8.5 }}>({tagCount})</span>
-                    )}
+                    <X size={10} />
                   </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
-      {/* RIGHT COLUMN: Composer OR Notes Inbox List */}
+      {/* RIGHT COLUMN: flex: 1 — Clean Editor with 85px Textarea & Auto-save */}
       <div
         style={{
           flex: 1,
           height: "100%",
           display: "flex",
           flexDirection: "column",
-          gap: 8,
-          overflow: "hidden"
+          gap: 4,
+          boxSizing: "border-box"
         }}
       >
-        {viewMode === "composer" ? (
-          /* ================= COMPOSER SURFACE ================= */
-          <div
+        {/* Right Top Status Bar */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 2px",
+            height: 18,
+            flexShrink: 0
+          }}
+        >
+          <span
             style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              height: "100%"
+              fontSize: 9.5,
+              fontWeight: 600,
+              color: "rgba(255, 255, 255, 0.6)"
             }}
           >
-            {/* Title / Status Bar */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <input
-                type="text"
-                value={draftTitle}
-                onChange={(e) => setDraftTitle(e.target.value)}
-                placeholder="Note Title (Optional)..."
-                style={{
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  color: "#ffffff",
-                  fontSize: 12,
-                  fontWeight: 700,
-                  fontFamily: "OpenRunde, system-ui, sans-serif",
-                  flex: 1
-                }}
-              />
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span
-                  style={{
-                    fontSize: 9.5,
-                    color: draftSaveStatus === "saved" ? "#10b981" : draftSaveStatus === "saving" ? "#38bdf8" : "#eab308",
-                    fontWeight: 600
-                  }}
-                >
-                  {draftSaveStatus === "saved" ? "Autosaved" : draftSaveStatus === "saving" ? "Saving..." : "Unsaved"}
-                </span>
-                {activeEditingNoteId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setActiveEditingNoteId(null);
-                      setDraftTitle("");
-                      setDraftContent("");
-                    }}
-                    style={{
-                      background: "transparent",
-                      border: "none",
-                      color: "rgba(255, 255, 255, 0.4)",
-                      fontSize: 10,
-                      cursor: "pointer"
-                    }}
-                  >
-                    Cancel Edit
-                  </button>
-                )}
-              </div>
-            </div>
+            {activeEditingNoteId ? "Editing Note" : "Draft"}
+          </span>
 
-            {/* Note Textarea Body */}
-            <textarea
-              ref={textareaRef}
-              value={draftContent}
-              onChange={(e) => setDraftContent(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                  e.preventDefault();
-                  handleSaveNote();
-                }
-              }}
-              placeholder="Jot down a quick thought, paste a link, or use Ctrl+Enter to save..."
+          {/* Auto-save Status Badge */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <span
               style={{
-                flex: 1,
-                background: "rgba(255, 255, 255, 0.04)",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
-                borderRadius: 10,
-                padding: "8px 10px",
-                color: "#ffffff",
-                fontSize: 12,
-                lineHeight: "1.45",
-                fontFamily: "OpenRunde, system-ui, sans-serif",
-                resize: "none",
-                outline: "none"
-              }}
-            />
-
-            {/* Bottom Actions Bar */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontSize: 10, color: "rgba(255, 255, 255, 0.4)" }}>
-                Press <b>Ctrl+Enter</b> to save
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDraftContent("");
-                    setDraftTitle("");
-                    if (window.electronAPI?.notes?.clearDraft) {
-                      window.electronAPI.notes.clearDraft();
-                    }
-                  }}
-                  style={{
-                    background: "rgba(255, 255, 255, 0.08)",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 8px",
-                    color: "rgba(255, 255, 255, 0.6)",
-                    fontSize: 11,
-                    cursor: "pointer"
-                  }}
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  onClick={handleSaveNote}
-                  style={{
-                    background: "#059669",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 12px",
-                    color: "#ffffff",
-                    fontSize: 11,
-                    fontWeight: 700,
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 4
-                  }}
-                >
-                  <Check size={12} />
-                  Save Note
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* ================= INBOX / SEARCH SURFACE ================= */
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: 8,
-              height: "100%",
-              overflow: "hidden"
-            }}
-          >
-            {/* Search Header */}
-            <div
-              style={{
+                fontSize: 9,
+                fontWeight: 700,
+                color: draftSaveStatus === "saved" ? "#10b981" : draftSaveStatus === "saving" ? "#38bdf8" : "#eab308",
                 display: "flex",
                 alignItems: "center",
-                gap: 8,
-                background: "rgba(255, 255, 255, 0.06)",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                borderRadius: 10,
-                padding: "5px 10px",
-                boxSizing: "border-box"
+                gap: 3
               }}
             >
-              <Search size={14} color="rgba(255, 255, 255, 0.5)" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search notes, tags (#work), or text..."
-                style={{
-                  flex: 1,
-                  background: "transparent",
-                  border: "none",
-                  outline: "none",
-                  color: "#ffffff",
-                  fontSize: 12,
-                  fontFamily: "OpenRunde, system-ui, sans-serif"
-                }}
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.4)", cursor: "pointer", padding: 0 }}
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
-
-            {/* Notes List */}
-            <div
-              className="notes-scrollable"
-              style={{
-                flex: 1,
-                overflowY: "auto",
-                display: "flex",
-                flexDirection: "column",
-                gap: 5,
-                paddingRight: 4
-              }}
-            >
-              {displayedNotes.length === 0 ? (
-                <div
-                  style={{
-                    flex: 1,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                    color: "rgba(255, 255, 255, 0.4)",
-                    fontSize: 11
-                  }}
-                >
-                  <Sparkles size={18} opacity={0.4} />
-                  <span>No notes found</span>
-                </div>
-              ) : (
-                displayedNotes.map((note) => (
-                  <div
-                    key={note.id}
-                    onClick={() => handleEditNote(note)}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      padding: "6px 9px",
-                      borderRadius: 8,
-                      background: "rgba(255, 255, 255, 0.03)",
-                      border: "1px solid rgba(255, 255, 255, 0.06)",
-                      cursor: "pointer",
-                      gap: 4,
-                      transition: "all 0.12s ease"
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span
-                        style={{
-                          fontSize: 11.5,
-                          fontWeight: 700,
-                          color: "#ffffff",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          maxWidth: 220
-                        }}
-                      >
-                        {note.title || "Untitled Note"}
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        {/* Pin Button */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleTogglePin(e, note.id)}
-                          title={note.pinned ? "Unpin note" : "Pin note"}
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: note.pinned ? "#eab308" : "rgba(255, 255, 255, 0.3)" }}
-                        >
-                          <Star size={12} fill={note.pinned ? "#eab308" : "none"} />
-                        </button>
-                        {/* Convert to Task */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleConvertToTask(e, note)}
-                          title="Convert to Task"
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: "rgba(255, 255, 255, 0.4)" }}
-                        >
-                          <CheckSquare size={12} />
-                        </button>
-                        {/* Copy */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopyNote(e, note)}
-                          title="Copy content"
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: "rgba(255, 255, 255, 0.4)" }}
-                        >
-                          <Copy size={12} />
-                        </button>
-                        {/* Archive */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleArchive(e, note.id)}
-                          title={note.archived ? "Restore note" : "Archive note"}
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: "rgba(255, 255, 255, 0.4)" }}
-                        >
-                          <Archive size={12} />
-                        </button>
-                        {/* Delete */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteNote(e, note)}
-                          title="Delete note"
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: "rgba(239, 68, 68, 0.7)" }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Snippet */}
-                    <div
-                      style={{
-                        fontSize: 10.5,
-                        color: "rgba(255, 255, 255, 0.65)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap"
-                      }}
-                    >
-                      {note.content}
-                    </div>
-
-                    {/* Metadata Badges */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "rgba(255, 255, 255, 0.4)", marginTop: 2 }}>
-                      <Clock size={10} />
-                      <span>{(() => {
-                        try {
-                          const ts = note.updatedAt || note.createdAt;
-                          const d = ts ? new Date(ts) : new Date();
-                          return isNaN(d.getTime()) ? "Recent" : d.toLocaleDateString([], { month: "short", day: "numeric" });
-                        } catch {
-                          return "Recent";
-                        }
-                      })()}</span>
-                      {Array.isArray(note.tags) && note.tags.length > 0 && (
-                        <span style={{ color: "#10b981", fontWeight: 600 }}>
-                          {note.tags.filter(t => typeof t === "string").map(t => `#${t}`).join(" ")}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+              {draftSaveStatus === "saved" ? "✓ Saved" : draftSaveStatus === "saving" ? "Saving..." : "Unsaved"}
+            </span>
           </div>
-        )}
+        </div>
+
+        {/* Clean 85px Textarea */}
+        <textarea
+          ref={textareaRef}
+          value={draftContent}
+          onChange={(e) => setDraftContent(e.target.value)}
+          placeholder="Write note here... (Auto-saves automatically)"
+          style={{
+            width: "100%",
+            height: 85,
+            background: "rgba(255, 255, 255, 0.04)",
+            border: "1px solid rgba(255, 255, 255, 0.08)",
+            borderRadius: 8,
+            padding: "6px 8px",
+            color: "#ffffff",
+            fontSize: 11,
+            lineHeight: "1.4",
+            fontFamily: "OpenRunde, system-ui, sans-serif",
+            resize: "none",
+            outline: "none",
+            boxSizing: "border-box"
+          }}
+        />
       </div>
 
       {/* Undo Delete Floating Banner */}
