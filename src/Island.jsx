@@ -3167,12 +3167,12 @@ export default function Island() {
   const tabVariants = {
     enter: () => ({
       opacity: 0,
-      scale: 0.92,
-      filter: "blur(8px)",
+      scale: 0.95,
+      filter: "blur(4px)",
       x: "-50%",
       transition: {
-        duration: 0.26,
-        ease: [0.22, 1, 0.36, 1]
+        duration: 0.20,
+        ease: [0.16, 1, 0.3, 1]
       }
     }),
     center: {
@@ -3181,18 +3181,18 @@ export default function Island() {
       filter: "blur(0px)",
       x: "-50%",
       transition: {
-        duration: 0.26,
-        ease: [0.22, 1, 0.36, 1]
+        duration: 0.20,
+        ease: [0.16, 1, 0.3, 1]
       }
     },
     exit: () => ({
       opacity: 0,
-      scale: 0.9,
-      filter: "blur(6px)",
+      scale: 0.95,
+      filter: "blur(4px)",
       x: "-50%",
       transition: {
-        duration: 0.14,
-        ease: "easeOut"
+        duration: 0.20,
+        ease: [0.16, 1, 0.3, 1]
       }
     })
   };
@@ -5120,12 +5120,12 @@ export default function Island() {
         setIsTransitioning(false);
       }}
       transition={{
-        width: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-        height: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-        borderBottomLeftRadius: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-        borderBottomRightRadius: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-        boxShadow: { duration: 0.32, ease: [0.16, 1, 0.3, 1] },
-        x: { duration: 0.15 }
+        width: { duration: 0.36, ease: [0.16, 1, 0.3, 1] },
+        height: { duration: 0.36, ease: [0.16, 1, 0.3, 1] },
+        borderBottomLeftRadius: { duration: 0.36, ease: [0.16, 1, 0.3, 1] },
+        borderBottomRightRadius: { duration: 0.36, ease: [0.16, 1, 0.3, 1] },
+        boxShadow: { duration: 0.36, ease: [0.16, 1, 0.3, 1] },
+        x: { duration: 0.20, ease: [0.16, 1, 0.3, 1] }
       }}
       style={{
         display: "flex",
@@ -5273,121 +5273,129 @@ export default function Island() {
 
         {/* NON-LARGE SIZE STATES: Micro (96x5), HUD Toast (260x40), Normal Idle (128x26) */}
         {/* NON-LARGE SIZE STATES: Micro (96x5), HUD Toast (310x62), Mascot (140x32), Idle Clock (154x32) */}
-        {mode !== "large" && !isCollapsing && (
-          <div style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}>
-            {isHudActive ? (() => {
-              const toastTitle = activeHudToast?.title || notificationAlert?.title || notificationAlert?.appName || "System Alert";
-              const toastSubtext = activeHudToast?.subtext || notificationAlert?.message || notificationAlert?.body || "";
-              const toastType = activeHudToast?.type || (notificationAlert ? "notif" : "system");
-              const isBluetoothToast = toastType === 'bluetooth' || toastTitle.toLowerCase().includes('buds') || toastTitle.toLowerCase().includes('headphone') || toastTitle.toLowerCase().includes('airbuds');
-              const isChargingToast = toastType === 'battery' || toastTitle.toLowerCase().includes('charg') || activeHudToast?.state === 'Charging';
-              const batteryPct = percent || 70;
+        <AnimatePresence initial={false}>
+          {mode !== "large" && (
+            <motion.div
+              key="non-large-stage"
+              initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+              exit={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+              transition={{ duration: 0.20, ease: [0.16, 1, 0.3, 1] }}
+              style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}
+            >
+              {isHudActive ? (() => {
+                const toastTitle = activeHudToast?.title || notificationAlert?.title || notificationAlert?.appName || "System Alert";
+                const toastSubtext = activeHudToast?.subtext || notificationAlert?.message || notificationAlert?.body || "";
+                const toastType = activeHudToast?.type || (notificationAlert ? "notif" : "system");
+                const isBluetoothToast = toastType === 'bluetooth' || toastTitle.toLowerCase().includes('buds') || toastTitle.toLowerCase().includes('headphone') || toastTitle.toLowerCase().includes('airbuds');
+                const isChargingToast = toastType === 'battery' || toastTitle.toLowerCase().includes('charg') || activeHudToast?.state === 'Charging';
+                const batteryPct = percent || 70;
 
-              if (isBluetoothToast) {
-                const devName = activeDevice?.name || toastTitle || "AirBuds Pro";
-                const devSub = toastSubtext || `Connected • ${batteryPct}%`;
-                return (
-                  <div className="notch-stage notch-stage-toast optical-blur-in">
-                    {/* Left: Glowing blue circular badge (#0ea5e9) with Bluetooth icon */}
-                    <div style={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      background: '#0ea5e9',
-                      boxShadow: '0 0 14px rgba(14, 165, 233, 0.7)',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#ffffff',
-                      flexShrink: 0
-                    }}>
-                      <Headphones size={16} color="#ffffff" />
-                    </div>
-
-                    {/* Center: Bold white device name + grey subtitle */}
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '0 12px', lineHeight: 1.2 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {devName}
-                      </span>
-                      <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {devSub}
-                      </span>
-                    </div>
-
-                    {/* Right: Headphone icon inside a dark circle surrounded by 2 animated concentric pulsing blue ripple rings */}
-                    <div className="ripple-circle-wrap">
-                      <div className="ripple-ring ripple-ring-1" />
-                      <div className="ripple-ring ripple-ring-2" />
+                if (isBluetoothToast) {
+                  const devName = activeDevice?.name || toastTitle || "AirBuds Pro";
+                  const devSub = toastSubtext || `Connected • ${batteryPct}%`;
+                  return (
+                    <div className="notch-stage notch-stage-toast toast-popin">
+                      {/* Left: Glowing blue circular badge (#0ea5e9) with Bluetooth icon */}
                       <div style={{
-                        width: 30,
-                        height: 30,
+                        width: 32,
+                        height: 32,
                         borderRadius: '50%',
-                        background: 'rgba(255, 255, 255, 0.1)',
+                        background: '#0ea5e9',
+                        boxShadow: '0 0 14px rgba(14, 165, 233, 0.7)',
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        zIndex: 2
+                        color: '#ffffff',
+                        flexShrink: 0
                       }}>
-                        <Headphones size={15} color="#0ea5e9" />
+                        <Headphones size={16} color="#ffffff" />
+                      </div>
+
+                      {/* Center: Bold white device name + grey subtitle */}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '0 12px', lineHeight: 1.2 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {devName}
+                        </span>
+                        <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {devSub}
+                        </span>
+                      </div>
+
+                      {/* Right: Headphone icon inside a dark circle surrounded by 2 animated concentric pulsing blue ripple rings */}
+                      <div className="ripple-circle-wrap">
+                        <div className="ripple-ring ripple-ring-1" />
+                        <div className="ripple-ring ripple-ring-2" />
+                        <div style={{
+                          width: 30,
+                          height: 30,
+                          borderRadius: '50%',
+                          background: 'rgba(255, 255, 255, 0.1)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          zIndex: 2
+                        }}>
+                          <Headphones size={15} color="#0ea5e9" />
+                        </div>
                       </div>
                     </div>
-                  </div>
-                );
-              }
+                  );
+                }
 
-              if (isChargingToast) {
-                const circ = 2 * Math.PI * 13;
-                const offset = circ * (1 - batteryPct / 100);
+                if (isChargingToast) {
+                  const circ = 2 * Math.PI * 13;
+                  const offset = circ * (1 - batteryPct / 100);
+                  return (
+                    <div className="notch-stage notch-stage-toast toast-popin">
+                      {/* Left: Green lightning bolt inside an SVG circular progress ring (#22c55e) */}
+                      <div style={{ position: 'relative', width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                        <svg width={34} height={34} style={{ transform: 'rotate(-90deg)' }}>
+                          <circle cx={17} cy={17} r={13} fill="none" stroke="rgba(255, 255, 255, 0.15)" strokeWidth={2.8} />
+                          <circle
+                            cx={17}
+                            cy={17}
+                            r={13}
+                            fill="none"
+                            stroke="#22c55e"
+                            strokeWidth={2.8}
+                            strokeDasharray={circ}
+                            strokeDashoffset={offset}
+                            strokeLinecap="round"
+                            style={{ transition: 'stroke-dashoffset 400ms ease' }}
+                          />
+                        </svg>
+                        <div style={{ position: 'absolute' }}>
+                          <Zap size={15} color="#22c55e" />
+                        </div>
+                      </div>
+
+                      {/* Center: Bold white Charging + grey subtitle Charger connected */}
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '0 12px', lineHeight: 1.2 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>Charging</span>
+                        <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)' }}>Charger connected</span>
+                      </div>
+
+                      {/* Right: Large crisp percentage readout (70%, 22px light/regular white) */}
+                      <div style={{ flexShrink: 0, paddingRight: 4 }}>
+                        <span style={{ fontSize: 22, fontWeight: 400, color: '#ffffff', letterSpacing: '-0.5px' }}>
+                          {batteryPct}%
+                        </span>
+                      </div>
+                    </div>
+                  );
+                }
+
+                // General Toast / Caps Lock / App Notifications
                 return (
-                  <div className="notch-stage notch-stage-toast optical-blur-in">
-                    {/* Left: Green lightning bolt inside an SVG circular progress ring (#22c55e) */}
-                    <div style={{ position: 'relative', width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                      <svg width={34} height={34} style={{ transform: 'rotate(-90deg)' }}>
-                        <circle cx={17} cy={17} r={13} fill="none" stroke="rgba(255, 255, 255, 0.15)" strokeWidth={2.8} />
-                        <circle
-                          cx={17}
-                          cy={17}
-                          r={13}
-                          fill="none"
-                          stroke="#22c55e"
-                          strokeWidth={2.8}
-                          strokeDasharray={circ}
-                          strokeDashoffset={offset}
-                          strokeLinecap="round"
-                          style={{ transition: 'stroke-dashoffset 400ms ease' }}
-                        />
-                      </svg>
-                      <div style={{ position: 'absolute' }}>
-                        <Zap size={15} color="#22c55e" />
-                      </div>
-                    </div>
-
-                    {/* Center: Bold white Charging + grey subtitle Charger connected */}
-                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: '0 12px', lineHeight: 1.2 }}>
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>Charging</span>
-                      <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.6)' }}>Charger connected</span>
-                    </div>
-
-                    {/* Right: Large crisp percentage readout (70%, 22px light/regular white) */}
-                    <div style={{ flexShrink: 0, paddingRight: 4 }}>
-                      <span style={{ fontSize: 22, fontWeight: 400, color: '#ffffff', letterSpacing: '-0.5px' }}>
-                        {batteryPct}%
-                      </span>
-                    </div>
-                  </div>
-                );
-              }
-
-              // General Toast / Caps Lock / App Notifications
-              return (
-                <div 
-                  className="notch-stage notch-stage-toast optical-blur-in"
-                  style={{ cursor: notificationAlert ? 'pointer' : 'default' }}
-                  onClick={(e) => {
-                    if (notificationAlert) {
-                      e.stopPropagation();
-                      const aId = notificationAlert.applicationId || notificationAlert.appId || '';
-                      const aName = notificationAlert.applicationName || notificationAlert.appName || notificationAlert.title || '';
+                  <div 
+                    className="notch-stage notch-stage-toast toast-popin"
+                    style={{ cursor: notificationAlert ? 'pointer' : 'default' }}
+                    onClick={(e) => {
+                      if (notificationAlert) {
+                        e.stopPropagation();
+                        const aId = notificationAlert.applicationId || notificationAlert.appId || '';
+                        const aName = notificationAlert.applicationName || notificationAlert.appName || notificationAlert.title || '';
                       if (window.electronAPI?.focusNotificationApp) {
                         window.electronAPI.focusNotificationApp(aId, aName);
                       }
@@ -5494,8 +5502,9 @@ export default function Island() {
                 </div>
               </div>
             )}
-          </div>
+          </motion.div>
         )}
+      </AnimatePresence>
 
       <AnimatePresence custom={direction} initial={false}>
         {mode === "large" && (
@@ -5539,16 +5548,17 @@ export default function Island() {
                 <motion.div
                   key={currentTab}
                   custom={direction}
-                  initial={{ opacity: 0, x: direction > 0 ? 16 : -16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: direction > 0 ? -16 : 16 }}
-                  transition={{ duration: 0.16, ease: [0.16, 1, 0.3, 1] }}
+                  initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+                  animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+                  transition={{ duration: 0.20, ease: [0.16, 1, 0.3, 1] }}
                   style={{
                     width: '100%',
                     height: '100%',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center'
+                    justifyContent: 'center',
+                    willChange: 'opacity, transform, filter'
                   }}
                 >
                 {/* Tab 3: Music & Synced Lyrics (Standard View + Synced Lyrics Split View) */}
@@ -6185,14 +6195,23 @@ export default function Island() {
                   return (
                     <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', userSelect: 'none' }}>
                       {/* Translucent Dashed Drop-Zone Overlay during Drag-Over */}
-                      {isDragOverShelf && (
-                        <div className="shelf-drag-overlay">
-                          <Inbox size={26} color="#38bdf8" />
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff', letterSpacing: '0.02em' }}>
-                            Release to add
-                          </span>
-                        </div>
-                      )}
+                      <AnimatePresence>
+                        {isDragOverShelf && (
+                          <motion.div
+                            key="shelf-drop-overlay"
+                            initial={{ opacity: 0, scale: 0.96 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.96 }}
+                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                            className="shelf-drag-overlay"
+                          >
+                            <Inbox size={26} color="#38bdf8" />
+                            <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff', letterSpacing: '0.02em' }}>
+                              Drop files here
+                            </span>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
 
                       {/* Shelf Content (dims and blurs when dragging over, preserving stashed items) */}
                       <div
@@ -6287,7 +6306,7 @@ export default function Island() {
                                       window.electronAPI.openExternal(file.path);
                                     }
                                   }}
-                                  className={`shelf-item-card ${idx === 0 ? "shelf-popin-item" : ""}`}
+                                  className={`shelf-item-card ${idx < 5 ? "shelf-popin-item" : ""}`}
                                   style={{
                                     background: 'rgba(255,255,255,0.08)',
                                     border: '1px solid rgba(255,255,255,0.12)',
@@ -6300,7 +6319,8 @@ export default function Island() {
                                     maxWidth: 140,
                                     cursor: 'pointer',
                                     flexShrink: 0,
-                                    position: 'relative'
+                                    position: 'relative',
+                                    animationDelay: `${idx * 40}ms`
                                   }}
                                 >
                                   <File size={16} color="#38bdf8" style={{ flexShrink: 0 }} />

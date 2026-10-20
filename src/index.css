@@ -15,11 +15,11 @@
   background-color: #000000 !important;
   overflow: hidden !important;
   will-change: width, height, border-radius, transform, box-shadow;
-  transition: width 320ms cubic-bezier(0.16, 1, 0.3, 1), 
-              height 320ms cubic-bezier(0.16, 1, 0.3, 1), 
-              border-radius 320ms cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 320ms cubic-bezier(0.16, 1, 0.3, 1),
-              transform 200ms ease;
+  transition: width 360ms cubic-bezier(0.16, 1, 0.3, 1), 
+              height 360ms cubic-bezier(0.16, 1, 0.3, 1), 
+              border-radius 360ms cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 360ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Ambient bottom inner glow for expanded and toast shells */
@@ -91,8 +91,8 @@
 @keyframes opticalBlurEnter {
   0% {
     opacity: 0;
-    transform: translateX(-50%) scale(0.92);
-    filter: blur(8px);
+    transform: translateX(-50%) scale(0.95);
+    filter: blur(4px);
   }
   100% {
     opacity: 1;
@@ -109,17 +109,52 @@
   }
   100% {
     opacity: 0;
-    transform: translateX(-50%) scale(0.88);
-    filter: blur(6px);
+    transform: translateX(-50%) scale(0.95);
+    filter: blur(4px);
+  }
+}
+
+/* Standalone Tab / Module crossfade keyframes */
+@keyframes tabModuleEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.95);
+    filter: blur(4px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0px);
+  }
+}
+
+@keyframes tabModuleExit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.95);
+    filter: blur(4px);
   }
 }
 
 .optical-blur-in {
-  animation: opticalBlurEnter 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation: opticalBlurEnter 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .optical-blur-out {
-  animation: opticalBlurExit 140ms ease-out forwards;
+  animation: opticalBlurExit 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tab-module-crossfade-in {
+  animation: tabModuleEnter 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.tab-module-crossfade-out {
+  animation: tabModuleExit 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* =========================================================================
@@ -293,16 +328,17 @@
 }
 
 /* =========================================================================
-   8. FILE SHELF OVERLAY & POP-IN SPRING
+   8. FILE SHELF OVERLAY & BOUNCY SPRING POP-IN ENGINE
    ========================================================================= */
 
+/* Bouncy pop-in for stashed files: scale(0.9) -> scale(1.03) -> scale(1.0) over 250ms */
 @keyframes shelfPopIn {
   0% {
-    transform: scale(0.8);
+    transform: scale(0.9);
     opacity: 0;
   }
-  65% {
-    transform: scale(1.04);
+  60% {
+    transform: scale(1.03);
     opacity: 1;
   }
   100% {
@@ -312,7 +348,43 @@
 }
 
 .shelf-popin-item {
-  animation: shelfPopIn 260ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: shelfPopIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Elastic spring pop-in for Toast HUDs: scale(0.9) -> scale(1.03) -> scale(1.0) over 250ms */
+@keyframes toastElasticPopIn {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.9);
+    filter: blur(4px);
+  }
+  60% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.03);
+    filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.0);
+    filter: blur(0px);
+  }
+}
+
+.toast-popin,
+.notch-stage-toast {
+  animation: toastElasticPopIn 250ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Fluid Drop-Zone Overlay: opacity 0 -> 1, scale 0.96 -> 1 over 180ms cubic-bezier(0.16, 1, 0.3, 1) */
+@keyframes shelfDropZoneFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 .shelf-drag-overlay {
@@ -320,9 +392,9 @@
   inset: 8px;
   box-sizing: border-box;
   overflow: hidden;
-  border: 1.5px dashed rgba(255, 255, 255, 0.25);
+  border: 1.5px dashed rgba(56, 189, 248, 0.45);
   border-radius: 14px;
-  background: rgba(14, 165, 233, 0.15);
+  background: rgba(14, 165, 233, 0.16);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -330,8 +402,9 @@
   gap: 6px;
   z-index: 20;
   pointer-events: none;
-  backdrop-filter: blur(3px);
-  animation: opticalBlurEnter 200ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  animation: shelfDropZoneFadeIn 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 /* =========================================================================
