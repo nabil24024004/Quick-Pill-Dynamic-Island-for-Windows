@@ -94,7 +94,7 @@ export default function CalendarModule() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        padding: "6px 20px 20px 20px",
+        padding: "0px 4px 14px 4px",
         boxSizing: "border-box",
         userSelect: "none"
       }}
@@ -102,43 +102,42 @@ export default function CalendarModule() {
       <div
         style={{
           width: "100%",
-          maxWidth: "390px",
           height: "100%",
           display: "flex",
           alignItems: "center",
-          gap: 16
+          gap: 12
         }}
       >
         {/* Left: Minimalist Hero Date (Pure Typography, No Box) */}
         <div
           style={{
-            width: 100,
+            width: 96,
             display: "flex",
             flexDirection: "column",
             justifyContent: "center",
             flexShrink: 0,
-            lineHeight: 1.15
+            paddingLeft: 4
           }}
         >
           <span
             style={{
-              fontSize: 11,
+              fontSize: 9.5,
               fontWeight: 800,
               color: "#ff3b30",
               letterSpacing: "0.8px",
               textTransform: "uppercase",
-              marginBottom: 2
+              marginBottom: 1
             }}
           >
             {selectedWeekday}
           </span>
           <span
             style={{
-              fontSize: 42,
+              fontSize: 32,
               fontWeight: 800,
               color: "#ffffff",
-              letterSpacing: "-1.5px",
-              lineHeight: "44px",
+              letterSpacing: "-1px",
+              lineHeight: "34px",
               fontVariantNumeric: "tabular-nums"
             }}
           >
@@ -146,10 +145,10 @@ export default function CalendarModule() {
           </span>
           <span
             style={{
-              fontSize: 11,
-              fontWeight: 600,
+              fontSize: 10,
+              fontWeight: 500,
               color: "rgba(255, 255, 255, 0.45)",
-              marginTop: 2
+              marginTop: 1
             }}
           >
             {selectedMonth} {selectedYear}
@@ -159,11 +158,11 @@ export default function CalendarModule() {
             <button
               onClick={handleGoToToday}
               style={{
-                marginTop: 6,
+                marginTop: 3,
                 background: "transparent",
                 border: "none",
                 color: "#ff453a",
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: 700,
                 padding: 0,
                 textAlign: "left",
@@ -183,7 +182,7 @@ export default function CalendarModule() {
         <div
           style={{
             width: 1,
-            height: 90,
+            height: "75%",
             background: "rgba(255, 255, 255, 0.08)",
             flexShrink: 0
           }}
@@ -197,7 +196,8 @@ export default function CalendarModule() {
             display: "flex",
             flexDirection: "column",
             justifyContent: "space-between",
-            minWidth: 0
+            minWidth: 0,
+            paddingRight: 4
           }}
         >
           {/* Month Header with ghost arrows */}
@@ -206,12 +206,13 @@ export default function CalendarModule() {
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
-              height: 20
+              height: 16,
+              marginBottom: 1
             }}
           >
             <span
               style={{
-                fontSize: 12,
+                fontSize: 11.5,
                 fontWeight: 700,
                 color: "#ffffff",
                 letterSpacing: "-0.2px"
@@ -220,7 +221,7 @@ export default function CalendarModule() {
               {monthTitle}
             </span>
 
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
               <button
                 onClick={handlePrevMonth}
                 title="Previous Month"
@@ -228,7 +229,7 @@ export default function CalendarModule() {
                   background: "transparent",
                   border: "none",
                   color: "rgba(255, 255, 255, 0.5)",
-                  padding: 2,
+                  padding: "1px 2px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -242,7 +243,7 @@ export default function CalendarModule() {
                   e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
                 }}
               >
-                <ChevronLeft size={14} />
+                <ChevronLeft size={12} />
               </button>
               <button
                 onClick={handleNextMonth}
@@ -251,7 +252,7 @@ export default function CalendarModule() {
                   background: "transparent",
                   border: "none",
                   color: "rgba(255, 255, 255, 0.5)",
-                  padding: 2,
+                  padding: "1px 2px",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -265,7 +266,7 @@ export default function CalendarModule() {
                   e.currentTarget.style.color = "rgba(255, 255, 255, 0.5)";
                 }}
               >
-                <ChevronRight size={14} />
+                <ChevronRight size={12} />
               </button>
             </div>
           </div>
@@ -276,16 +277,17 @@ export default function CalendarModule() {
               display: "grid",
               gridTemplateColumns: "repeat(7, 1fr)",
               textAlign: "center",
-              height: 12,
-              lineHeight: "12px"
+              height: 10,
+              lineHeight: "10px",
+              marginBottom: 1
             }}
           >
             {weekdaysShort.map((w, idx) => (
               <span
                 key={idx}
                 style={{
-                  fontSize: 9,
-                  fontWeight: 600,
+                  fontSize: 8,
+                  fontWeight: 700,
                   color: "rgba(255, 255, 255, 0.35)"
                 }}
               >
@@ -299,7 +301,8 @@ export default function CalendarModule() {
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(7, 1fr)",
-              rowGap: 1,
+              rowGap: 1.5,
+              columnGap: 1.5,
               flex: 1,
               alignContent: "space-between"
             }}
@@ -327,19 +330,19 @@ export default function CalendarModule() {
                     alignItems: "center",
                     justifyContent: "center",
                     height: "100%",
-                    minHeight: 15,
+                    minHeight: 13,
                     cursor: "pointer"
                   }}
                 >
                   <div
                     style={{
-                      width: 17,
-                      height: 17,
+                      width: 14,
+                      height: 14,
                       borderRadius: "50%",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      fontSize: 9.5,
+                      fontSize: 8.5,
                       fontVariantNumeric: "tabular-nums",
                       fontWeight: isCellToday ? 800 : isCellSelected ? 700 : 500,
                       background: isCellToday
@@ -355,7 +358,7 @@ export default function CalendarModule() {
                             ? "rgba(255, 255, 255, 0.85)"
                             : "rgba(255, 255, 255, 0.18)",
                       boxShadow: isCellToday
-                        ? "0 0 8px rgba(255, 59, 48, 0.45)"
+                        ? "0 0 5px rgba(255, 59, 48, 0.45)"
                         : "none",
                       transition: "all 0.12s ease"
                     }}

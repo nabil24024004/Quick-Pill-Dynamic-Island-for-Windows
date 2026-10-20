@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Droplet,
-  Timer,
-  Music,
   Battery,
   BatteryCharging,
   CheckSquare,
@@ -10,23 +8,21 @@ import {
   Sparkles,
   Zap,
   Pause,
-  ArrowRight,
   Heart,
   Activity,
-  MessageSquare
+  MessageSquare,
+  Inbox
 } from "lucide-react";
 
 /**
  * MascotStandbyHub: "Obsidian Visor-Cat / Cyber Spirit"
  * 
- * Redesigned Layout & Visuals:
- * - Strictly reserved 20px bottom clearance (padding: 6px 34px 20px 34px) preventing any overlap with pagination dots.
- * - Ultra-sleek top mini status bar (height: 20px, font-size: 11px, subtle rgba(255,255,255,0.55)).
- * - Sleek organic squircle head/body silhouette with integrated curved cat ears, obsidian gradient (#1e2230 -> #090a0f).
- * - Large glossy glass visor screen (#030407) with specular reflection streak.
- * - Big, ultra-expressive glowing eyes with real-time cursor tracking (dx, dy).
- * - Floating levitation animation (@keyframes mascotFloat) with soft glowing radial aura underneath (no stiff feet/legs).
- * - Refined glassmorphic smart status card with compact mood header, crisp text, and sleek 24px action pill button.
+ * Standby Layout & Visuals:
+ * - 20px bottom clearance preventing any overlap with pagination dots.
+ * - Ultra-sleek top mini status bar (Time & Date on left, Battery & CPU on right).
+ * - Organic squircle obsidian cat head/body silhouette with visor screen, gloss sheen, inner ears & underglow aura.
+ * - Big, ultra-expressive glowing eyes with real-time cursor tracking.
+ * - Refined glassmorphic smart status card with clean typography (pill-free header & sleek borderless action link).
  */
 export default function MascotStandbyHub({
   time = "--:--",
@@ -41,6 +37,7 @@ export default function MascotStandbyHub({
   onAddWater,
   tasks = [],
   shelfFiles = [],
+  visibleTabs = [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16],
   onSwitchTab,
   onToggleMedia,
   onTogglePomodoro,
@@ -117,34 +114,38 @@ export default function MascotStandbyHub({
     setEyeOffset({ x: 0, y: 0 });
   }, []);
 
-  // Available candidate moods based on live system state
+  // Available candidate moods based on live system state and active modules
   const availableInsights = useMemo(() => {
     const list = [];
 
-    // 1. Pomodoro Focusing Check (active focus state)
-    if (pomodoroState?.isRunning) {
+    // 1. Pomodoro Focusing Check (active focus state) - Tab 10
+    if (visibleTabs.includes(10) && pomodoroState?.isRunning) {
       list.push("focusing");
     }
 
-    // 2. Media / Music Playing Check (active entertainment state)
-    if (isPlaying) {
+    // 2. Media / Music Playing Check (active entertainment state) - Tab 3
+    if (visibleTabs.includes(3) && isPlaying) {
       list.push("vibing");
     }
 
-    // 3. Battery Check (charging or low)
-    if (charging) {
-      list.push("charging");
-    } else if (percent !== null && percent < 25) {
-      list.push("low-battery");
+    // 3. Battery Check (charging or low) - Tab 11
+    if (visibleTabs.includes(11)) {
+      if (charging) {
+        list.push("charging");
+      } else if (percent !== null && percent < 25) {
+        list.push("low-battery");
+      }
     }
 
-    // 4. Tasks & Shelf Check (only if real tasks or real shelf files exist!)
-    if (pendingCount > 0 || shelfCount > 0) {
+    // 4. Tasks & Shelf Check (only if module enabled and items exist) - Tab 8 / 13
+    const hasTasks = pendingCount > 0 && visibleTabs.includes(8);
+    const hasShelf = shelfCount > 0 && visibleTabs.includes(13);
+    if (hasTasks || hasShelf) {
       list.push("busy-tasks");
     }
 
-    // 5. Thirsty Check (only if user logged hydration that hasn't reached goal)
-    if (waterIntake > 0 && waterIntake < waterGoal) {
+    // 5. Thirsty Check (only if water reminder enabled and logged hydration that hasn't reached goal) - Tab 1
+    if (visibleTabs.includes(1) && waterIntake > 0 && waterIntake < waterGoal) {
       list.push("thirsty");
     }
 
@@ -152,15 +153,15 @@ export default function MascotStandbyHub({
     list.push("chill");
 
     return list;
-  }, [waterIntake, waterGoal, pomodoroState?.isRunning, isPlaying, charging, percent, pendingCount, shelfCount]);
+  }, [waterIntake, waterGoal, pomodoroState?.isRunning, isPlaying, charging, percent, pendingCount, shelfCount, visibleTabs]);
 
   // Active mood resolved from priorities and manual cycling
   const activeMood = useMemo(() => {
-    if (isGulping) return "gulping";
+    if (isGulping && visibleTabs.includes(1)) return "gulping";
     if (availableInsights.length === 0) return "chill";
     const idx = Math.abs(manualMoodCycle) % availableInsights.length;
     return availableInsights[idx];
-  }, [availableInsights, manualMoodCycle, isGulping]);
+  }, [availableInsights, manualMoodCycle, isGulping, visibleTabs]);
 
   // Click / Poke Mascot Interaction
   const handlePokeMascot = useCallback(() => {
@@ -188,6 +189,7 @@ export default function MascotStandbyHub({
   // 1-Click Action: Drink Water
   const handleDrinkWater = useCallback((e) => {
     e.stopPropagation();
+    if (!visibleTabs.includes(1)) return;
     if (typeof onAddWater === "function") {
       onAddWater();
     }
@@ -196,9 +198,9 @@ export default function MascotStandbyHub({
     gulpTimerRef.current = setTimeout(() => {
       setIsGulping(false);
     }, 1600);
-  }, [onAddWater]);
+  }, [onAddWater, visibleTabs]);
 
-  // Mood-Specific Content Configurations
+  // Mood-Specific Content Configurations (Pill-Free Badges & Clean Text Action Links)
   const moodConfig = useMemo(() => {
     const litersIntake = (waterIntake / 1000).toFixed(1);
     const litersGoal = (waterGoal / 1000).toFixed(1);
@@ -209,116 +211,87 @@ export default function MascotStandbyHub({
       case "gulping":
         return {
           badgeText: "💧 Segar!",
-          badgeBg: "rgba(56, 189, 248, 0.16)",
           badgeColor: "#38bdf8",
-          badgeBorder: "rgba(56, 189, 248, 0.3)",
           glowColor: "rgba(56, 189, 248, 0.55)",
           rimColor: "rgba(56, 189, 248, 0.4)",
           message: "+250ml tercatat • Tetap terhidrasi!",
-          actionBtn: (
+          actionBtn: visibleTabs.includes(1) ? (
             <button
               onClick={() => onSwitchTab?.(1)}
-              className="mascot-action-btn"
-              style={{
-                background: "rgba(56, 189, 248, 0.15)",
-                border: "1px solid rgba(56, 189, 248, 0.35)",
-                color: "#38bdf8"
-              }}
+              className="mascot-action-link"
+              style={{ color: "#38bdf8" }}
             >
               <span>Detail Hidrasi →</span>
             </button>
-          )
+          ) : null
         };
 
       case "thirsty":
         return {
           badgeText: "💧 Hidrasi",
-          badgeBg: "rgba(56, 189, 248, 0.14)",
           badgeColor: "#38bdf8",
-          badgeBorder: "rgba(56, 189, 248, 0.28)",
           glowColor: "rgba(56, 189, 248, 0.45)",
           rimColor: "rgba(56, 189, 248, 0.3)",
           message: `${litersIntake}L / ${litersGoal}L • Waktunya minum air!`,
-          actionBtn: (
+          actionBtn: visibleTabs.includes(1) ? (
             <button
               onClick={handleDrinkWater}
-              className="mascot-action-btn"
-              style={{
-                background: "linear-gradient(90deg, #0284c7, #38bdf8)",
-                border: "none",
-                color: "#ffffff",
-                boxShadow: "0 2px 8px rgba(14, 165, 233, 0.35)"
-              }}
+              className="mascot-action-link"
+              style={{ color: "#38bdf8" }}
             >
-              <Droplet size={11} color="#ffffff" />
-              <span>Minum (+250ml)</span>
+              <Droplet size={11} color="#38bdf8" />
+              <span>Minum (+250ml) →</span>
             </button>
-          )
+          ) : null
         };
 
       case "focusing":
         return {
           badgeText: "🔥 Fokus",
-          badgeBg: "rgba(244, 63, 94, 0.16)",
           badgeColor: "#fb7185",
-          badgeBorder: "rgba(244, 63, 94, 0.3)",
           glowColor: "rgba(244, 63, 94, 0.5)",
           rimColor: "rgba(244, 63, 94, 0.4)",
           message: `Sisa ${formattedPomodoroTime} • Tetap fokus!`,
-          actionBtn: (
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          actionBtn: visibleTabs.includes(10) ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onTogglePomodoro?.();
                 }}
-                className="mascot-action-btn"
-                style={{
-                  background: "rgba(244, 63, 94, 0.2)",
-                  border: "1px solid rgba(244, 63, 94, 0.4)",
-                  color: "#fb7185"
-                }}
+                className="mascot-action-link"
+                style={{ color: "#fb7185" }}
               >
                 <Pause size={10} />
                 <span>Pause</span>
               </button>
               <button
                 onClick={() => onSwitchTab?.(10)}
-                className="mascot-action-btn"
-                style={{
-                  background: "rgba(255, 255, 255, 0.08)",
-                  border: "1px solid rgba(255, 255, 255, 0.14)",
-                  color: "rgba(255, 255, 255, 0.85)"
-                }}
+                className="mascot-action-link"
+                style={{ color: "rgba(255, 255, 255, 0.65)" }}
               >
                 <span>Pomodoro →</span>
               </button>
             </div>
-          )
+          ) : null
         };
 
       case "vibing":
         return {
           badgeText: "🎵 Musik",
-          badgeBg: "rgba(168, 85, 247, 0.16)",
           badgeColor: "#c084fc",
-          badgeBorder: "rgba(168, 85, 247, 0.3)",
           glowColor: "rgba(168, 85, 247, 0.45)",
           rimColor: "rgba(168, 85, 247, 0.35)",
           message: `${trackTitle}${trackArtist ? ` • ${trackArtist}` : ""}`,
-          actionBtn: (
-            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+          actionBtn: visibleTabs.includes(3) ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleMedia?.();
                 }}
-                className="mascot-action-btn"
-                style={{
-                  background: "rgba(168, 85, 247, 0.2)",
-                  border: "1px solid rgba(168, 85, 247, 0.4)",
-                  color: "#c084fc"
-                }}
+                className="mascot-action-link"
+                style={{ color: "#c084fc" }}
               >
                 <Pause size={10} />
                 <span>Pause</span>
@@ -328,120 +301,144 @@ export default function MascotStandbyHub({
                   onOpenLyrics?.();
                   onSwitchTab?.(3);
                 }}
-                className="mascot-action-btn"
-                style={{
-                  background: "rgba(255, 255, 255, 0.08)",
-                  border: "1px solid rgba(255, 255, 255, 0.14)",
-                  color: "rgba(255, 255, 255, 0.85)"
-                }}
+                className="mascot-action-link"
+                style={{ color: "rgba(255, 255, 255, 0.65)" }}
               >
                 <MessageSquare size={10} />
                 <span>Lirik →</span>
               </button>
             </div>
-          )
+          ) : null
         };
 
       case "charging":
         return {
           badgeText: "⚡ Charging",
-          badgeBg: "rgba(34, 197, 94, 0.16)",
           badgeColor: "#22c55e",
-          badgeBorder: "rgba(34, 197, 94, 0.3)",
           glowColor: "rgba(34, 197, 94, 0.5)",
           rimColor: "rgba(34, 197, 94, 0.35)",
           message: `Baterai ${percent}% • Pengisian aktif`,
-          actionBtn: (
+          actionBtn: visibleTabs.includes(11) ? (
             <button
               onClick={() => onSwitchTab?.(11)}
-              className="mascot-action-btn"
-              style={{
-                background: "rgba(34, 197, 94, 0.16)",
-                border: "1px solid rgba(34, 197, 94, 0.35)",
-                color: "#22c55e"
-              }}
+              className="mascot-action-link"
+              style={{ color: "#22c55e" }}
             >
               <BatteryCharging size={11} />
               <span>Battery Hub →</span>
             </button>
-          )
+          ) : null
         };
 
       case "low-battery":
         return {
           badgeText: "🔋 Low Power",
-          badgeBg: "rgba(244, 63, 94, 0.16)",
           badgeColor: "#f43f5e",
-          badgeBorder: "rgba(244, 63, 94, 0.3)",
           glowColor: "rgba(244, 63, 94, 0.5)",
           rimColor: "rgba(244, 63, 94, 0.35)",
           message: `Tersisa ${percent}% • Perlu charger!`,
-          actionBtn: (
+          actionBtn: visibleTabs.includes(11) ? (
             <button
               onClick={() => onSwitchTab?.(11)}
-              className="mascot-action-btn"
-              style={{
-                background: "rgba(244, 63, 94, 0.2)",
-                border: "1px solid rgba(244, 63, 94, 0.4)",
-                color: "#f43f5e"
-              }}
+              className="mascot-action-link"
+              style={{ color: "#f43f5e" }}
             >
               <span>Periksa Baterai →</span>
             </button>
-          )
+          ) : null
         };
 
       case "busy-tasks":
+        const canOpenTasks = pendingCount > 0 && visibleTabs.includes(8);
+        const canOpenShelf = shelfCount > 0 && visibleTabs.includes(13);
         return {
-          badgeText: `📝 ${pendingCount} Tugas`,
-          badgeBg: "rgba(251, 191, 36, 0.14)",
+          badgeText: canOpenTasks
+            ? `📝 ${pendingCount} Tugas`
+            : `📦 ${shelfCount} File`,
           badgeColor: "#fbbf24",
-          badgeBorder: "rgba(251, 191, 36, 0.28)",
           glowColor: "rgba(251, 191, 36, 0.45)",
           rimColor: "rgba(251, 191, 36, 0.35)",
-          message: shelfCount > 0 
+          message: canOpenTasks && canOpenShelf
             ? `${pendingCount} tugas pending • ${shelfCount} di Shelf`
-            : `${pendingCount} tugas to-do belum selesai`,
-          actionBtn: (
+            : canOpenTasks
+            ? `${pendingCount} tugas to-do belum selesai`
+            : `${shelfCount} file tersimpan di Shelf`,
+          actionBtn: canOpenTasks ? (
             <button
               onClick={() => onSwitchTab?.(8)}
-              className="mascot-action-btn"
-              style={{
-                background: "rgba(251, 191, 36, 0.16)",
-                border: "1px solid rgba(251, 191, 36, 0.35)",
-                color: "#fbbf24"
-              }}
+              className="mascot-action-link"
+              style={{ color: "#fbbf24" }}
             >
               <CheckSquare size={11} />
               <span>Buka To-Do →</span>
             </button>
-          )
+          ) : canOpenShelf ? (
+            <button
+              onClick={() => onSwitchTab?.(13)}
+              className="mascot-action-link"
+              style={{ color: "#fbbf24" }}
+            >
+              <Inbox size={11} />
+              <span>Buka Shelf →</span>
+            </button>
+          ) : null
         };
 
       case "chill":
       default:
-        return {
-          badgeText: "✨ All Good",
-          badgeBg: "rgba(129, 140, 248, 0.15)",
-          badgeColor: "#818cf8",
-          badgeBorder: "rgba(129, 140, 248, 0.3)",
-          glowColor: "rgba(129, 140, 248, 0.45)",
-          rimColor: "rgba(255, 255, 255, 0.15)",
-          message: "Semua aman! Klik aku untuk bermain.",
-          actionBtn: (
+        const candidateTab = [14, 16, 15, 0, 4, 7].find(id => visibleTabs.includes(id));
+        let chillBtn = null;
+        if (candidateTab === 14) {
+          chillBtn = (
             <button
               onClick={() => onSwitchTab?.(14)}
-              className="mascot-action-btn"
-              style={{
-                background: "rgba(129, 140, 248, 0.16)",
-                border: "1px solid rgba(129, 140, 248, 0.35)",
-                color: "#818cf8"
-              }}
+              className="mascot-action-link"
+              style={{ color: "#818cf8" }}
             >
               <Compass size={11} />
               <span>App Launcher →</span>
             </button>
-          )
+          );
+        } else if (candidateTab === 16) {
+          chillBtn = (
+            <button
+              onClick={() => onSwitchTab?.(16)}
+              className="mascot-action-link"
+              style={{ color: "#a855f7" }}
+            >
+              <Sparkles size={11} />
+              <span>Ask AI →</span>
+            </button>
+          );
+        } else if (candidateTab === 15) {
+          chillBtn = (
+            <button
+              onClick={() => onSwitchTab?.(15)}
+              className="mascot-action-link"
+              style={{ color: "#38bdf8" }}
+            >
+              <span>Quick Notes →</span>
+            </button>
+          );
+        } else if (candidateTab !== undefined) {
+          chillBtn = (
+            <button
+              onClick={() => onSwitchTab?.(candidateTab)}
+              className="mascot-action-link"
+              style={{ color: "#818cf8" }}
+            >
+              <span>Buka Modul →</span>
+            </button>
+          );
+        }
+
+        return {
+          badgeText: "✨ All Good",
+          badgeColor: "#818cf8",
+          glowColor: "rgba(129, 140, 248, 0.45)",
+          rimColor: "rgba(255, 255, 255, 0.15)",
+          message: "Semua aman! Klik aku untuk bermain.",
+          actionBtn: chillBtn
         };
     }
   }, [
@@ -453,6 +450,7 @@ export default function MascotStandbyHub({
     pendingCount,
     shelfCount,
     formattedPomodoroTime,
+    visibleTabs,
     handleDrinkWater,
     onSwitchTab,
     onToggleMedia,
@@ -506,9 +504,14 @@ export default function MascotStandbyHub({
         {/* Right: ⚡ 57% • CPU 0% */}
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <div
-            onClick={() => onSwitchTab?.(11)}
-            title="Open Battery Hub"
-            style={{ display: "flex", alignItems: "center", gap: 4, cursor: "pointer" }}
+            onClick={visibleTabs.includes(11) ? () => onSwitchTab?.(11) : undefined}
+            title={visibleTabs.includes(11) ? "Open Battery Hub" : undefined}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              cursor: visibleTabs.includes(11) ? "pointer" : "default"
+            }}
           >
             {charging ? (
               <Zap size={10} color="#22c55e" />
@@ -549,7 +552,7 @@ export default function MascotStandbyHub({
         }}
       >
         {/* =======================================================================
-            2A. OBSIDIAN VISOR-CAT MASCOT STAGE (width: 120px, height: 98px)
+            2A. OBSIDIAN VISOR-CAT MASCOT STAGE (width: 110px, height: 98px)
             ======================================================================= */}
         <div
           ref={mascotStageRef}
@@ -799,7 +802,7 @@ export default function MascotStandbyHub({
                       fill="none"
                       style={{ filter: "drop-shadow(0 0 6px rgba(56, 189, 248, 0.85))" }}
                     />
-                    {/* Tiny cute cat mouth (ω) */}
+                    {/* Cute cat mouth (ω) */}
                     <path d="M 40,50 Q 41.5,52 43,50 Q 44.5,52 46,50" stroke="#38bdf8" strokeWidth="1.5" strokeLinecap="round" fill="none" />
                     {/* Pink Cheek Blushes */}
                     <ellipse cx="23" cy="51" rx="4" ry="2" fill="rgba(244, 114, 182, 0.75)" />
@@ -929,6 +932,7 @@ export default function MascotStandbyHub({
 
         {/* =======================================================================
             2B. REFINED RIGHT-SIDE SMART STATUS CARD (flex: 1)
+            Clean typography: pill-free header and sleek borderless action link
             ======================================================================= */}
         <div
           style={{
@@ -962,7 +966,7 @@ export default function MascotStandbyHub({
             }}
           />
 
-          {/* Top Row: Compact Mood Header + Poke Hint */}
+          {/* Top Row: Clean Pill-Free Mood Header + Minimalist Pet Button */}
           <div
             style={{
               display: "flex",
@@ -972,47 +976,39 @@ export default function MascotStandbyHub({
               flexShrink: 0
             }}
           >
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 5,
-                background: moodConfig.badgeBg,
-                border: `1px solid ${moodConfig.badgeBorder}`,
-                borderRadius: 999,
-                padding: "2px 8px"
-              }}
-            >
+            {/* Clean borderless header text - NO pill badge */}
+            <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
               <span
                 style={{
-                  fontSize: 10,
+                  fontSize: 11,
                   fontWeight: 700,
                   color: moodConfig.badgeColor,
-                  letterSpacing: "0.04em"
+                  letterSpacing: "0.02em"
                 }}
               >
                 {moodConfig.badgeText}
               </span>
             </div>
 
-            {/* Minimalist Pet / Cycle Button */}
+            {/* Minimalist Pet / Cycle Button - Clean icon */}
             <button
               type="button"
               onClick={handlePokeMascot}
               title="Elus / klik kucing untuk ganti status 🐾"
               style={{
-                background: "rgba(255, 255, 255, 0.05)",
-                border: "1px solid rgba(255, 255, 255, 0.08)",
-                borderRadius: 999,
-                padding: "1px 7px",
+                background: "transparent",
+                border: "none",
+                padding: "0 2px",
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 3,
-                fontSize: 9.5,
-                color: "rgba(255, 255, 255, 0.5)",
+                fontSize: 10,
+                color: "rgba(255, 255, 255, 0.45)",
                 cursor: "pointer",
-                transition: "all 150ms ease"
+                transition: "opacity 150ms ease"
               }}
+              onMouseEnter={(e) => (e.currentTarget.style.opacity = "0.9")}
+              onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.45")}
             >
               <span>🐾</span>
             </button>
@@ -1035,7 +1031,7 @@ export default function MascotStandbyHub({
             {moodConfig.message}
           </div>
 
-          {/* Bottom: Sleek 24px Action Pill Button */}
+          {/* Bottom: Sleek Pill-Free Action Link */}
           <div
             style={{
               display: "flex",

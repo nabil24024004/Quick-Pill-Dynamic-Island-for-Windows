@@ -6,6 +6,7 @@ import AppLauncher from "./components/AppLauncher";
 import QuickNotes from "./components/QuickNotes";
 import MascotStandbyHub from "./components/MascotStandbyHub";
 import CalendarModule from "./components/CalendarModule";
+import AskAI from "./components/AskAI";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 // Helper parse synced LRC format lyrics
@@ -511,6 +512,7 @@ const TABS = [
   { id: 13, name: "File Shelf", icon: (color, size = 15) => <Inbox size={size} color={color} /> },
   { id: 14, name: "App Launcher", icon: (color, size = 15) => <Compass size={size} color={color} /> },
   { id: 15, name: "Quick Notes", icon: (color, size = 15) => <FileText size={size} color={color} /> },
+  { id: 16, name: "Ask AI", icon: (color, size = 15) => <Sparkles size={size} color={color} /> },
   { id: 3, name: "Music", icon: (color, size = 15) => <Music size={size} color={color} /> },
   { id: 4, name: "Calendar", icon: (color, size = 15) => <CalendarIcon size={size} color={color} /> },
   { id: 5, name: "Notifications", icon: (color, size = 15) => <Bell size={size} color={color} /> },
@@ -529,6 +531,7 @@ const DEFAULT_TAB_SHORTCUTS = {
   13: "Alt+P",  // Progress Island
   14: "Alt+L",  // App Launcher
   15: "Alt+Q",  // Quick Notes
+  16: "Alt+I",  // Ask AI
   3: "Alt+M",   // Now Playing
   4: "Alt+C",   // Calendar
   5: "Alt+N",   // Notifications
@@ -1856,12 +1859,24 @@ export default function Island() {
           else saved.push(15);
           localStorage.setItem("tab-order", JSON.stringify(saved));
         }
+        if (!saved.includes(16)) {
+          const idx15 = saved.indexOf(15);
+          if (idx15 !== -1) saved.splice(idx15 + 1, 0, 16);
+          else saved.push(16);
+          localStorage.setItem("tab-order", JSON.stringify(saved));
+        }
         return saved.filter(id => id !== 9);
       }
     } catch {}
-    return [2, 11, 12, 13, 14, 15, 4, 5, 6, 7, 8, 10, 0, 1, 3];
+    return [2, 11, 12, 13, 14, 15, 16, 4, 5, 6, 7, 8, 10, 0, 1, 3];
   });
-  const [hiddenTabs, setHiddenTabs] = useState(() => JSON.parse(localStorage.getItem("hidden-tabs") || "[6]"));
+  const [hiddenTabs, setHiddenTabs] = useState(() => {
+    try {
+      const parsed = JSON.parse(localStorage.getItem("hidden-tabs") || "[6]");
+      if (Array.isArray(parsed)) return parsed.filter(id => id !== 16);
+    } catch {}
+    return [6];
+  });
   const [defaultTabId, setDefaultTabId] = useState(() => Number(localStorage.getItem("default-tab") || 2));
 
   const moveTabOrder = (fromIdx, toIdx) => {
@@ -1976,6 +1991,7 @@ export default function Island() {
   const [taskText, setTaskText] = useState("");
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [copiedClipboardId, setCopiedClipboardId] = useState(null);
+  const [completingTaskIds, setCompletingTaskIds] = useState(() => new Set());
   const [isHovered, setIsHovered] = useState(false);
   const isHoveredRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -2372,11 +2388,37 @@ export default function Island() {
   }, []);
 
   useEffect(() => {
+    if (window.electronAPI?.getTabOrder) {
+      window.electronAPI.getTabOrder().then(val => {
+        if (Array.isArray(val) && val.length > 0) {
+          setTabOrder(val);
+          localStorage.setItem("tab-order", JSON.stringify(val));
+        }
+      }).catch(() => {});
+    }
+    if (window.electronAPI?.onTabOrderChange) {
+      const unsub = window.electronAPI.onTabOrderChange((val) => {
+        if (Array.isArray(val) && val.length > 0) {
+          setTabOrder(val);
+          localStorage.setItem("tab-order", JSON.stringify(val));
+        }
+      });
+      return () => unsub?.();
+    }
+  }, []);
+
+  useEffect(() => {
     const handleStorage = (e) => {
       if (e.key === "hidden-tabs" && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
           if (Array.isArray(parsed)) setHiddenTabs(parsed);
+        } catch (_) {}
+      }
+      if (e.key === "tab-order" && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed) && parsed.length > 0) setTabOrder(parsed);
         } catch (_) {}
       }
     };
@@ -3167,12 +3209,12 @@ export default function Island() {
   const tabVariants = {
     enter: () => ({
       opacity: 0,
-      scale: 0.95,
-      filter: "blur(4px)",
+      scale: 0.96,
+      filter: "blur(12px)",
       x: "-50%",
       transition: {
-        duration: 0.20,
-        ease: [0.16, 1, 0.3, 1]
+        duration: 0.22,
+        ease: [0.22, 1, 0.36, 1]
       }
     }),
     center: {
@@ -3181,18 +3223,18 @@ export default function Island() {
       filter: "blur(0px)",
       x: "-50%",
       transition: {
-        duration: 0.20,
-        ease: [0.16, 1, 0.3, 1]
+        duration: 0.22,
+        ease: [0.22, 1, 0.36, 1]
       }
     },
     exit: () => ({
       opacity: 0,
-      scale: 0.95,
-      filter: "blur(4px)",
+      scale: 0.96,
+      filter: "blur(12px)",
       x: "-50%",
       transition: {
-        duration: 0.20,
-        ease: [0.16, 1, 0.3, 1]
+        duration: 0.22,
+        ease: [0.22, 1, 0.36, 1]
       }
     })
   };
@@ -3423,14 +3465,14 @@ export default function Island() {
   }, [tasks]);
 
   const activeMascotMood = useMemo(() => {
-    if (pomodoroState?.isRunning) return "focusing";
-    if (isPlaying) return "vibing";
-    if (charging) return "charging";
-    if (percent !== null && percent < 25) return "low-battery";
-    if (pendingTasksCount > 0 || (Array.isArray(shelfFiles) && shelfFiles.length > 0)) return "busy-tasks";
-    if (waterIntake > 0 && waterIntake < 1500) return "thirsty";
+    if (pomodoroState?.isRunning && visibleTabs.includes(10)) return "focusing";
+    if (isPlaying && visibleTabs.includes(3)) return "vibing";
+    if (charging && visibleTabs.includes(11)) return "charging";
+    if (percent !== null && percent < 25 && visibleTabs.includes(11)) return "low-battery";
+    if ((pendingTasksCount > 0 && visibleTabs.includes(8)) || (Array.isArray(shelfFiles) && shelfFiles.length > 0 && visibleTabs.includes(13))) return "busy-tasks";
+    if (waterIntake > 0 && waterIntake < 1500 && visibleTabs.includes(1)) return "thirsty";
     return "chill";
-  }, [waterIntake, pomodoroState?.isRunning, isPlaying, charging, percent, pendingTasksCount, shelfFiles]);
+  }, [waterIntake, pomodoroState?.isRunning, isPlaying, charging, percent, pendingTasksCount, shelfFiles, visibleTabs]);
 
   const isIdleMascot = mode !== "large" && !isHudActive && !isMicroMode && Boolean(mascotMode && timerSeconds === 0);
 
@@ -3513,7 +3555,7 @@ export default function Island() {
       "position-mode": "top-center",
       "location": "Chattogram",
       "display-id": "2287529652",
-      "tab-order": "[2,4,5,6,7,8,10,0,1,3,9]",
+      "tab-order": "[2,11,12,13,14,15,16,4,5,6,7,8,10,0,1,3]",
       "hidden-tabs": "[6]"
     };
     for (const [key, val] of Object.entries(defaults)) {
@@ -3531,13 +3573,36 @@ export default function Island() {
         }
       }).catch(() => {});
     }
+    if (window.electronAPI?.getAutoLaunch) {
+      window.electronAPI.getAutoLaunch().then((enabled) => {
+        if (typeof enabled === "boolean") {
+          setAutoLaunchEnabled(enabled);
+          localStorage.setItem("auto-launch", String(enabled));
+        }
+      }).catch(() => {});
+    }
+
+    const unsubs = [];
     if (window.electronAPI?.onAlwaysOnTopChange) {
-      const unsub = window.electronAPI.onAlwaysOnTopChange((enabled) => {
+      unsubs.push(window.electronAPI.onAlwaysOnTopChange((enabled) => {
         setAlwaysOnTopEnabled(enabled);
         localStorage.setItem("always-on-top", String(enabled));
-      });
-      return unsub;
+      }));
     }
+    if (window.electronAPI?.onAutoLaunchChange) {
+      unsubs.push(window.electronAPI.onAutoLaunchChange((enabled) => {
+        setAutoLaunchEnabled(enabled);
+        localStorage.setItem("auto-launch", String(enabled));
+      }));
+    }
+
+    return () => {
+      unsubs.forEach(unsub => {
+        try {
+          if (typeof unsub === 'function') unsub();
+        } catch (_) {}
+      });
+    };
   }, []);
 
   const handleAlwaysOnTopChange = (e) => {
@@ -5277,10 +5342,10 @@ export default function Island() {
           {mode !== "large" && (
             <motion.div
               key="non-large-stage"
-              initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+              initial={{ opacity: 0, scale: 0.96, filter: "blur(12px)" }}
               animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-              exit={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
-              transition={{ duration: 0.20, ease: [0.16, 1, 0.3, 1] }}
+              exit={{ opacity: 0, scale: 0.96, filter: "blur(12px)" }}
+              transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden' }}
             >
               {isHudActive ? (() => {
@@ -5468,7 +5533,12 @@ export default function Island() {
             ) : isIdleMascot ? (
               /* Mascot Idle Mode (140x32): Glowing White Pill Eyes + Purple-Blue Glow */
               <div className="notch-stage notch-stage-idle-mascot optical-blur-in">
-                <MascotEyes mood={activeMascotMood} isPlaying={isPlaying} charging={charging} percent={percent} />
+                <MascotEyes
+                  mood={activeMascotMood}
+                  isPlaying={isPlaying && visibleTabs.includes(3)}
+                  charging={charging && visibleTabs.includes(11)}
+                  percent={visibleTabs.includes(11) ? percent : null}
+                />
               </div>
             ) : (
               /* Default Idle Clock (154x32): Animated Green Ring — Bold Time — 5-Bar Waveform */
@@ -5548,10 +5618,10 @@ export default function Island() {
                 <motion.div
                   key={currentTab}
                   custom={direction}
-                  initial={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
+                  initial={{ opacity: 0, scale: 0.96, filter: "blur(12px)" }}
                   animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                  exit={{ opacity: 0, scale: 0.95, filter: "blur(4px)" }}
-                  transition={{ duration: 0.20, ease: [0.16, 1, 0.3, 1] }}
+                  exit={{ opacity: 0, scale: 0.96, filter: "blur(12px)" }}
+                  transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                   style={{
                     width: '100%',
                     height: '100%',
@@ -6177,7 +6247,7 @@ export default function Island() {
                   );
                 })()}
 
-                {/* Tab 13: Interactive Drag & Drop File Shelf */}
+                {/* Tab 13: Headerless Nusa-Style File Shelf */}
                 {currentTab === 13 && (() => {
                   const removeShelfItem = (idx) => {
                     setShelfFiles(prev => {
@@ -6187,212 +6257,306 @@ export default function Island() {
                     });
                   };
 
-                  const clearShelf = () => {
-                    setShelfFiles([]);
-                    localStorage.removeItem("shelf-files");
+                  const isImageExt = (name = "") => {
+                    const ext = name.split('.').pop()?.toLowerCase();
+                    return ['png', 'jpg', 'jpeg', 'webp', 'gif', 'svg', 'bmp', 'ico'].includes(ext);
                   };
 
                   return (
-                    <div style={{ position: 'relative', width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center', userSelect: 'none' }}>
-                      {/* Translucent Dashed Drop-Zone Overlay during Drag-Over */}
+                    <div style={{
+                      position: 'relative',
+                      width: '100%',
+                      height: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      userSelect: 'none',
+                      boxSizing: 'border-box'
+                    }}>
+                      {/* Floating Clear Pill Button (only when files.length > 0) */}
+                      {shelfFiles.length > 0 && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            clearShelf();
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: 8,
+                            right: 28,
+                            zIndex: 20,
+                            background: 'rgba(255, 255, 255, 0.1)',
+                            border: 'none',
+                            borderRadius: 999,
+                            color: 'rgba(255, 255, 255, 0.85)',
+                            fontSize: 10.5,
+                            fontWeight: 600,
+                            padding: '2px 10px',
+                            cursor: 'pointer',
+                            transition: 'all 160ms ease',
+                            backdropFilter: 'blur(4px)',
+                            WebkitBackdropFilter: 'blur(4px)'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)'}
+                          onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)'}
+                        >
+                          Clear
+                        </button>
+                      )}
+
+                      {/* Translucent Drag-Over Overlay (Crucial Animation: smoothly fades in over 160ms ease) */}
                       <AnimatePresence>
                         {isDragOverShelf && (
                           <motion.div
                             key="shelf-drop-overlay"
-                            initial={{ opacity: 0, scale: 0.96 }}
+                            initial={{ opacity: 0, scale: 0.97 }}
                             animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.96 }}
-                            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-                            className="shelf-drag-overlay"
+                            exit={{ opacity: 0, scale: 0.97 }}
+                            transition={{ duration: 0.16, ease: "easeOut" }}
+                            className="nusa-shelf-drag-overlay"
+                            style={{
+                              position: 'absolute',
+                              inset: '12px 28px 22px 28px',
+                              boxSizing: 'border-box',
+                              border: '1.5px dashed rgba(255, 255, 255, 0.35)',
+                              borderRadius: 18,
+                              background: 'rgba(14, 165, 233, 0.16)',
+                              backdropFilter: 'blur(8px)',
+                              WebkitBackdropFilter: 'blur(8px)',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              gap: 6,
+                              zIndex: 30,
+                              pointerEvents: 'none'
+                            }}
                           >
-                            <Inbox size={26} color="#38bdf8" />
-                            <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff', letterSpacing: '0.02em' }}>
-                              Drop files here
+                            <Download size={26} color="#38bdf8" />
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>
+                              Release to add
+                            </span>
+                            <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.65)' }}>
+                              Drag out anytime • click to copy
                             </span>
                           </motion.div>
                         )}
                       </AnimatePresence>
 
-                      {/* Shelf Content (dims and blurs when dragging over, preserving stashed items) */}
-                      <div
-                        style={{
-                          width: '100%',
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'center',
-                          opacity: isDragOverShelf ? 0.25 : 1,
-                          filter: isDragOverShelf ? 'blur(2px)' : 'none',
-                          transition: 'opacity 220ms ease, filter 220ms ease'
-                        }}
-                      >
-                        {shelfFiles.length === 0 ? (
-                          /* Empty State */
-                          <div className="shelf-dropzone" style={{
-                            width: '100%',
-                            height: 80,
-                            borderRadius: 12,
-                            border: '1.5px dashed rgba(255,255,255,0.2)',
-                            background: 'rgba(255,255,255,0.03)',
+                      {/* Shelf Stage Content */}
+                      {shelfFiles.length === 0 ? (
+                        /* Empty State: Full-card rounded dashed drop-zone */
+                        <div
+                          style={{
+                            position: 'absolute',
+                            inset: '12px 28px 22px 28px',
+                            boxSizing: 'border-box',
+                            border: '1.5px dashed rgba(255, 255, 255, 0.22)',
+                            borderRadius: 18,
                             display: 'flex',
+                            flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: 10,
-                            boxSizing: 'border-box'
-                          }}>
-                            <Inbox size={22} color="rgba(255,255,255,0.5)" />
-                            <div style={{ display: 'flex', flexDirection: 'column' }}>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff' }}>
-                                Drop files here
-                              </span>
-                              <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>
-                                Drop files anytime, click to open
-                              </span>
-                            </div>
-                          </div>
-                        ) : (
-                          /* Populated State with Stashed Files */
-                          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {/* Top header row */}
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px' }}>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.6)' }}>
-                                {shelfFiles.length} file{shelfFiles.length > 1 ? 's' : ''} stashed
-                              </span>
-                              <button
-                                onClick={clearShelf}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#ef4444',
-                                  fontSize: 9.5,
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                  padding: '1px 4px'
-                                }}
-                              >
-                                Clear
-                              </button>
-                            </div>
+                            gap: 6,
+                            pointerEvents: 'none'
+                          }}
+                        >
+                          <Download size={24} color="rgba(255, 255, 255, 0.65)" />
+                          <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>
+                            Drop files here
+                          </span>
+                          <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.45)' }}>
+                            Drag out anytime • click to copy
+                          </span>
+                        </div>
+                      ) : (
+                        /* Populated State: Horizontal File Tiles */
+                        <div
+                          style={{
+                            width: '100%',
+                            height: '100%',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 14,
+                            padding: '14px 32px 22px 32px',
+                            overflowX: 'auto',
+                            boxSizing: 'border-box',
+                            scrollbarWidth: 'none',
+                            opacity: isDragOverShelf ? 0.25 : 1,
+                            filter: isDragOverShelf ? 'blur(2px)' : 'none',
+                            transition: 'opacity 160ms ease, filter 160ms ease'
+                          }}
+                        >
+                          {shelfFiles.map((file, idx) => {
+                            const isFolder = file.size === 'Folder' || file.type === 'folder' || (!file.type && !file.name?.includes('.'));
+                            const hasThumbnail = isImageExt(file.name) && Boolean(file.path);
 
-                            {/* Horizontal scrollable row of file cards */}
-                            <div style={{
-                              display: 'flex',
-                              gap: 8,
-                              overflowX: 'auto',
-                              paddingBottom: 2,
-                              scrollbarWidth: 'none'
-                            }}>
-                              {shelfFiles.map((file, idx) => (
-                                <div
-                                  key={file.name + idx}
-                                  draggable
-                                  onDragStart={() => {
-                                    isOutboundDragging.current = true;
-                                    setIsDragOverShelf(false);
-                                    if (file.path && window.electronAPI?.startDrag) {
-                                      window.electronAPI.startDrag(file.path);
+                            return (
+                              <div
+                                key={(file.path || file.name) + idx}
+                                draggable
+                                onDragStart={(e) => {
+                                  try {
+                                    if (e && typeof e.preventDefault === "function") {
+                                      e.preventDefault();
                                     }
-                                    setTimeout(() => {
-                                      isOutboundDragging.current = false;
-                                      setIsDragOverShelf(false);
-                                    }, 300);
-                                  }}
-                                  onDragEnd={() => {
+                                  } catch (_) {}
+                                  isOutboundDragging.current = true;
+                                  setIsDragOverShelf(false);
+                                  if (file.path && window.electronAPI?.startDrag) {
+                                    window.electronAPI.startDrag(file.path);
+                                  }
+                                  setTimeout(() => {
                                     isOutboundDragging.current = false;
                                     setIsDragOverShelf(false);
-                                  }}
-                                  onClick={() => {
-                                    if (file.path && window.electronAPI?.openExternal) {
+                                  }, 300);
+                                }}
+                                onDragEnd={() => {
+                                  isOutboundDragging.current = false;
+                                  setIsDragOverShelf(false);
+                                }}
+                                onClick={() => {
+                                  if (file.path) {
+                                    if (window.electronAPI?.writeClipboardText) {
+                                      window.electronAPI.writeClipboardText(file.path);
+                                    } else if (navigator.clipboard) {
+                                      navigator.clipboard.writeText(file.path);
+                                    }
+                                    if (window.electronAPI?.openExternal) {
                                       window.electronAPI.openExternal(file.path);
                                     }
-                                  }}
-                                  className={`shelf-item-card ${idx < 5 ? "shelf-popin-item" : ""}`}
-                                  style={{
-                                    background: 'rgba(255,255,255,0.08)',
-                                    border: '1px solid rgba(255,255,255,0.12)',
-                                    borderRadius: 10,
-                                    padding: '6px 10px',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    minWidth: 110,
-                                    maxWidth: 140,
-                                    cursor: 'pointer',
-                                    flexShrink: 0,
-                                    position: 'relative',
-                                    animationDelay: `${idx * 40}ms`
-                                  }}
-                                >
-                                  <File size={16} color="#38bdf8" style={{ flexShrink: 0 }} />
-                                  <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-                                    <span style={{ fontSize: 10, fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                      {file.name}
-                                    </span>
-                                    <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.5)' }}>
-                                      {file.size}
-                                    </span>
-                                  </div>
-                                  <button
+                                  }
+                                }}
+                                className={`shelf-tile-wrap ${idx < 6 ? "shelf-popin-item" : ""}`}
+                                style={{
+                                  position: 'relative',
+                                  width: 68,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  cursor: 'pointer',
+                                  flexShrink: 0,
+                                  userSelect: 'none',
+                                  animationDelay: `${idx * 40}ms`
+                                }}
+                              >
+                                {/* Top: 46px x 46px rounded icon/thumbnail with subtle x remove badge on tile hover */}
+                                <div style={{
+                                  position: 'relative',
+                                  width: 46,
+                                  height: 46,
+                                  borderRadius: 12,
+                                  background: 'rgba(255, 255, 255, 0.08)',
+                                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  overflow: 'hidden'
+                                }}>
+                                  {hasThumbnail ? (
+                                    <img
+                                      src={`file:///${file.path.replace(/\\/g, '/')}`}
+                                      alt=""
+                                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                      onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                                    />
+                                  ) : isFolder ? (
+                                    <FolderOpen size={24} color="#38bdf8" />
+                                  ) : (
+                                    <File size={22} color="#38bdf8" />
+                                  )}
+
+                                  {/* Subtle X remove badge on hover */}
+                                  <div
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       removeShelfItem(idx);
                                     }}
-                                    className="shelf-item-remove"
+                                    className="shelf-tile-remove-badge"
                                     style={{
-                                      background: 'none',
-                                      border: 'none',
-                                      color: 'rgba(255,255,255,0.4)',
-                                      cursor: 'pointer',
-                                      padding: 2,
+                                      position: 'absolute',
+                                      top: 2,
+                                      right: 2,
+                                      width: 16,
+                                      height: 16,
+                                      borderRadius: '50%',
+                                      background: '#ef4444',
                                       display: 'flex',
-                                      alignItems: 'center'
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      color: '#ffffff',
+                                      boxShadow: '0 2px 6px rgba(0,0,0,0.4)',
+                                      cursor: 'pointer'
                                     }}
+                                    title="Remove from Shelf"
                                   >
-                                    <X size={10} />
-                                  </button>
+                                    <X size={10} strokeWidth={2.5} />
+                                  </div>
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
+
+                                {/* Middle: Bold white truncated filename (11.5px) */}
+                                <span style={{
+                                  fontSize: 11.5,
+                                  fontWeight: 700,
+                                  color: '#ffffff',
+                                  marginTop: 6,
+                                  width: '100%',
+                                  textAlign: 'center',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
+                                  {file.name}
+                                </span>
+
+                                {/* Bottom: Muted grey size or type (10px, rgba(255,255,255,0.45)) */}
+                                <span style={{
+                                  fontSize: 10,
+                                  color: 'rgba(255, 255, 255, 0.45)',
+                                  marginTop: 2,
+                                  width: '100%',
+                                  textAlign: 'center',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
+                                }}>
+                                  {file.size || (isFolder ? "Folder" : "File")}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
 
-                {/* Tab 8: To-Do List (Nusa 2-Column Clean Style) */}
+                {/* Tab 8: Ripple-Style Minimalist Single-Column To-Do List */}
                 {currentTab === 8 && (() => {
-                  const completedCount = tasks.filter(t => (typeof t === 'object' ? (t.completed || t.done) : false)).length;
-                  const totalCount = tasks.length;
-                  const ratio = totalCount > 0 ? `${completedCount}/${totalCount}` : "0/0";
+                  const handleCheckTask = (task, idx) => {
+                    const taskId = (typeof task === 'object' && task.id) ? task.id : `task-${idx}`;
+                    if (completingTaskIds.has(taskId)) return;
 
-                  const toggleTaskIdx = (idx) => {
-                    setTasks(prev => {
-                      const updated = [...prev];
-                      const item = updated[idx];
-                      if (typeof item === 'object') {
-                        updated[idx] = { ...item, completed: !item.completed };
-                      } else {
-                        updated[idx] = { title: String(item), completed: true };
-                      }
-                      localStorage.setItem("tasks", JSON.stringify(updated));
-                      return updated;
-                    });
-                  };
+                    setCompletingTaskIds(prev => new Set(prev).add(taskId));
 
-                  const removeTaskIdx = (idx) => {
-                    setTasks(prev => {
-                      const updated = prev.filter((_, i) => i !== idx);
-                      localStorage.setItem("tasks", JSON.stringify(updated));
-                      return updated;
-                    });
+                    setTimeout(() => {
+                      setTasks(prev => {
+                        const updated = prev.filter((_, i) => i !== idx);
+                        localStorage.setItem("tasks", JSON.stringify(updated));
+                        return updated;
+                      });
+                      setCompletingTaskIds(prev => {
+                        const next = new Set(prev);
+                        next.delete(taskId);
+                        return next;
+                      });
+                    }, 200);
                   };
 
                   const addNewTask = () => {
                     if (!taskText.trim()) return;
                     const newTask = { title: taskText.trim(), completed: false, id: Date.now() };
                     setTasks(prev => {
-                      const updated = [newTask, ...prev];
+                      const updated = [...prev, newTask];
                       localStorage.setItem("tasks", JSON.stringify(updated));
                       return updated;
                     });
@@ -6400,198 +6564,148 @@ export default function Island() {
                   };
 
                   return (
-                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', gap: 14, padding: '0 4px', userSelect: 'none', boxSizing: 'border-box' }}>
-                      {/* Kolom Kiri (135px): Angka besar 24px bold, Task Done Today, kapsul + Add Task */}
-                      <div style={{
-                        width: 135,
-                        flexShrink: 0,
-                        height: 84,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between'
-                      }}>
-                        <div>
-                          <div style={{
-                            fontSize: 24,
-                            fontWeight: 800,
-                            color: '#ffffff',
-                            lineHeight: 1,
-                            letterSpacing: '-0.5px',
-                            fontFamily: 'OpenRunde, system-ui, sans-serif'
-                          }}>
-                            {ratio}
-                          </div>
-                          <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.5)', marginTop: 3 }}>
-                            Task Done Today
-                          </div>
-                        </div>
-
-                        {/* Capsule + Add Task Button / Modern Inline Input Field */}
-                        {isAddingTask ? (
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            background: 'rgba(255,255,255,0.08)',
-                            border: '1px solid rgba(255,255,255,0.22)',
-                            borderRadius: 14,
-                            padding: '3px 8px'
-                          }}>
-                            <input
-                              autoFocus
-                              placeholder="New task..."
-                              value={taskText}
-                              onChange={(e) => setTaskText(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') {
-                                  e.preventDefault();
-                                  addNewTask();
-                                  setIsAddingTask(false);
-                                } else if (e.key === 'Escape') {
-                                  setIsAddingTask(false);
-                                  setTaskText("");
-                                }
-                              }}
-                              onBlur={() => {
-                                if (taskText.trim()) {
-                                  addNewTask();
-                                }
-                                setIsAddingTask(false);
-                              }}
-                              style={{
-                                width: '100%',
-                                background: 'none',
-                                border: 'none',
-                                outline: 'none',
-                                fontSize: 10,
-                                color: '#ffffff',
-                                padding: 0
-                              }}
-                            />
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setIsAddingTask(true)}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              gap: 4,
-                              background: 'rgba(255,255,255,0.08)',
-                              border: '1px solid rgba(255,255,255,0.14)',
-                              borderRadius: 14,
-                              padding: '4px 10px',
-                              color: '#ffffff',
-                              fontSize: 10,
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              width: 'fit-content',
-                              transition: 'all 0.15s ease'
-                            }}
-                          >
-                            <span>+ Add Task</span>
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Kolom Kanan (flex: 1): Daftar tugas scrollable dengan circular green checkbox dan hover delete */}
+                    <div style={{
+                      width: '100%',
+                      height: '100%',
+                      boxSizing: 'border-box',
+                      padding: '12px 28px 22px 28px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      userSelect: 'none'
+                    }}>
+                      {/* Top Task Stage (flex: 1; overflow-y: auto) */}
                       <div style={{
                         flex: 1,
-                        height: 84,
                         overflowY: 'auto',
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: 4,
-                        paddingRight: 2,
-                        scrollbarWidth: 'none'
+                        gap: 6,
+                        scrollbarWidth: 'none',
+                        minHeight: 0
                       }}>
                         {tasks.length === 0 ? (
                           <div style={{
                             height: '100%',
                             display: 'flex',
-                            flexDirection: 'column',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            gap: 4,
-                            opacity: 0.45
+                            fontSize: 13,
+                            color: 'rgba(255, 255, 255, 0.55)'
                           }}>
-                            <span style={{ fontSize: 10, color: '#ffffff' }}>No tasks yet</span>
-                            <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.6)' }}>Click + Add Task to create</span>
+                            No tasks yet. Add one below!
                           </div>
                         ) : (
-                          tasks.map((task, idx) => {
-                            const isDone = typeof task === 'object' ? (task.completed || task.done) : false;
-                            const title = typeof task === 'object' ? (task.title || task.text || "Task") : String(task);
+                          <AnimatePresence initial={false}>
+                            {tasks.map((task, idx) => {
+                              const title = typeof task === 'object' ? (task.title || task.text || "Task") : String(task);
+                              const taskId = (typeof task === 'object' && task.id) ? task.id : `task-${idx}`;
+                              const isCompleting = completingTaskIds.has(taskId);
 
-                            return (
-                              <div
-                                key={idx}
-                                className="todo-row"
-                                style={{
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'space-between',
-                                  background: 'rgba(255,255,255,0.04)',
-                                  borderRadius: 7,
-                                  padding: '4px 8px',
-                                  gap: 6
-                                }}
-                              >
-                                <div
-                                  onClick={() => toggleTaskIdx(idx)}
-                                  style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', flex: 1, minWidth: 0 }}
+                              return (
+                                <motion.div
+                                  key={taskId}
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{
+                                    opacity: isCompleting ? 0 : 1,
+                                    scale: isCompleting ? 0.92 : 1
+                                  }}
+                                  exit={{ opacity: 0, scale: 0.92 }}
+                                  transition={{ duration: 0.2 }}
+                                  className="ripple-todo-row"
+                                  style={{
+                                    background: '#121212',
+                                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                                    borderRadius: 12,
+                                    padding: '8px 12px',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    boxSizing: 'border-box',
+                                    flexShrink: 0
+                                  }}
                                 >
-                                  {isDone ? (
-                                    <div style={{
-                                      width: 14,
-                                      height: 14,
-                                      borderRadius: '50%',
-                                      background: '#22c55e',
+                                  {/* Rounded square checkbox: 16x16, border-radius: 5px, border: 1.5px solid rgba(255,255,255,0.4) */}
+                                  <div
+                                    onClick={() => handleCheckTask(task, idx)}
+                                    style={{
+                                      width: 16,
+                                      height: 16,
+                                      borderRadius: 5,
+                                      border: isCompleting ? '1.5px solid #ffffff' : '1.5px solid rgba(255,255,255,0.4)',
+                                      background: isCompleting ? '#ffffff' : 'transparent',
+                                      cursor: 'pointer',
+                                      flexShrink: 0,
                                       display: 'flex',
                                       alignItems: 'center',
                                       justifyContent: 'center',
-                                      flexShrink: 0
-                                    }}>
-                                      <Check size={9} color="#ffffff" strokeWidth={3} />
-                                    </div>
-                                  ) : (
-                                    <div style={{
-                                      width: 14,
-                                      height: 14,
-                                      borderRadius: '50%',
-                                      border: '1.5px solid rgba(255,255,255,0.3)',
-                                      flexShrink: 0
-                                    }} />
-                                  )}
+                                      transition: 'all 150ms ease'
+                                    }}
+                                  >
+                                    {isCompleting && <Check size={11} color="#000000" strokeWidth={3} />}
+                                  </div>
+
+                                  {/* Task title (12.5px white) */}
                                   <span style={{
-                                    fontSize: 10.5,
-                                    color: isDone ? 'rgba(255,255,255,0.35)' : '#ffffff',
-                                    textDecoration: isDone ? 'line-through' : 'none',
+                                    fontSize: 12.5,
+                                    color: '#ffffff',
                                     whiteSpace: 'nowrap',
                                     overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
+                                    textOverflow: 'ellipsis',
+                                    flex: 1,
+                                    textDecoration: isCompleting ? 'line-through' : 'none'
                                   }}>
                                     {title}
                                   </span>
-                                </div>
-                                <button
-                                  onClick={() => removeTaskIdx(idx)}
-                                  className="todo-delete-btn"
-                                  style={{
-                                    background: 'none',
-                                    border: 'none',
-                                    color: 'rgba(255,255,255,0.4)',
-                                    cursor: 'pointer',
-                                    padding: 2,
-                                    display: 'flex',
-                                    alignItems: 'center'
-                                  }}
-                                >
-                                  <X size={11} />
-                                </button>
-                              </div>
-                            );
-                          })
+                                </motion.div>
+                              );
+                            })}
+                          </AnimatePresence>
                         )}
+                      </div>
+
+                      {/* Bottom Pinned Input Bar (34px, 8px margin-top) */}
+                      <div style={{ display: 'flex', gap: 8, height: 34, marginTop: 8, flexShrink: 0 }}>
+                        <input
+                          placeholder="New task..."
+                          value={taskText}
+                          onChange={(e) => setTaskText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              addNewTask();
+                            }
+                          }}
+                          style={{
+                            flex: 1,
+                            background: '#121212',
+                            border: '1px solid rgba(255, 255, 255, 0.14)',
+                            borderRadius: 12,
+                            padding: '0 12px',
+                            color: '#fff',
+                            fontSize: 12,
+                            outline: 'none',
+                            boxSizing: 'border-box'
+                          }}
+                        />
+                        <button
+                          onClick={addNewTask}
+                          style={{
+                            background: '#ffffff',
+                            color: '#000000',
+                            fontWeight: 600,
+                            fontSize: 12,
+                            padding: '0 18px',
+                            borderRadius: 999,
+                            border: 'none',
+                            cursor: 'pointer',
+                            transition: 'all 140ms ease'
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                          onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                        >
+                          Add
+                        </button>
                       </div>
                     </div>
                   );
@@ -6696,6 +6810,17 @@ export default function Island() {
                   </ErrorBoundary>
                 )}
 
+                {/* Tab 16: Ask AI (JARVIS Integration) */}
+                {currentTab === 16 && (
+                  <ErrorBoundary tabName="Ask AI" onGoHome={() => setTabState([3, -1])}>
+                    <AskAI
+                      textColor={textColor}
+                      accentColor="#a855f7"
+                      onClose={() => setMode("still")}
+                    />
+                  </ErrorBoundary>
+                )}
+
                 {/* Tab 12: Audio Mixer */}
                 {currentTab === 12 && (() => {
                   const masterPercent = Math.round((masterAudioVolume || 0) * 100);
@@ -6775,24 +6900,27 @@ export default function Island() {
                     pomodoroState={pomodoroState}
                     waterIntake={waterIntake}
                     waterGoal={1500}
-                    onAddWater={addWaterDrink}
+                    onAddWater={visibleTabs.includes(1) ? addWaterDrink : undefined}
                     tasks={tasks}
                     shelfFiles={shelfFiles}
+                    visibleTabs={visibleTabs}
                     onSwitchTab={(targetId) => {
-                      setTabState([targetId, targetId > currentTabId ? 1 : -1]);
+                      if (visibleTabs.includes(targetId)) {
+                        setTabState([targetId, targetId > currentTabId ? 1 : -1]);
+                      }
                     }}
-                    onToggleMedia={() => {
+                    onToggleMedia={visibleTabs.includes(3) ? () => {
                       if (window.electronAPI?.controlSystemMedia) {
                         window.electronAPI.controlSystemMedia('playPause');
                       }
-                    }}
-                    onTogglePomodoro={() => {
+                    } : undefined}
+                    onTogglePomodoro={visibleTabs.includes(10) ? () => {
                       setPomodoroState(prev => ({ ...prev, isRunning: !prev.isRunning }));
-                    }}
-                    onOpenLyrics={() => {
+                    } : undefined}
+                    onOpenLyrics={visibleTabs.includes(3) ? () => {
                       setLyricsOpen(true);
                       setTabState([3, 1]);
-                    }}
+                    } : undefined}
                   />
                 )}
 
@@ -7098,151 +7226,122 @@ export default function Island() {
                   </div>
                 )}
 
-                {/* Tab 7: Clipboard History */}
+                {/* Tab 7: Ripple-Style Minimalist Monochrome Clipboard Saver */}
                 {currentTab === 7 && (() => {
                   const items = Array.isArray(clipboard) ? clipboard : [];
+
+                  const handleCopy = (item, id) => {
+                    const text = typeof item === 'object' ? item.text : item;
+                    if (!text) return;
+                    if (window.electronAPI?.writeClipboardText) {
+                      window.electronAPI.writeClipboardText(text);
+                    } else if (navigator.clipboard) {
+                      navigator.clipboard.writeText(text);
+                    }
+                    setCopiedClipboardId(id);
+                    setTimeout(() => {
+                      setCopiedClipboardId(null);
+                    }, 1000);
+                  };
+
                   return (
                     <div style={{
                       width: '100%',
                       height: '100%',
+                      boxSizing: 'border-box',
+                      padding: '12px 28px 22px 28px',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 6,
-                      padding: '2px 4px',
                       userSelect: 'none',
-                      boxSizing: 'border-box'
+                      position: 'relative'
                     }}>
-                      {/* Header Row: Title & Item Count on Left, Clear button on Right */}
-                      <div style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '0 4px',
-                        flexShrink: 0
-                      }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Clipboard size={12} color="#38bdf8" />
-                          <span style={{ fontSize: 11, fontWeight: 700, color: '#ffffff' }}>Clipboard History</span>
-                          <span style={{
-                            fontSize: 9,
-                            padding: '1px 6px',
-                            borderRadius: 10,
-                            background: 'rgba(255,255,255,0.08)',
-                            color: 'rgba(255,255,255,0.6)',
-                            fontWeight: 600
-                          }}>
-                            {items.length}
-                          </span>
+                      {items.length === 0 ? (
+                        <div style={{
+                          flex: 1,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: 'rgba(255, 255, 255, 0.45)',
+                          fontSize: 12
+                        }}>
+                          No clipboard items yet
                         </div>
-                        {items.length > 0 && (
-                          <button
-                            onClick={clearAllClipboard}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: '#ef4444',
-                              fontSize: 9.5,
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              padding: '2px 6px',
-                              borderRadius: 4
-                            }}
-                          >
-                            Clear
-                          </button>
-                        )}
-                      </div>
-
-                      {/* Scrollable list of compact cards (smooth scroll, fits within 150px shell) */}
-                      <div style={{
-                        flex: 1,
-                        overflowY: 'auto',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 4,
-                        paddingRight: 2,
-                        maxHeight: 88,
-                        scrollbarWidth: 'none'
-                      }}>
-                        {items.length === 0 ? (
-                          <div style={{
-                            height: 60,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: 4,
-                            opacity: 0.45
-                          }}>
-                            <Clipboard size={18} color="rgba(255,255,255,0.6)" />
-                            <span style={{ fontSize: 10.5, color: '#ffffff' }}>Clipboard is empty</span>
-                          </div>
-                        ) : (
-                          items.map((item, idx) => {
+                      ) : (
+                        <div style={{
+                          flex: 1,
+                          overflowY: 'auto',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 8,
+                          scrollbarWidth: 'none'
+                        }}>
+                          {items.map((item, idx) => {
                             const itemText = typeof item === 'object' ? (item.text || "") : String(item || "");
                             const itemId = typeof item === 'object' ? (item.id || idx) : idx;
-                            const timeAgo = typeof item === 'object' ? formatRelativeTime(item.timestamp) : "Just now";
                             const isCopied = copiedClipboardId === itemId;
 
                             return (
                               <div
                                 key={itemId}
-                                onClick={() => copyClipboardItem(item, itemId)}
-                                className="clipboard-item-row"
+                                className="ripple-clipboard-card"
                                 style={{
+                                  background: '#121212',
+                                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                                  borderRadius: 14,
+                                  padding: '10px 12px',
                                   display: 'flex',
-                                  alignItems: 'center',
+                                  flexDirection: 'column',
                                   justifyContent: 'space-between',
-                                  gap: 8,
-                                  padding: '5px 8px',
-                                  borderRadius: 7,
-                                  background: isCopied ? 'rgba(34, 197, 94, 0.12)' : 'rgba(255,255,255,0.06)',
-                                  border: isCopied ? '1px solid rgba(34, 197, 94, 0.3)' : '1px solid rgba(255,255,255,0.08)',
-                                  cursor: 'pointer'
+                                  minHeight: 46,
+                                  boxSizing: 'border-box',
+                                  flexShrink: 0
                                 }}
                               >
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 0 }}>
-                                  <Copy size={11} color={isCopied ? '#22c55e' : 'rgba(255,255,255,0.4)'} style={{ flexShrink: 0 }} />
-                                  <span style={{
-                                    fontSize: 10.5,
-                                    color: '#ffffff',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis',
-                                    lineHeight: 1.3
-                                  }}>
-                                    {itemText}
-                                  </span>
+                                <div style={{
+                                  fontSize: 12,
+                                  color: '#f5f5f5',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  maxWidth: '100%'
+                                }}>
+                                  {itemText}
                                 </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                                  {isCopied ? (
-                                    <span style={{
-                                      fontSize: 8.5,
-                                      fontWeight: 700,
-                                      color: '#22c55e',
-                                      background: 'rgba(34, 197, 94, 0.2)',
-                                      padding: '1px 5px',
-                                      borderRadius: 4
-                                    }}>
-                                      Copied!
-                                    </span>
-                                  ) : (
-                                    <span style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.4)', fontVariantNumeric: 'tabular-nums' }}>
-                                      {timeAgo}
-                                    </span>
-                                  )}
-                                </div>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleCopy(item, itemId);
+                                  }}
+                                  style={{
+                                    alignSelf: 'flex-end',
+                                    background: '#ffffff',
+                                    color: '#000000',
+                                    fontWeight: 600,
+                                    fontSize: 11,
+                                    padding: '3px 14px',
+                                    borderRadius: 999,
+                                    border: 'none',
+                                    cursor: 'pointer',
+                                    marginTop: 6,
+                                    lineHeight: 1.2,
+                                    transition: 'all 140ms ease'
+                                  }}
+                                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.9'}
+                                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                                >
+                                  {isCopied ? "Copied" : "Copy"}
+                                </button>
                               </div>
                             );
-                          })
-                        )}
-                      </div>
+                          })}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
 
                 {/* Fallback if currentTab does not match any known tab */}
-                {![0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15].includes(currentTab) && (
+                {![0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15, 16].includes(currentTab) && (
                   <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Clock size={16} color="#38bdf8" />

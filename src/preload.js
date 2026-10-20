@@ -30,6 +30,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   setDisplay: (displayId) => ipcRenderer.invoke('set-display', displayId),
   updateWindowPosition: (xPerc, yPx) => ipcRenderer.invoke('update-window-position', xPerc, yPx),
   setAutoLaunch: (enable) => ipcRenderer.invoke('set-auto-launch', enable),
+  getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
+  createDesktopShortcut: () => ipcRenderer.invoke('create-desktop-shortcut'),
+  onAutoLaunchChange: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('settings:auto-launch-changed', handler);
+    return () => ipcRenderer.removeListener('settings:auto-launch-changed', handler);
+  },
   getClipboardText: () => ipcRenderer.invoke('get-clipboard-text'),
   writeClipboardText: (text) => ipcRenderer.invoke('write-clipboard-text', text),
   clearClipboard: () => ipcRenderer.invoke('clear-clipboard'),
@@ -54,6 +61,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   startUpdateDownload: () => ipcRenderer.invoke('start-update-download'),
   cancelUpdateDownload: () => ipcRenderer.invoke('cancel-update-download'),
   installUpdate: () => ipcRenderer.invoke('install-update'),
+  getUpdaterState: () => ipcRenderer.invoke('get-updater-state'),
   getAppVersion: () => ipcRenderer.invoke('get-app-version'),
   getAutoDownloadInstall: () => ipcRenderer.invoke('get-auto-download-install'),
   setAutoDownloadInstall: (enable) => ipcRenderer.invoke('set-auto-download-install', enable),
@@ -125,6 +133,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     activateWindow: (hWnd) => ipcRenderer.invoke('launcher:activate-window', hWnd),
     getFavorites: () => ipcRenderer.invoke('launcher:get-favorites'),
     setFavorites: (favorites) => ipcRenderer.invoke('launcher:set-favorites', favorites),
+    openApp: (targetPath) => ipcRenderer.invoke('launcher:open-app', targetPath),
+    openUrl: (url) => ipcRenderer.invoke('launcher:open-url', url),
+    selectFile: () => ipcRenderer.invoke('launcher:select-file'),
     getWorkspaces: () => ipcRenderer.invoke('workspaces:get-workspaces'),
     saveWorkspace: (workspace) => ipcRenderer.invoke('workspaces:save-workspace', workspace),
     deleteWorkspace: (id) => ipcRenderer.invoke('workspaces:delete-workspace', id),
@@ -193,6 +204,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.on('settings:hidden-tabs-changed', handler);
     return () => ipcRenderer.removeListener('settings:hidden-tabs-changed', handler);
   },
+  getTabOrder: () => ipcRenderer.invoke('get-tab-order'),
+  setTabOrder: (tabs) => ipcRenderer.invoke('set-tab-order', tabs),
+  onTabOrderChange: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on('settings:tab-order-changed', handler);
+    return () => ipcRenderer.removeListener('settings:tab-order-changed', handler);
+  },
   openSettingsWindow: () => ipcRenderer.invoke('open-settings-window'),
   startDrag: (filePath) => {
     try {
@@ -245,5 +263,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('settings:privacy-dots-changed', handler);
   },
   invalidateWindow: () => ipcRenderer.invoke('window:invalidate'),
+  askJarvis: (prompt) => ipcRenderer.invoke('jarvis:ask', prompt),
+  getJarvisConfig: () => ipcRenderer.invoke('jarvis:getConfig'),
+  setJarvisConfig: (config) => ipcRenderer.invoke('jarvis:setConfig', config),
+  testJarvisConnection: (endpoint) => ipcRenderer.invoke('jarvis:testConnection', endpoint),
+  launchJarvisServer: () => ipcRenderer.invoke('jarvis:launchServer'),
+  stopJarvisServer: () => ipcRenderer.invoke('jarvis:stopServer'),
+  onJarvisConfigUpdate: (callback) => {
+    const handler = (event, val) => callback(val);
+    ipcRenderer.on('jarvis:configUpdated', handler);
+    return () => ipcRenderer.removeListener('jarvis:configUpdated', handler);
+  },
   platform: 'win32'
 });
+

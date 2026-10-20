@@ -1,24 +1,19 @@
 {
-  "version": "5.5.1",
-  "name": "Quick Pill 5.5.1",
-  "releaseDate": "2026-10-18",
+  "version": "5.5.2",
+  "name": "Quick Pill 5.5.2",
+  "releaseDate": "2026-10-20",
   "mandatory": false,
   "minSupportedVersion": "4.0.0",
   "changelog": [
-    "Quick App Launcher 1.5x Enlargement: Expanded window size (885x278) for high-efficiency application switching, larger workspace profile editor, and instant catalog search.",
-    "Settings & Tab Navigation: Smooth vertical scrolling in sidebar categories, wheel swipe protection, and customizable Alt-based tab shortcuts.",
-    "Quick Notes & Contextual Capture: Instant note capture with debounced autosave and crash recovery, searchable notes inbox with tags and filters, contextual clipboard capture with large-content guard, and non-destructive note-to-task conversion.",
-    "Smart Notification Actions: Intelligent notification interaction layer with WhatsApp/VoIP call cards, inline replies, local snooze presets (5m, 15m, 30m, 1h), grouped multi-message stacks, low-priority collapsing, privacy preview masking, and dismissal undo buffer.",
-    "Universal Progress Island: Centralized background progress tracking interface anchored at the top-center Dynamic Island, supporting file copy/hash operations, background auto-updater progress, and cancellable task workflows.",
-    "Per-App Audio Mixer: Native Windows Core Audio WASAPI mixer to adjust individual application volume levels, mute/unmute audio streams, monitor peak volume meters, and toggle audio output devices.",
-    "Apple Dynamic Island Battery Hub: Redesigned with Apple HIG design, 60 FPS right-to-left fluid liquid wave canvas physics engine, buoyant micro-bubbles, and real-time battery duration forecasting.",
-    "Persistent Always-On-Top & Background Timers: Screen-saver topmost priority level, wall-clock synchronized timers that never pause on lock screen or sleep.",
-    "Silent Background Auto-Updater: When a new release is detected, the app automatically downloads and silently installs the update via NSIS in the background, with user preferences in Settings.",
-    "Customizable Instant Tab Shortcuts: System-wide and in-app instant Alt+key shortcuts to open all 16 tabs instantly without conflicting with the Click-Through feature, fully customizable with collision handling in the Settings tab."
+    "Fluid Spring Morphing & Pop-ins: Optical blur crossfades, shelf pop-ins, and spring physics morphing.",
+    "Local JARVIS AI Companion: Integrated AskAI module with configurable Ollama/OpenAI API settings and status indicator.",
+    "Minimalist Calendar & macOS Notch: Customizable calendar module, customizable shortcut recorder, and notch toggle.",
+    "Notification Focus & App Activation: Direct app focus upon clicking notifications with smooth drawer transitions.",
+    "Quick App Launcher & Notes Sync: Enhanced search index, workspace profiles, and crash-resilient note taking."
   ],
   "platforms": {
     "win32-x64": {
-      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.1-Setup.exe",
+      "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.5.2-Setup.exe",
       "sha256": "14acfabffd3ddb68d78583f18685c5038bbe67355eabcc284d7760c2cd15548d",
       "size": 135151289,
       "installerType": "nsis"
