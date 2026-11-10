@@ -44,6 +44,26 @@ test("Safety Shield: Island.jsx wraps Tab 14 and Tab 15 in ErrorBoundary with va
     content.includes('accentColor="#10b981"'),
     "QuickNotes must receive concrete accentColor '#10b981'"
   );
+
+  // Verify Tab 16 has ErrorBoundary and concrete accentColor
+  assert.ok(
+    content.includes('<ErrorBoundary tabName="Shelf"'),
+    "Tab 16 (Shelf) must be wrapped in ErrorBoundary"
+  );
+  assert.ok(
+    content.includes('accentColor="#38bdf8"'),
+    "Shelf must receive concrete accentColor '#38bdf8'"
+  );
+
+  // Verify Tab 17 has ErrorBoundary and concrete accentColor
+  assert.ok(
+    content.includes('<ErrorBoundary tabName="Prayer"'),
+    "Tab 17 (Prayer) must be wrapped in ErrorBoundary"
+  );
+  assert.ok(
+    content.includes('accentColor="#38bdf8"'),
+    "Prayer must receive concrete accentColor '#38bdf8'"
+  );
 });
 
 test("Safety Shield: App.jsx wraps root in ErrorBoundary with window error protection", () => {
@@ -55,12 +75,14 @@ test("Safety Shield: App.jsx wraps root in ErrorBoundary with window error prote
   assert.ok(content.includes("window.addEventListener('unhandledrejection'"), "Must listen to unhandled rejections");
 });
 
-test("Safety Shield: AppLauncher and QuickNotes contain scrollable class hooks", () => {
+test("Safety Shield: AppLauncher, QuickNotes, and Shelf contain scrollable class hooks", () => {
   const launcherPath = path.join(__dirname, "../src/components/AppLauncher.jsx");
   const notesPath = path.join(__dirname, "../src/components/QuickNotes.jsx");
+  const shelfPath = path.join(__dirname, "../src/components/Shelf.jsx");
 
   const launcherContent = fs.readFileSync(launcherPath, "utf8");
   const notesContent = fs.readFileSync(notesPath, "utf8");
+  const shelfContent = fs.readFileSync(shelfPath, "utf8");
 
   assert.ok(
     launcherContent.includes('className="launcher-scrollable"'),
@@ -69,6 +91,10 @@ test("Safety Shield: AppLauncher and QuickNotes contain scrollable class hooks",
   assert.ok(
     notesContent.includes('className="notes-scrollable"'),
     "QuickNotes must contain notes-scrollable for smooth mouse wheel behavior"
+  );
+  assert.ok(
+    shelfContent.includes('className="shelf-scrollable"'),
+    "Shelf must contain shelf-scrollable for smooth mouse wheel behavior"
   );
 });
 

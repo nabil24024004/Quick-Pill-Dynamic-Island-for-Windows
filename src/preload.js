@@ -1,9 +1,33 @@
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
+
+function resolveFilePath(file) {
+  try {
+    if (webUtils && typeof webUtils.getPathForFile === 'function' && file) {
+      const resolved = webUtils.getPathForFile(file);
+      if (resolved) return resolved;
+    }
+  } catch (_) {}
+  return (file && typeof file.path === 'string') ? file.path : '';
+}
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  setIgnoreMouseEvents: (ignore, forward) => {
-    return ipcRenderer.invoke('set-ignore-mouse-events', ignore, forward);
+  setIgnoreMouseEvents: (ignore, forward, isCtrl) => {
+    return ipcRenderer.invoke('set-ignore-mouse-events', ignore, forward, isCtrl);
   },
+  updateIslandBounds: (bounds) => {
+    ipcRenderer.send('update-island-bounds', bounds);
+  },
+  onIslandCursorEntered: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('island:cursor-entered', handler);
+    return () => ipcRenderer.removeListener('island:cursor-entered', handler);
+  },
+  onIslandCursorOutside: (callback) => {
+    const handler = (event, data) => callback(data);
+    ipcRenderer.on('island:cursor-outside', handler);
+    return () => ipcRenderer.removeListener('island:cursor-outside', handler);
+  },
+  getPathForFile: (file) => resolveFilePath(file),
   getSystemMedia: () => ipcRenderer.invoke('get-system-media'),
   getBluetoothStatus: () => ipcRenderer.invoke('get-bluetooth-status'),
   getCameraStatus: () => ipcRenderer.invoke('get-camera-status'),
@@ -69,19 +93,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setMute: (payload) => ipcRenderer.invoke('audio-mixer:set-mute', payload),
     setMasterVolume: (payload) => ipcRenderer.invoke('audio-mixer:set-master-volume', payload),
     setMasterMute: (payload) => ipcRenderer.invoke('audio-mixer:set-master-mute', payload),
-  },
-  progress: {
-    getSnapshot: () => ipcRenderer.invoke('progress:get-snapshot'),
-    executeAction: (operationId, action, params) => ipcRenderer.invoke('progress:execute-action', operationId, action, params),
-    startFileOperation: (params) => ipcRenderer.invoke('progress:start-file-op', params),
-    startHashOperation: (params) => ipcRenderer.invoke('progress:start-hash-op', params),
-    selectFile: () => ipcRenderer.invoke('progress:select-file'),
-    clearHistory: () => ipcRenderer.invoke('progress:clear-history'),
-    onUpdate: (callback) => {
-      const handler = (event, data) => callback(data);
-      ipcRenderer.on('progress:update', handler);
-      return () => ipcRenderer.removeListener('progress:update', handler);
-    }
   },
   notifications: {
     getSnapshot: () => ipcRenderer.invoke('notification:get-snapshot'),
@@ -153,6 +164,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('notes:updated', handler);
       return () => ipcRenderer.removeListener('notes:updated', handler);
     },
+  },
+  shelf: {
+    getItems: () => ipcRenderer.invoke('shelf:get-items'),
+    addFiles: (filePaths) => ipcRenderer.invoke('shelf:add-files', filePaths),
+    removeItem: (id) => ipcRenderer.invoke('shelf:remove-item', id),
+    clear: () => ipcRenderer.invoke('shelf:clear'),
+    openFile: (filePathOrId) => ipcRenderer.invoke('shelf:open-file', filePathOrId),
+    showInFolder: (filePathOrId) => ipcRenderer.invoke('shelf:show-in-folder', filePathOrId),
+    startDrag: (filePathOrId, islandBounds) => ipcRenderer.send('shelf:start-drag', filePathOrId, islandBounds),
+    getPathForFile: (file) => resolveFilePath(file),
+    onUpdate: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on('shelf:update', handler);
+      return () => ipcRenderer.removeListener('shelf:update', handler);
+    },
+    onDragEnded: (callback) => {
+      const handler = (event, data) => callback(data);
+      ipcRenderer.on('shelf:drag-ended', handler);
+      return () => ipcRenderer.removeListener('shelf:drag-ended', handler);
+    },
+  },
+  prayer: {
+    getTimings: (city, country) => ipcRenderer.invoke('prayer:get-timings', city, country),
   },
   shortcuts: {
     getTabShortcuts: () => ipcRenderer.invoke('shortcuts:get-tab-shortcuts'),

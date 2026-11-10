@@ -56,10 +56,11 @@ function loadServiceModule(serviceRelPath) {
   return require(serviceRelPath);
 }
 
-const { createProgressEngine } = loadServiceModule("services/progress");
 const { createNotificationEngine, NOTIFICATION_ACTION_TYPES } = loadServiceModule("services/notifications");
 const { createLauncherEngine } = loadServiceModule("services/launcher");
 const { createNotesEngine } = loadServiceModule("services/notes");
+const { createShelfEngine } = loadServiceModule("services/shelf");
+const { fetchPrayerTimes, calculateOfflinePrayerTimes } = loadServiceModule("services/prayer");
 
 
 
@@ -201,9 +202,7 @@ const DEFAULT_TAB_SHORTCUTS = {
   0: "Alt+B",   // Browser Search
   1: "Alt+W",   // Weather
   2: "Alt+O",   // Overview
-  11: "Alt+H",  // Battery Hub
   12: "Alt+A",  // Audio Mixer
-  13: "Alt+P",  // Progress Island
   14: "Alt+L",  // App Launcher
   15: "Alt+Q",  // Quick Notes
   3: "Alt+M",   // Now Playing
@@ -213,6 +212,8 @@ const DEFAULT_TAB_SHORTCUTS = {
   7: "Alt+V",   // Clipboard
   8: "Alt+T",   // Tasks
   10: "Alt+R",  // Timer
+  16: "Alt+F",  // Shelf
+  17: "Alt+P",  // Prayer
   9: "Alt+S"    // Settings
 };
 
@@ -547,9 +548,27 @@ ipcMain.handle("log-renderer-error", (event, errorData) => {
   logToFile(`[RENDERER ERROR] Unhandled Renderer Exception ${JSON.stringify(errorData)}`);
 });
 
-ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
+let currentIgnoreMouseState = true;
+let ctrlClickThroughRequested = false;
+let currentIslandBounds = null;
+let isNativeDragOutInProgress = false;
+
+ipcMain.on("update-island-bounds", (event, bounds) => {
+  if (bounds && typeof bounds.left === "number" && typeof bounds.right === "number") {
+    currentIslandBounds = bounds;
+  }
+});
+
+ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward, isCtrl) => {
   if (mainWindow && !mainWindow.isDestroyed()) {
     try {
+      // While dragging a file OUT of the Shelf, mainWindow MUST remain click-through (ignore=true)
+      // so the fullscreen overlay does not block File Explorer / Desktop / external apps from receiving the drop
+      if (!ignore && isNativeDragOutInProgress) {
+        return;
+      }
+      currentIgnoreMouseState = Boolean(ignore);
+      ctrlClickThroughRequested = Boolean(ignore && isCtrl);
       if (ignore) {
         const useForward = forward !== undefined ? forward : true;
         mainWindow.setIgnoreMouseEvents(true, { forward: useForward });
@@ -561,6 +580,7 @@ ipcMain.handle("set-ignore-mouse-events", (event, ignore, forward) => {
     } catch (e) {
       logToFile("Error in setIgnoreMouseEvents, falling back to forward=true", e);
       try {
+        currentIgnoreMouseState = true;
         mainWindow.setIgnoreMouseEvents(true, { forward: true });
       } catch (_) {}
     }
@@ -884,6 +904,287 @@ ipcMain.handle("notes:convert-to-task", async (event, noteOrId) => {
   }
 });
 
+// ==========================================
+// Quick Pill Drop Shelf Engine & IPC Handlers
+// ==========================================
+let shelfEngineInstance = null;
+function getShelfEngine() {
+  if (!shelfEngineInstance) {
+    shelfEngineInstance = createShelfEngine({
+      app,
+      shell,
+      nativeImage
+    });
+  }
+  return shelfEngineInstance;
+}
+
+// Namespaced shelf:* channels
+ipcMain.handle("shelf:get-items", async () => {
+  try {
+    return getShelfEngine().getItems();
+  } catch (err) {
+    logToFile("Error in shelf:get-items:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("shelf:add-files", async (event, filePaths) => {
+  try {
+    const items = await getShelfEngine().addFiles(filePaths);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("shelf:update", items);
+    }
+    return items;
+  } catch (err) {
+    logToFile("Error in shelf:add-files:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("shelf:remove-item", async (event, id) => {
+  try {
+    const items = getShelfEngine().removeItem(id);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("shelf:update", items);
+    }
+    return items;
+  } catch (err) {
+    logToFile("Error in shelf:remove-item:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("shelf:clear", async () => {
+  try {
+    const items = getShelfEngine().clearShelf();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("shelf:update", items);
+    }
+    return items;
+  } catch (err) {
+    logToFile("Error in shelf:clear:", err);
+    return [];
+  }
+});
+
+ipcMain.handle("shelf:open-file", async (event, filePathOrId) => {
+  try {
+    return await getShelfEngine().openFile(filePathOrId);
+  } catch (err) {
+    logToFile("Error in shelf:open-file:", err);
+    return false;
+  }
+});
+
+ipcMain.handle("shelf:show-in-folder", async (event, filePathOrId) => {
+  try {
+    return getShelfEngine().showInFolder(filePathOrId);
+  } catch (err) {
+    logToFile("Error in shelf:show-in-folder:", err);
+    return false;
+  }
+});
+
+class WinDragPassThroughHelper {
+  constructor() {
+    this.child = null;
+    this.isStopping = false;
+  }
+
+  start() {
+    if (process.platform !== "win32") return;
+    if (this.child && !this.child.killed) return;
+
+    try {
+      const scriptPath = path.join(app.getPath("userData"), "drag-passthrough.ps1");
+      const scriptContent = `[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+$code = 'using System; using System.Runtime.InteropServices; public static class WinDragHelper { [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex); [DllImport("user32.dll")] public static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong); [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vKey); public static void SetClickThrough(long hwndVal, bool transparent) { IntPtr hWnd = new IntPtr(hwndVal); int exStyle = GetWindowLong(hWnd, -20); if (transparent) { SetWindowLong(hWnd, -20, exStyle | 0x00000020 | 0x00080000); } else { SetWindowLong(hWnd, -20, exStyle & ~0x00000020); } } }'
+Add-Type -TypeDefinition $code
+while ($null -ne ($line = [Console]::In.ReadLine())) {
+  $parts = $line.Trim().Split(' ')
+  if ($parts.Length -ge 2) {
+    $cmd = $parts[0]
+    $hwnd = [long]$parts[1]
+    if ($cmd -eq "ENABLE") {
+      $delay = if ($parts.Length -ge 3) { [int]$parts[2] } else { 75 }
+      Start-Sleep -Milliseconds $delay
+      if ([WinDragHelper]::GetAsyncKeyState(1) -lt 0) {
+        [WinDragHelper]::SetClickThrough($hwnd, $true)
+      }
+    } elseif ($cmd -eq "RESTORE") {
+      [WinDragHelper]::SetClickThrough($hwnd, $false)
+    }
+  }
+}
+`;
+      fs.writeFileSync(scriptPath, scriptContent, "utf8");
+      this.child = spawn(
+        "powershell",
+        ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
+        {
+          stdio: ["pipe", "ignore", "ignore"],
+          windowsHide: true
+        }
+      );
+      this.child.on("close", () => {
+        this.child = null;
+        if (!this.isStopping) {
+          setTimeout(() => this.start(), 1500);
+        }
+      });
+      this.child.on("error", () => {
+        this.child = null;
+      });
+    } catch (err) {
+      logToFile("Failed to start WinDragPassThroughHelper:", err);
+    }
+  }
+
+  getMainWindowHwnd() {
+    if (!mainWindow || mainWindow.isDestroyed()) return 0;
+    try {
+      const buf = mainWindow.getNativeWindowHandle();
+      if (!buf || buf.length < 4) return 0;
+      return buf.length >= 8 ? Number(buf.readBigUInt64LE(0)) : buf.readUInt32LE(0);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  scheduleClickThrough(delayMs = 75) {
+    const hwnd = this.getMainWindowHwnd();
+    if (!hwnd) return;
+    if (!this.child || !this.child.stdin || this.child.killed) {
+      this.start();
+    }
+    try {
+      this.child?.stdin?.write(`ENABLE ${hwnd} ${delayMs}\n`);
+    } catch (_) {}
+  }
+
+  restore() {
+    const hwnd = this.getMainWindowHwnd();
+    if (!hwnd) return;
+    try {
+      this.child?.stdin?.write(`RESTORE ${hwnd}\n`);
+    } catch (_) {}
+  }
+
+  stop() {
+    this.isStopping = true;
+    if (this.child) {
+      try {
+        this.child.kill();
+      } catch (_) {}
+      this.child = null;
+    }
+  }
+}
+
+const winDragPassThroughHelper = new WinDragPassThroughHelper();
+
+ipcMain.on("shelf:start-drag", (event, filePathOrId, islandBounds) => {
+  if (islandBounds && typeof islandBounds.left === "number" && typeof islandBounds.right === "number") {
+    currentIslandBounds = islandBounds;
+  }
+  isNativeDragOutInProgress = true;
+
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    try {
+      // 1. Ensure mainWindow has active mouse capture BEFORE calling event.sender.startDrag
+      // Calling setIgnoreMouseEvents(true) before startDrag strips mouse capture on Windows and aborts DoDragDrop!
+      currentIgnoreMouseState = false;
+      mainWindow.setIgnoreMouseEvents(false);
+
+      // 2. Clip mainWindow's OS window region (SetWindowRgn) to ONLY #Island's rectangle so the rest
+      // of the 1920x1080 fullscreen window immediately passes hit-tests through to Explorer/Desktop
+      const winBounds = mainWindow.getBounds();
+      const bounds = (currentIslandBounds && typeof currentIslandBounds.left === "number")
+        ? currentIslandBounds
+        : {
+            left: Math.round(winBounds.width / 2 - 285),
+            top: 0,
+            right: Math.round(winBounds.width / 2 + 285),
+            bottom: 190
+          };
+      const islandRect = {
+        x: Math.max(0, Math.floor(bounds.left - 20)),
+        y: Math.max(0, Math.floor(bounds.top - 10)),
+        width: Math.max(200, Math.ceil((bounds.right - bounds.left) + 40)),
+        height: Math.max(60, Math.ceil((bounds.bottom - bounds.top) + 30))
+      };
+      mainWindow.setShape([islandRect]);
+
+      // 3. Schedule off-thread WS_EX_TRANSPARENT 75ms after DoDragDrop starts its modal loop
+      winDragPassThroughHelper.scheduleClickThrough(75);
+    } catch (prepErr) {
+      logToFile("Warning preparing window for shelf:start-drag:", prepErr);
+    }
+  }
+
+  try {
+    logToFile(`[Shelf] startDrag initiated for: ${filePathOrId}`);
+    const started = getShelfEngine().startDrag(filePathOrId, event.sender);
+    logToFile(`[Shelf] startDrag completed (started=${started}) for: ${filePathOrId}`);
+  } catch (err) {
+    logToFile("Error in shelf:start-drag:", err);
+  } finally {
+    isNativeDragOutInProgress = false;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      try {
+        mainWindow.setShape([]);
+      } catch (_) {}
+      try {
+        const cursor = screen.getCursorScreenPoint();
+        const winBounds = mainWindow.getBounds();
+        const relX = cursor.x - winBounds.x;
+        const relY = cursor.y - winBounds.y;
+        const bounds = currentIslandBounds || {
+          left: Math.round(winBounds.width / 2 - 285),
+          top: 0,
+          right: Math.round(winBounds.width / 2 + 285),
+          bottom: 190
+        };
+        const isInside = (
+          relX >= bounds.left - 12 &&
+          relX <= bounds.right + 12 &&
+          relY >= bounds.top - 10 &&
+          relY <= bounds.bottom + 14
+        );
+        if (isInside) {
+          winDragPassThroughHelper.restore();
+          currentIgnoreMouseState = false;
+          mainWindow.setIgnoreMouseEvents(false);
+        } else {
+          currentIgnoreMouseState = true;
+          mainWindow.setIgnoreMouseEvents(true, { forward: true });
+        }
+      } catch (_) {
+        try {
+          currentIgnoreMouseState = true;
+          mainWindow.setIgnoreMouseEvents(true, { forward: true });
+        } catch (__) {}
+      }
+      try {
+        mainWindow.webContents.send("shelf:drag-ended");
+      } catch (_) {}
+    }
+  }
+});
+
+// ==========================================
+// Quick Pill Prayer Timings IPC Handlers
+// ==========================================
+ipcMain.handle("prayer:get-timings", async (event, city, country) => {
+  try {
+    return await fetchPrayerTimes(city, country);
+  } catch (err) {
+    logToFile("Error in prayer:get-timings:", err);
+    return null;
+  }
+});
+
 // Namespaced shortcuts:* channels
 ipcMain.handle("shortcuts:get-tab-shortcuts", () => {
   return loadTabShortcutsPreference();
@@ -994,7 +1295,7 @@ class AppUpdater extends EventEmitter {
   constructor() {
     super();
     this.manifestUrls = [...DEFAULT_MANIFEST_URLS];
-    this.currentVersion = app ? app.getVersion() : "5.5.1";
+    this.currentVersion = app ? app.getVersion() : "5.6.0";
     this.status = "idle";
     this.updateInfo = null;
     this.downloadedFilePath = null;
@@ -1452,60 +1753,6 @@ ipcMain.handle("set-auto-download-install", (event, enable) => {
   return val;
 });
 
-// --- Universal Progress Island Engine ---
-const progressEngine = createProgressEngine({
-  autoUpdater,
-  openPath: async (targetPath) => {
-    try {
-      if (fs.existsSync(targetPath)) {
-        if (fs.statSync(targetPath).isDirectory()) {
-          await shell.openPath(targetPath);
-        } else {
-          shell.showItemInFolder(targetPath);
-        }
-      }
-    } catch (err) {
-      logToFile('[progress openPath error]', err);
-    }
-  }
-});
-
-progressEngine.coordinator.on("update", (snapshot) => {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send("progress:update", snapshot);
-  }
-});
-
-ipcMain.handle("progress:get-snapshot", () => {
-  return progressEngine.coordinator.getSnapshot();
-});
-
-ipcMain.handle("progress:execute-action", async (event, operationId, action, params) => {
-  return await progressEngine.coordinator.executeAction(operationId, action, params);
-});
-
-ipcMain.handle("progress:start-file-op", async (event, params) => {
-  return await progressEngine.fileOpsProvider.startCopy(params);
-});
-
-ipcMain.handle("progress:start-hash-op", async (event, params) => {
-  return await progressEngine.fileOpsProvider.startHash(params);
-});
-
-ipcMain.handle("progress:clear-history", () => {
-  progressEngine.registry.clearHistory();
-  return true;
-});
-
-ipcMain.handle("progress:select-file", async () => {
-  if (!mainWindow) return null;
-  const res = await dialog.showOpenDialog(mainWindow, {
-    properties: ["openFile"]
-  });
-  if (res.canceled || !res.filePaths.length) return null;
-  return res.filePaths[0];
-});
-
 const getIconPath = (forceExt = null) => {
   const ext = forceExt || "ico";
 
@@ -1770,6 +2017,61 @@ app.whenReady().then(() => {
       }
     }
   }, 2500);
+
+  // Native cursor-in-notch watcher so Windows OLE file drag-and-drop (DoDragDrop)
+  // can wake the notch even when WS_EX_TRANSPARENT (setIgnoreMouseEvents(true)) is active
+  let wasCursorOutsideSent = false;
+  setInterval(() => {
+    if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) return;
+    if (ctrlClickThroughRequested || isNativeDragOutInProgress) return;
+    try {
+      const cursor = screen.getCursorScreenPoint();
+      const winBounds = mainWindow.getBounds();
+      const relX = cursor.x - winBounds.x;
+      const relY = cursor.y - winBounds.y;
+
+      const bounds = (currentIslandBounds && typeof currentIslandBounds.left === "number")
+        ? currentIslandBounds
+        : {
+            left: Math.round(winBounds.width / 2 - 140),
+            top: 0,
+            right: Math.round(winBounds.width / 2 + 140),
+            bottom: 50
+          };
+
+      const isInside = (
+        relX >= bounds.left - 12 &&
+        relX <= bounds.right + 12 &&
+        relY >= bounds.top - 10 &&
+        relY <= bounds.bottom + 14
+      );
+
+      if (isInside) {
+        wasCursorOutsideSent = false;
+        if (currentIgnoreMouseState) {
+          currentIgnoreMouseState = false;
+          mainWindow.setIgnoreMouseEvents(false);
+          ensureAlwaysOnTop();
+          mainWindow.webContents.send("island:cursor-entered", { x: relX, y: relY });
+        }
+      } else if (!currentIgnoreMouseState) {
+        const isFarOutside = (
+          relX < bounds.left - 35 ||
+          relX > bounds.right + 35 ||
+          relY < bounds.top - 25 ||
+          relY > bounds.bottom + 35
+        );
+        if (isFarOutside) {
+          currentIgnoreMouseState = true;
+          mainWindow.setIgnoreMouseEvents(true, { forward: true });
+          if (!wasCursorOutsideSent) {
+            wasCursorOutsideSent = true;
+            mainWindow.webContents.send("island:cursor-outside", { x: relX, y: relY });
+          }
+        }
+      }
+    } catch (_) {}
+  }, 90);
 
   // Check for updates 4 seconds after app boot so startup remains smooth
   setTimeout(() => {
@@ -2816,10 +3118,12 @@ class AudioMixerManager {
 const audioMixerManager = new AudioMixerManager();
 app.whenReady().then(() => {
   audioMixerManager.start();
+  winDragPassThroughHelper.start();
 });
 
 app.on('will-quit', () => {
   audioMixerManager.stop();
+  winDragPassThroughHelper.stop();
   try { globalShortcut.unregisterAll(); } catch (_) {}
   if (launcherEngineInstance) {
     try { launcherEngineInstance.destroy(); } catch (_) {}
@@ -2828,6 +3132,7 @@ app.on('will-quit', () => {
 
 app.on('before-quit', () => {
   audioMixerManager.stop();
+  winDragPassThroughHelper.stop();
   try { globalShortcut.unregisterAll(); } catch (_) {}
   if (launcherEngineInstance) {
     try { launcherEngineInstance.destroy(); } catch (_) {}

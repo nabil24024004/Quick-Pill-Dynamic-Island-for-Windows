@@ -822,9 +822,6 @@ label {
 #clipboard,
 .notifications-container,
 #task-list,
-#clipboard,
-.notifications-container,
-#task-list,
 #settings-container,
 #settings-sidebar,
 .settings-sidebar-scrollable,
@@ -832,7 +829,6 @@ label {
 .settings-content-scrollable,
 .notes-scrollable,
 .launcher-scrollable,
-.progress-island-scrollable,
 .audio-mixer-scrollable {
   scrollbar-width: thin;
   scrollbar-color: color-mix(in srgb, var(--island-text-color), transparent 80%) transparent;
@@ -848,7 +844,6 @@ label {
 .settings-content-scrollable::-webkit-scrollbar,
 .notes-scrollable::-webkit-scrollbar,
 .launcher-scrollable::-webkit-scrollbar,
-.progress-island-scrollable::-webkit-scrollbar,
 .audio-mixer-scrollable::-webkit-scrollbar {
   display: block !important;
   width: 4px !important;
@@ -864,7 +859,6 @@ label {
 .settings-content-scrollable::-webkit-scrollbar-track,
 .notes-scrollable::-webkit-scrollbar-track,
 .launcher-scrollable::-webkit-scrollbar-track,
-.progress-island-scrollable::-webkit-scrollbar-track,
 .audio-mixer-scrollable::-webkit-scrollbar-track {
   background: transparent !important;
 }
@@ -879,7 +873,6 @@ label {
 .settings-content-scrollable::-webkit-scrollbar-thumb,
 .notes-scrollable::-webkit-scrollbar-thumb,
 .launcher-scrollable::-webkit-scrollbar-thumb,
-.progress-island-scrollable::-webkit-scrollbar-thumb,
 .audio-mixer-scrollable::-webkit-scrollbar-thumb {
   background: color-mix(in srgb, var(--island-text-color), transparent 80%) !important;
   border-radius: 4px !important;
@@ -895,7 +888,6 @@ label {
 .settings-content-scrollable::-webkit-scrollbar-thumb:hover,
 .notes-scrollable::-webkit-scrollbar-thumb:hover,
 .launcher-scrollable::-webkit-scrollbar-thumb:hover,
-.progress-island-scrollable::-webkit-scrollbar-thumb:hover,
 .audio-mixer-scrollable::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--island-text-color), transparent 50%) !important;
 }
@@ -1578,14 +1570,5 @@ label {
 
 @keyframes spin-kf {
   100% { transform: rotate(360deg); }
-}
-
-@keyframes progress-shimmer {
-  0% { transform: translateX(-100%); }
-  100% { transform: translateX(350%); }
-}
-
-.progress-shimmer-bar {
-  animation: progress-shimmer 1.5s infinite ease-in-out;
 }
 

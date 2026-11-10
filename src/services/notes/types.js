@@ -8,6 +8,7 @@ const NOTE_FILTER_TYPES = Object.freeze({
   RECENT: "recent",
   PINNED: "pinned",
   ARCHIVED: "archived",
+  EVERYTHING: "everything",
 });
 
 /**

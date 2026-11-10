@@ -59,7 +59,7 @@ export default function QuickNotes({
     try {
       if (window.electronAPI?.notes) {
         const [fetchedNotes, fetchedTags] = await Promise.all([
-          window.electronAPI.notes.getNotes(filter, { tag: selectedTag }),
+          window.electronAPI.notes.getNotes("everything", {}).catch(() => window.electronAPI.notes.getNotes(filter, { tag: selectedTag })),
           window.electronAPI.notes.getTags().catch(() => [])
         ]);
 
@@ -241,61 +241,135 @@ export default function QuickNotes({
   // Toggle pin
   const handleTogglePin = useCallback(async (e, noteId) => {
     e.stopPropagation();
+    if (!noteId) return;
+
+    let nextPinned = false;
+    setNotes(prev => {
+      const list = Array.isArray(prev) ? [...prev] : [];
+      const idx = list.findIndex(n => n.id === noteId);
+      if (idx >= 0) {
+        const curPinned = Boolean(list[idx].isPinned ?? list[idx].pinned);
+        nextPinned = !curPinned;
+        list[idx] = { ...list[idx], isPinned: nextPinned, pinned: nextPinned };
+        try {
+          localStorage.setItem("quick_pill_notes_cache", JSON.stringify(list));
+        } catch (_) {}
+      }
+      return list;
+    });
+
+    showStatus(nextPinned ? "✓ Note pinned to top" : "✓ Note unpinned");
+
     try {
       if (window.electronAPI?.notes?.togglePin) {
         await window.electronAPI.notes.togglePin(noteId);
-        loadNotes();
       }
-    } catch (_) {}
-  }, [loadNotes]);
+    } catch (err) {
+      console.error("Failed to toggle pin:", err);
+    }
+  }, [showStatus]);
 
   // Toggle archive
   const handleToggleArchive = useCallback(async (e, noteId) => {
     e.stopPropagation();
+    if (!noteId) return;
+
+    let nextArchived = false;
+    setNotes(prev => {
+      const list = Array.isArray(prev) ? [...prev] : [];
+      const idx = list.findIndex(n => n.id === noteId);
+      if (idx >= 0) {
+        const curArchived = Boolean(list[idx].isArchived ?? list[idx].archived);
+        nextArchived = !curArchived;
+        list[idx] = { ...list[idx], isArchived: nextArchived, archived: nextArchived };
+        try {
+          localStorage.setItem("quick_pill_notes_cache", JSON.stringify(list));
+        } catch (_) {}
+      }
+      return list;
+    });
+
+    showStatus(nextArchived ? "✓ Note moved to Archive" : "✓ Note restored from Archive");
+
     try {
       if (window.electronAPI?.notes?.toggleArchive) {
-        const res = await window.electronAPI.notes.toggleArchive(noteId);
-        showStatus(res?.isArchived ? "Note archived" : "Note restored");
-        loadNotes();
+        await window.electronAPI.notes.toggleArchive(noteId);
       }
-    } catch (_) {}
-  }, [loadNotes, showStatus]);
+    } catch (err) {
+      console.error("Failed to toggle archive:", err);
+    }
+  }, [showStatus]);
 
   // Delete note with undo buffer
   const handleDeleteNote = useCallback(async (e, note) => {
     e.stopPropagation();
+    if (!note) return;
+
+    setUndoDeleteNote(note);
+    setNotes(prev => {
+      const list = Array.isArray(prev) ? prev.filter(n => n.id !== note.id) : [];
+      try {
+        localStorage.setItem("quick_pill_notes_cache", JSON.stringify(list));
+      } catch (_) {}
+      return list;
+    });
+
+    showStatus(`Deleted "${note.title || "Note"}" (Click Undo to restore)`, 5000);
+
     try {
       if (window.electronAPI?.notes?.deleteNote) {
         await window.electronAPI.notes.deleteNote(note.id);
-        setUndoDeleteNote(note);
-        loadNotes();
-        showStatus(`Deleted "${note.title || "Note"}" (Click Undo to restore)`, 5000);
       }
     } catch (err) {
       showStatus("Failed to delete note: " + err.message, 3000);
     }
-  }, [loadNotes, showStatus]);
+  }, [showStatus]);
 
   // Undo delete
   const handleUndoDelete = useCallback(async () => {
+    if (!undoDeleteNote) return;
+    const noteToRestore = undoDeleteNote;
+    setUndoDeleteNote(null);
+
+    setNotes(prev => {
+      const list = Array.isArray(prev) ? [noteToRestore, ...prev] : [noteToRestore];
+      try {
+        localStorage.setItem("quick_pill_notes_cache", JSON.stringify(list));
+      } catch (_) {}
+      return list;
+    });
+
+    showStatus("✓ Note restored");
+
     try {
       if (window.electronAPI?.notes?.undoDelete) {
-        const res = await window.electronAPI.notes.undoDelete();
-        if (res?.success) {
-          setUndoDeleteNote(null);
-          showStatus("✓ Note restored");
-          loadNotes();
-        }
+        await window.electronAPI.notes.undoDelete();
+      } else if (window.electronAPI?.notes?.saveNote) {
+        await window.electronAPI.notes.saveNote(noteToRestore);
       }
+      loadNotes();
     } catch (_) {}
-  }, [loadNotes, showStatus]);
+  }, [undoDeleteNote, loadNotes, showStatus]);
 
   // Copy note content
-  const handleCopyNote = useCallback((e, note) => {
+  const handleCopyNote = useCallback(async (e, note) => {
     e.stopPropagation();
+    if (!note) return;
+    const textToCopy = note.content || note.title || "";
     try {
-      navigator.clipboard.writeText(note.content || "");
-      showStatus("✓ Note copied to clipboard");
+      if (window.electronAPI?.writeClipboardText) {
+        await window.electronAPI.writeClipboardText(textToCopy);
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(textToCopy);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = textToCopy;
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      showStatus("✓ Note content copied to clipboard");
     } catch (_) {
       showStatus("Could not access clipboard");
     }
@@ -375,24 +449,73 @@ export default function QuickNotes({
   // Note-to-Task Conversion
   const handleConvertToTask = useCallback(async (e, note) => {
     e.stopPropagation();
+    if (!note) return;
     try {
+      let task = null;
       if (window.electronAPI?.notes?.convertToTask) {
-        const task = await window.electronAPI.notes.convertToTask(note);
-        if (task) {
-          if (typeof onTaskCreated === "function") {
-            onTaskCreated(task);
-          }
-          showStatus(`✓ Task created: "${task.title}"`);
-        }
+        task = await window.electronAPI.notes.convertToTask(note);
       }
+      if (!task || task.error || !task.title) {
+        const cleanContent = typeof note.content === "string" ? note.content.trim() : "";
+        const lines = cleanContent.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+        const title = (lines[0] || note.title || "Untitled Task").slice(0, 60);
+        task = {
+          id: "task_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7),
+          title,
+          body: cleanContent,
+          noteId: note.id ? String(note.id) : null,
+          completed: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          source: "quick_notes",
+        };
+      }
+      if (typeof onTaskCreated === "function") {
+        onTaskCreated(task);
+      }
+      showStatus(`✓ Converted to Task: "${task.title}"`);
     } catch (err) {
-      showStatus("Task conversion failed: " + err.message, 3500);
+      showStatus("Task conversion failed: " + (err.message || "Failed"), 3500);
     }
   }, [onTaskCreated, showStatus]);
 
-  // Filtered notes list based on search and tags
+  // Compute counts for navigation badges
+  const counts = useMemo(() => {
+    const safeNotes = Array.isArray(notes) ? notes : [];
+    let all = 0, pinned = 0, archived = 0;
+    for (const n of safeNotes) {
+      if (!n) continue;
+      if (n.isArchived || n.archived) {
+        archived++;
+      } else {
+        all++;
+        if (n.isPinned || n.pinned) pinned++;
+      }
+    }
+    return { all, recent: all, pinned, archived };
+  }, [notes]);
+
+  // Filtered notes list based on filter, selectedTag, and search
   const displayedNotes = useMemo(() => {
-    let list = Array.isArray(notes) ? notes : [];
+    let list = Array.isArray(notes) ? [...notes] : [];
+
+    // Filter by view / tab
+    if (filter === "archived") {
+      list = list.filter(n => Boolean(n.isArchived ?? n.archived));
+    } else if (filter === "pinned") {
+      list = list.filter(n => Boolean(n.isPinned ?? n.pinned) && !Boolean(n.isArchived ?? n.archived));
+    } else {
+      // 'all' or 'recent'
+      list = list.filter(n => !Boolean(n.isArchived ?? n.archived));
+    }
+
+    // Filter by selected tag
+    if (selectedTag) {
+      const target = selectedTag.toLowerCase();
+      list = list.filter(n => Array.isArray(n.tags) && n.tags.some(t => typeof t === "string" && t.toLowerCase() === target));
+    }
+
+    // Filter by search query
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       list = list.filter(n =>
@@ -403,8 +526,23 @@ export default function QuickNotes({
         )
       );
     }
+
+    // Sorting: pinned notes stay on top in all / recent
+    list.sort((a, b) => {
+      if (filter === "all" || filter === "recent") {
+        const aPin = Boolean(a.isPinned ?? a.pinned);
+        const bPin = Boolean(b.isPinned ?? b.pinned);
+        if (aPin !== bPin) return bPin ? 1 : -1;
+      }
+      const timeA = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const timeB = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return timeB - timeA;
+    });
+
     return list.filter(Boolean);
-  }, [notes, searchQuery]);
+  }, [notes, filter, selectedTag, searchQuery]);
+
+  const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
 
   return (
     <div
@@ -417,231 +555,293 @@ export default function QuickNotes({
         justifyContent: "space-between",
         padding: "10px 16px",
         boxSizing: "border-box",
-        gap: 14,
+        gap: 12,
         userSelect: "none",
-        position: "relative"
+        position: "relative",
+        fontFamily: iosFontStack
       }}
     >
-      {/* LEFT COLUMN: Sidebar summary, View Toggles & Tags */}
+      {/* LEFT COLUMN: 3D Beveled Notes Console Pod, View Toggles & Tags */}
       <div
         className="notes-scrollable"
         style={{
-          width: 175,
+          width: 178,
           height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          gap: 6,
+          borderRadius: 16,
+          padding: 4,
+          background: "linear-gradient(145deg, #1a2a24 0%, #0f1815 55%, #070b0a 100%)",
+          boxShadow: `
+            0 10px 22px rgba(0, 0, 0, 0.85),
+            inset 0 1.5px 2px rgba(255, 255, 255, 0.16),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.9)
+          `,
           flexShrink: 0,
-          overflowY: "auto",
-          overflowX: "hidden",
-          paddingRight: 4,
-          boxSizing: "border-box"
+          boxSizing: "border-box",
+          display: "flex"
         }}
       >
-        {/* Top Header Card */}
         <div
+          className="notes-scrollable"
+          data-scrollable="true"
           style={{
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: 12,
-            padding: "8px 10px",
+            width: "100%",
+            height: "100%",
+            borderRadius: 13,
+            background: "linear-gradient(180deg, #0c1311 0%, #070b0a 100%)",
+            boxShadow: "inset 0 4px 10px rgba(0, 0, 0, 0.92)",
+            padding: "6px 7px",
             display: "flex",
             flexDirection: "column",
-            gap: 6,
-            flexShrink: 0
+            justifyContent: "flex-start",
+            gap: 5,
+            overflowY: "auto",
+            overflowX: "hidden",
+            boxSizing: "border-box"
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <FileText size={14} color="#10b981" />
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#ffffff", letterSpacing: "0.4px", textTransform: "uppercase" }}>
-                Quick Notes
-              </span>
-            </div>
-            {/* View Mode Toggle Button */}
-            <button
-              type="button"
-              onClick={() => {
-                if (viewMode === "composer") {
-                  setViewMode("inbox");
-                } else {
-                  setViewMode("composer");
-                  setActiveEditingNoteId(null);
-                }
-              }}
-              title={viewMode === "composer" ? "View Notes Inbox" : "Compose New Note"}
-              style={{
-                background: viewMode === "composer" ? "rgba(16, 185, 129, 0.2)" : "rgba(255, 255, 255, 0.1)",
-                border: "none",
-                borderRadius: 6,
-                padding: "3px 6px",
-                color: viewMode === "composer" ? "#10b981" : "#ffffff",
-                fontSize: 10,
-                fontWeight: 700,
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: 4
-              }}
-            >
-              {viewMode === "composer" ? (
-                <>
-                  <Archive size={11} />
-                  Inbox
-                </>
-              ) : (
-                <>
-                  <Plus size={11} />
-                  New
-                </>
-              )}
-            </button>
-          </div>
-
-          {/* Quick Contextual Capture Action */}
-          <button
-            type="button"
-            onClick={handleContextualCapture}
+          {/* Top Header Card */}
+          <div
             style={{
+              background: "linear-gradient(180deg, #131f1b 0%, #0b1310 100%)",
+              border: "1px solid rgba(16, 185, 129, 0.25)",
+              boxShadow: "0 3px 8px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.12)",
+              borderRadius: 10,
+              padding: "6px 8px",
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
+              flexDirection: "column",
               gap: 5,
-              background: "rgba(16, 185, 129, 0.15)",
-              border: "1px solid rgba(16, 185, 129, 0.3)",
-              borderRadius: 6,
-              padding: "4px 8px",
-              color: "#10b981",
-              fontSize: 10,
-              fontWeight: 600,
-              cursor: "pointer",
-              transition: "all 0.15s ease"
+              flexShrink: 0
             }}
           >
-            <Copy size={11} />
-            Capture Clipboard
-          </button>
-
-          {/* Stats Bar */}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "rgba(255, 255, 255, 0.45)" }}>
-            <span>{Array.isArray(notes) ? notes.length : 0} notes</span>
-            <span>{Array.isArray(tags) ? tags.length : 0} tags</span>
-          </div>
-        </div>
-
-        {/* Filter Navigation (All / Recent / Pinned / Archived) */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 2, flexShrink: 0 }}>
-          {[
-            { id: "all", label: "All Notes" },
-            { id: "recent", label: "Recent" },
-            { id: "pinned", label: "Pinned" },
-            { id: "archived", label: "Archived" }
-          ].map(btn => {
-            const isActive = filter === btn.id && viewMode === "inbox" && !selectedTag;
-            return (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <FileText size={13} color="#10b981" style={{ filter: "drop-shadow(0 0 6px rgba(16,185,129,0.45))" }} />
+                <span style={{ fontSize: 10, fontWeight: 800, color: "#10b981", letterSpacing: "0.4px", textTransform: "uppercase" }}>
+                  Notes
+                </span>
+              </div>
+              {/* View Mode Toggle Button */}
               <button
-                key={btn.id}
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFilter(btn.id);
-                  setSelectedTag(null);
-                  setViewMode("inbox");
+                onClick={() => {
+                  if (viewMode === "composer") {
+                    setViewMode("inbox");
+                  } else {
+                    setViewMode("composer");
+                    setActiveEditingNoteId(null);
+                  }
                 }}
+                title={viewMode === "composer" ? "View Notes Inbox" : "Compose New Note"}
                 style={{
+                  background: viewMode === "composer"
+                    ? "linear-gradient(180deg, #0d3326 0%, #071e16 100%)"
+                    : "linear-gradient(180deg, #1f242c 0%, #13171d 100%)",
+                  border: viewMode === "composer"
+                    ? "1px solid rgba(16, 185, 129, 0.42)"
+                    : "1px solid rgba(255, 255, 255, 0.14)",
+                  boxShadow: "0 2px 5px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.14)",
+                  borderRadius: 6,
+                  padding: "2.5px 6px",
+                  color: viewMode === "composer" ? "#10b981" : "#ffffff",
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "5px 8px",
-                  borderRadius: 8,
-                  background: isActive ? "rgba(16, 185, 129, 0.16)" : "transparent",
-                  border: isActive ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid transparent",
-                  color: isActive ? "#10b981" : "rgba(255, 255, 255, 0.65)",
-                  fontSize: 11,
-                  fontWeight: isActive ? 700 : 500,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                  fontFamily: "OpenRunde, system-ui, sans-serif"
+                  gap: 3.5
                 }}
               >
-                <span>{btn.label}</span>
+                {viewMode === "composer" ? (
+                  <>
+                    <Archive size={10} />
+                    Inbox
+                  </>
+                ) : (
+                  <>
+                    <Plus size={10} />
+                    New
+                  </>
+                )}
               </button>
-            );
-          })}
-        </div>
+            </div>
 
-        {/* Tag Filters Section */}
-        {Array.isArray(tags) && tags.length > 0 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 4, paddingBottom: 6, flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "2px 4px" }}>
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: "rgba(255, 255, 255, 0.4)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
-                Tags
-              </span>
-              {selectedTag && (
+            {/* Quick Contextual Capture Action */}
+            <button
+              type="button"
+              onClick={handleContextualCapture}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 5,
+                background: "linear-gradient(180deg, #0e3226 0%, #081e17 100%)",
+                border: "1px solid rgba(16, 185, 129, 0.38)",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,255,255,0.15)",
+                borderRadius: 7,
+                padding: "4px 8px",
+                color: "#34d399",
+                fontSize: 9.5,
+                fontWeight: 700,
+                cursor: "pointer",
+                transition: "all 0.15s ease"
+              }}
+            >
+              <Copy size={10} />
+              Capture Clipboard
+            </button>
+
+            {/* Stats Bar */}
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "rgba(255, 255, 255, 0.48)" }}>
+              <span>{Array.isArray(notes) ? notes.length : 0} notes</span>
+              <span>{Array.isArray(tags) ? tags.length : 0} tags</span>
+            </div>
+          </div>
+
+          {/* Filter Navigation (All / Recent / Pinned / Archived) */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 2.5, flexShrink: 0 }}>
+            {[
+              { id: "all", label: "All Notes" },
+              { id: "recent", label: "Recent" },
+              { id: "pinned", label: "Pinned" },
+              { id: "archived", label: "Archived" }
+            ].map(btn => {
+              const isActive = filter === btn.id && viewMode === "inbox" && !selectedTag;
+              return (
                 <button
+                  key={btn.id}
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
+                    setFilter(btn.id);
                     setSelectedTag(null);
+                    setViewMode("inbox");
                   }}
-                  style={{ background: "transparent", border: "none", color: "#10b981", fontSize: 9, cursor: "pointer", padding: 0 }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "4px 8px",
+                    borderRadius: 8,
+                    background: isActive
+                      ? "linear-gradient(180deg, #0e3326 0%, #081e17 100%)"
+                      : "transparent",
+                    border: isActive
+                      ? "1px solid rgba(16, 185, 129, 0.42)"
+                      : "1px solid transparent",
+                    boxShadow: isActive
+                      ? "0 3px 8px rgba(0, 0, 0, 0.75), inset 0 1px 1px rgba(255, 255, 255, 0.15)"
+                      : "none",
+                    color: isActive ? "#34d399" : "rgba(255, 255, 255, 0.62)",
+                    fontSize: 10.5,
+                    fontWeight: isActive ? 700 : 600,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "all 0.15s ease",
+                    fontFamily: iosFontStack
+                  }}
                 >
-                  Clear
+                  <span>{btn.label}</span>
+                  <span
+                    style={{
+                      fontSize: 9,
+                      padding: "1px 5px",
+                      borderRadius: 10,
+                      background: isActive ? "rgba(52, 211, 153, 0.2)" : "rgba(255, 255, 255, 0.08)",
+                      color: isActive ? "#34d399" : "rgba(255, 255, 255, 0.45)",
+                      fontWeight: 700
+                    }}
+                  >
+                    {counts[btn.id] || 0}
+                  </span>
                 </button>
-              )}
-            </div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
-              {tags.map(tagItem => {
-                const tagName = typeof tagItem === "string" ? tagItem : (tagItem.tag || tagItem.name);
-                const tagCount = typeof tagItem === "object" ? tagItem.count : null;
-                const isSelected = selectedTag === tagName;
-                return (
+              );
+            })}
+          </div>
+
+          {/* Tag Filters Section */}
+          {Array.isArray(tags) && tags.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: 3, marginTop: 2, paddingBottom: 4, flexShrink: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1px 4px" }}>
+                <span style={{ fontSize: 9, fontWeight: 800, color: "rgba(255, 255, 255, 0.42)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  Tags
+                </span>
+                {selectedTag && (
                   <button
-                    key={tagName}
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setSelectedTag(isSelected ? null : tagName);
-                      setViewMode("inbox");
+                      setSelectedTag(null);
                     }}
-                    style={{
-                      background: isSelected ? "rgba(16, 185, 129, 0.25)" : "rgba(255, 255, 255, 0.05)",
-                      border: isSelected ? "1px solid rgba(16, 185, 129, 0.5)" : "1px solid rgba(255, 255, 255, 0.08)",
-                      borderRadius: 12,
-                      padding: "2px 6px",
-                      color: isSelected ? "#10b981" : "rgba(255, 255, 255, 0.6)",
-                      fontSize: 9.5,
-                      fontWeight: isSelected ? 700 : 500,
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 3,
-                      transition: "all 0.15s ease"
-                    }}
+                    style={{ background: "transparent", border: "none", color: "#10b981", fontSize: 9, cursor: "pointer", padding: 0 }}
                   >
-                    <Tag size={9} />
-                    <span>#{tagName}</span>
-                    {tagCount !== null && (
-                      <span style={{ opacity: 0.6, fontSize: 8.5 }}>({tagCount})</span>
-                    )}
+                    Clear
                   </button>
-                );
-              })}
+                )}
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 3 }}>
+                {tags.map(tagItem => {
+                  const tagName = typeof tagItem === "string" ? tagItem : (tagItem.tag || tagItem.name);
+                  const tagCount = typeof tagItem === "object" ? tagItem.count : null;
+                  const isSelected = selectedTag === tagName;
+                  return (
+                    <button
+                      key={tagName}
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedTag(isSelected ? null : tagName);
+                        setViewMode("inbox");
+                      }}
+                      style={{
+                        background: isSelected
+                          ? "linear-gradient(180deg, #0e3326 0%, #081e17 100%)"
+                          : "#070a09",
+                        border: isSelected
+                          ? "1px solid rgba(16, 185, 129, 0.5)"
+                          : "1px solid rgba(255, 255, 255, 0.08)",
+                        boxShadow: isSelected
+                          ? "0 2px 6px rgba(0,0,0,0.7)"
+                          : "inset 0 1px 3px rgba(0,0,0,0.8)",
+                        borderRadius: 999,
+                        padding: "2px 6px",
+                        color: isSelected ? "#34d399" : "rgba(255, 255, 255, 0.6)",
+                        fontSize: 9,
+                        fontWeight: isSelected ? 700 : 600,
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 3,
+                        transition: "all 0.15s ease"
+                      }}
+                    >
+                      <Tag size={8.5} />
+                      <span>#{tagName}</span>
+                      {tagCount !== null && (
+                        <span style={{ opacity: 0.6, fontSize: 8.5 }}>({tagCount})</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {/* RIGHT COLUMN: Composer OR Notes Inbox List */}
+      {/* RIGHT COLUMN: Sunken 3D Composer OR Notes Inbox Well */}
       <div
         style={{
           flex: 1,
           height: "100%",
+          borderRadius: 16,
+          padding: "7px 10px",
+          boxSizing: "border-box",
+          background: "linear-gradient(180deg, #090c0b 0%, #0e1412 100%)",
+          border: "1px solid rgba(16, 185, 129, 0.18)",
+          boxShadow: "inset 0 4px 12px rgba(0, 0, 0, 0.94), 0 4px 12px rgba(0, 0, 0, 0.6)",
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: 6,
           overflow: "hidden"
         }}
       >
@@ -652,12 +852,23 @@ export default function QuickNotes({
               flex: 1,
               display: "flex",
               flexDirection: "column",
-              gap: 8,
+              gap: 6,
               height: "100%"
             }}
           >
-            {/* Title / Status Bar */}
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            {/* Sunken Title / Status Bar */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "#060807",
+                border: "1px solid rgba(255, 255, 255, 0.08)",
+                boxShadow: "inset 0 2px 6px rgba(0, 0, 0, 0.9)",
+                borderRadius: 9,
+                padding: "4px 9px"
+              }}
+            >
               <input
                 type="text"
                 value={draftTitle}
@@ -668,9 +879,9 @@ export default function QuickNotes({
                   border: "none",
                   outline: "none",
                   color: "#ffffff",
-                  fontSize: 12,
+                  fontSize: 11.5,
                   fontWeight: 700,
-                  fontFamily: "OpenRunde, system-ui, sans-serif",
+                  fontFamily: iosFontStack,
                   flex: 1
                 }}
               />
@@ -678,8 +889,8 @@ export default function QuickNotes({
                 <span
                   style={{
                     fontSize: 9.5,
-                    color: draftSaveStatus === "saved" ? "#10b981" : draftSaveStatus === "saving" ? "#38bdf8" : "#eab308",
-                    fontWeight: 600
+                    color: draftSaveStatus === "saved" ? "#34d399" : draftSaveStatus === "saving" ? "#38bdf8" : "#eab308",
+                    fontWeight: 700
                   }}
                 >
                   {draftSaveStatus === "saved" ? "Autosaved" : draftSaveStatus === "saving" ? "Saving..." : "Unsaved"}
@@ -695,8 +906,8 @@ export default function QuickNotes({
                     style={{
                       background: "transparent",
                       border: "none",
-                      color: "rgba(255, 255, 255, 0.4)",
-                      fontSize: 10,
+                      color: "rgba(255, 255, 255, 0.45)",
+                      fontSize: 9.5,
                       cursor: "pointer"
                     }}
                   >
@@ -706,7 +917,7 @@ export default function QuickNotes({
               </div>
             </div>
 
-            {/* Note Textarea Body */}
+            {/* Sunken 3D Note Textarea Well */}
             <textarea
               ref={textareaRef}
               value={draftContent}
@@ -720,14 +931,15 @@ export default function QuickNotes({
               placeholder="Jot down a quick thought, paste a link, or use Ctrl+Enter to save..."
               style={{
                 flex: 1,
-                background: "rgba(255, 255, 255, 0.04)",
-                border: "1px solid rgba(255, 255, 255, 0.1)",
+                background: "#060807",
+                border: "1px solid rgba(16, 185, 129, 0.22)",
+                boxShadow: "inset 0 4px 10px rgba(0, 0, 0, 0.94), 0 1px 1px rgba(255, 255, 255, 0.04)",
                 borderRadius: 10,
-                padding: "8px 10px",
+                padding: "7px 10px",
                 color: "#ffffff",
-                fontSize: 12,
+                fontSize: 11.5,
                 lineHeight: "1.45",
-                fontFamily: "OpenRunde, system-ui, sans-serif",
+                fontFamily: iosFontStack,
                 resize: "none",
                 outline: "none"
               }}
@@ -735,7 +947,7 @@ export default function QuickNotes({
 
             {/* Bottom Actions Bar */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{ fontSize: 10, color: "rgba(255, 255, 255, 0.4)" }}>
+              <div style={{ fontSize: 9.5, color: "rgba(255, 255, 255, 0.42)" }}>
                 Press <b>Ctrl+Enter</b> to save
               </div>
               <div style={{ display: "flex", gap: 6 }}>
@@ -749,12 +961,14 @@ export default function QuickNotes({
                     }
                   }}
                   style={{
-                    background: "rgba(255, 255, 255, 0.08)",
-                    border: "none",
-                    borderRadius: 6,
-                    padding: "4px 8px",
-                    color: "rgba(255, 255, 255, 0.6)",
-                    fontSize: 11,
+                    background: "linear-gradient(180deg, #1b211f 0%, #111514 100%)",
+                    border: "1px solid rgba(255, 255, 255, 0.12)",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.12)",
+                    borderRadius: 7,
+                    padding: "4px 9px",
+                    color: "rgba(255, 255, 255, 0.7)",
+                    fontSize: 10.5,
+                    fontWeight: 600,
                     cursor: "pointer"
                   }}
                 >
@@ -764,12 +978,13 @@ export default function QuickNotes({
                   type="button"
                   onClick={handleSaveNote}
                   style={{
-                    background: "#059669",
-                    border: "none",
-                    borderRadius: 6,
+                    background: "linear-gradient(180deg, #0d3a2b 0%, #072219 100%)",
+                    border: "1px solid rgba(16, 185, 129, 0.48)",
+                    boxShadow: "0 4px 10px rgba(0, 0, 0, 0.8), 0 0 10px rgba(16, 185, 129, 0.16), inset 0 1px 1px rgba(255, 255, 255, 0.18)",
+                    borderRadius: 7,
                     padding: "4px 12px",
-                    color: "#ffffff",
-                    fontSize: 11,
+                    color: "#34d399",
+                    fontSize: 10.5,
                     fontWeight: 700,
                     cursor: "pointer",
                     display: "flex",
@@ -790,25 +1005,26 @@ export default function QuickNotes({
               flex: 1,
               display: "flex",
               flexDirection: "column",
-              gap: 8,
+              gap: 6,
               height: "100%",
               overflow: "hidden"
             }}
           >
-            {/* Search Header */}
+            {/* Sunken Search Header Trough */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                background: "rgba(255, 255, 255, 0.06)",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
+                background: "#060807",
+                border: "1px solid rgba(16, 185, 129, 0.25)",
+                boxShadow: "inset 0 3px 8px rgba(0, 0, 0, 0.94), 0 1px 1px rgba(255, 255, 255, 0.04)",
                 borderRadius: 10,
-                padding: "5px 10px",
+                padding: "4.5px 10px",
                 boxSizing: "border-box"
               }}
             >
-              <Search size={14} color="rgba(255, 255, 255, 0.5)" />
+              <Search size={13} color="#10b981" />
               <input
                 type="text"
                 value={searchQuery}
@@ -820,15 +1036,16 @@ export default function QuickNotes({
                   border: "none",
                   outline: "none",
                   color: "#ffffff",
-                  fontSize: 12,
-                  fontFamily: "OpenRunde, system-ui, sans-serif"
+                  fontSize: 11.5,
+                  fontWeight: 500,
+                  fontFamily: iosFontStack
                 }}
               />
               {searchQuery && (
                 <button
                   type="button"
                   onClick={() => setSearchQuery("")}
-                  style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.4)", cursor: "pointer", padding: 0 }}
+                  style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.45)", cursor: "pointer", padding: 0 }}
                 >
                   <X size={13} />
                 </button>
@@ -838,13 +1055,14 @@ export default function QuickNotes({
             {/* Notes List */}
             <div
               className="notes-scrollable"
+              data-scrollable="true"
               style={{
                 flex: 1,
                 overflowY: "auto",
                 display: "flex",
                 flexDirection: "column",
-                gap: 5,
-                paddingRight: 4
+                gap: 4.5,
+                paddingRight: 2
               }}
             >
               {displayedNotes.length === 0 ? (
@@ -856,126 +1074,263 @@ export default function QuickNotes({
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 6,
-                    color: "rgba(255, 255, 255, 0.4)",
+                    color: "rgba(255, 255, 255, 0.42)",
                     fontSize: 11
                   }}
                 >
-                  <Sparkles size={18} opacity={0.4} />
+                  <Sparkles size={18} color="#10b981" opacity={0.45} />
                   <span>No notes found</span>
                 </div>
               ) : (
-                displayedNotes.map((note) => (
-                  <div
-                    key={note.id}
-                    onClick={() => handleEditNote(note)}
-                    style={{
-                      display: "flex",
-                      flexDirection: "column",
-                      padding: "6px 9px",
-                      borderRadius: 8,
-                      background: "rgba(255, 255, 255, 0.03)",
-                      border: "1px solid rgba(255, 255, 255, 0.06)",
-                      cursor: "pointer",
-                      gap: 4,
-                      transition: "all 0.12s ease"
-                    }}
-                  >
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <span
-                        style={{
-                          fontSize: 11.5,
-                          fontWeight: 700,
-                          color: "#ffffff",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          maxWidth: 220
-                        }}
-                      >
-                        {note.title || "Untitled Note"}
-                      </span>
-                      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                        {/* Pin Button */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleTogglePin(e, note.id)}
-                          title={note.pinned ? "Unpin note" : "Pin note"}
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: note.pinned ? "#eab308" : "rgba(255, 255, 255, 0.3)" }}
-                        >
-                          <Star size={12} fill={note.pinned ? "#eab308" : "none"} />
-                        </button>
-                        {/* Convert to Task */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleConvertToTask(e, note)}
-                          title="Convert to Task"
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: "rgba(255, 255, 255, 0.4)" }}
-                        >
-                          <CheckSquare size={12} />
-                        </button>
-                        {/* Copy */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleCopyNote(e, note)}
-                          title="Copy content"
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: "rgba(255, 255, 255, 0.4)" }}
-                        >
-                          <Copy size={12} />
-                        </button>
-                        {/* Archive */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleArchive(e, note.id)}
-                          title={note.archived ? "Restore note" : "Archive note"}
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: "rgba(255, 255, 255, 0.4)" }}
-                        >
-                          <Archive size={12} />
-                        </button>
-                        {/* Delete */}
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteNote(e, note)}
-                          title="Delete note"
-                          style={{ background: "transparent", border: "none", cursor: "pointer", padding: "2px", color: "rgba(239, 68, 68, 0.7)" }}
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    </div>
+                displayedNotes.map((note) => {
+                  const isPinned = Boolean(note.isPinned ?? note.pinned);
+                  const isArchived = Boolean(note.isArchived ?? note.archived);
 
-                    {/* Snippet */}
+                  return (
                     <div
+                      key={note.id}
+                      onClick={() => handleEditNote(note)}
                       style={{
-                        fontSize: 10.5,
-                        color: "rgba(255, 255, 255, 0.65)",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap"
+                        display: "flex",
+                        flexDirection: "column",
+                        padding: "6px 9px",
+                        borderRadius: 10,
+                        background: isPinned
+                          ? "linear-gradient(180deg, #1f2214 0%, #12140b 100%)"
+                          : isArchived
+                          ? "linear-gradient(180deg, #101923 0%, #0a1017 100%)"
+                          : "linear-gradient(180deg, #141c19 0%, #0d1311 100%)",
+                        border: isPinned
+                          ? "1px solid rgba(234, 179, 8, 0.45)"
+                          : isArchived
+                          ? "1px solid rgba(56, 189, 248, 0.32)"
+                          : "1px solid rgba(255, 255, 255, 0.07)",
+                        boxShadow: isPinned
+                          ? "0 4px 10px rgba(0, 0, 0, 0.72), 0 0 10px rgba(234, 179, 8, 0.12), inset 0 1px 1px rgba(255, 255, 255, 0.12)"
+                          : "0 4px 10px rgba(0, 0, 0, 0.72), inset 0 1px 1px rgba(255, 255, 255, 0.1), inset 0 -1px 2px rgba(0, 0, 0, 0.85)",
+                        cursor: "pointer",
+                        gap: 3.5,
+                        transition: "all 0.15s ease"
                       }}
                     >
-                      {note.content}
-                    </div>
-
-                    {/* Metadata Badges */}
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 9, color: "rgba(255, 255, 255, 0.4)", marginTop: 2 }}>
-                      <Clock size={10} />
-                      <span>{(() => {
-                        try {
-                          const ts = note.updatedAt || note.createdAt;
-                          const d = ts ? new Date(ts) : new Date();
-                          return isNaN(d.getTime()) ? "Recent" : d.toLocaleDateString([], { month: "short", day: "numeric" });
-                        } catch {
-                          return "Recent";
-                        }
-                      })()}</span>
-                      {Array.isArray(note.tags) && note.tags.length > 0 && (
-                        <span style={{ color: "#10b981", fontWeight: 600 }}>
-                          {note.tags.filter(t => typeof t === "string").map(t => `#${t}`).join(" ")}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <span
+                          style={{
+                            fontSize: 11.5,
+                            fontWeight: 700,
+                            color: isPinned ? "#fef08a" : "#ffffff",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            maxWidth: 220
+                          }}
+                        >
+                          {note.title || "Untitled Note"}
                         </span>
-                      )}
+                        <div style={{ display: "flex", alignItems: "center", gap: 3.5 }}>
+                          {/* 1. Pin / Star Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleTogglePin(e, note.id)}
+                            title={isPinned ? "Unpin note" : "Pin note to top"}
+                            style={{
+                              background: isPinned ? "rgba(234, 179, 8, 0.18)" : "transparent",
+                              border: isPinned ? "1px solid rgba(234, 179, 8, 0.35)" : "1px solid transparent",
+                              borderRadius: 5,
+                              cursor: "pointer",
+                              padding: "2.5px 3.5px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: isPinned ? "#eab308" : "rgba(255, 255, 255, 0.38)",
+                              transition: "all 0.15s ease"
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isPinned) e.currentTarget.style.color = "#eab308";
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isPinned) e.currentTarget.style.color = "rgba(255, 255, 255, 0.38)";
+                            }}
+                          >
+                            <Star size={12} fill={isPinned ? "#eab308" : "none"} />
+                          </button>
+
+                          {/* 2. Convert to Task Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleConvertToTask(e, note)}
+                            title="Convert note to Task"
+                            style={{
+                              background: "transparent",
+                              border: "1px solid transparent",
+                              borderRadius: 5,
+                              cursor: "pointer",
+                              padding: "2.5px 3.5px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "rgba(255, 255, 255, 0.38)",
+                              transition: "all 0.15s ease"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = "#10b981";
+                              e.currentTarget.style.background = "rgba(16, 185, 129, 0.14)";
+                              e.currentTarget.style.borderColor = "rgba(16, 185, 129, 0.32)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = "rgba(255, 255, 255, 0.38)";
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.borderColor = "transparent";
+                            }}
+                          >
+                            <CheckSquare size={12} />
+                          </button>
+
+                          {/* 3. Copy Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleCopyNote(e, note)}
+                            title="Copy note text to clipboard"
+                            style={{
+                              background: "transparent",
+                              border: "1px solid transparent",
+                              borderRadius: 5,
+                              cursor: "pointer",
+                              padding: "2.5px 3.5px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "rgba(255, 255, 255, 0.38)",
+                              transition: "all 0.15s ease"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = "#38bdf8";
+                              e.currentTarget.style.background = "rgba(56, 189, 248, 0.14)";
+                              e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.32)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = "rgba(255, 255, 255, 0.38)";
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.borderColor = "transparent";
+                            }}
+                          >
+                            <Copy size={12} />
+                          </button>
+
+                          {/* 4. Archive Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleToggleArchive(e, note.id)}
+                            title={isArchived ? "Restore note from archive" : "Archive note"}
+                            style={{
+                              background: isArchived ? "rgba(56, 189, 248, 0.16)" : "transparent",
+                              border: isArchived ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid transparent",
+                              borderRadius: 5,
+                              cursor: "pointer",
+                              padding: "2.5px 3.5px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: isArchived ? "#38bdf8" : "rgba(255, 255, 255, 0.38)",
+                              transition: "all 0.15s ease"
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!isArchived) {
+                                e.currentTarget.style.color = "#38bdf8";
+                                e.currentTarget.style.background = "rgba(56, 189, 248, 0.14)";
+                                e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.32)";
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (!isArchived) {
+                                e.currentTarget.style.color = "rgba(255, 255, 255, 0.38)";
+                                e.currentTarget.style.background = "transparent";
+                                e.currentTarget.style.borderColor = "transparent";
+                              }
+                            }}
+                          >
+                            <Archive size={12} />
+                          </button>
+
+                          {/* 5. Delete Button */}
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteNote(e, note)}
+                            title="Delete note"
+                            style={{
+                              background: "transparent",
+                              border: "1px solid transparent",
+                              borderRadius: 5,
+                              cursor: "pointer",
+                              padding: "2.5px 3.5px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "rgba(239, 68, 68, 0.72)",
+                              transition: "all 0.15s ease"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = "#ef4444";
+                              e.currentTarget.style.background = "rgba(239, 68, 68, 0.16)";
+                              e.currentTarget.style.borderColor = "rgba(239, 68, 68, 0.38)";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = "rgba(239, 68, 68, 0.72)";
+                              e.currentTarget.style.background = "transparent";
+                              e.currentTarget.style.borderColor = "transparent";
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Snippet */}
+                      <div
+                        style={{
+                          fontSize: 10.5,
+                          color: "rgba(255, 255, 255, 0.65)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap"
+                        }}
+                      >
+                        {note.content}
+                      </div>
+
+                      {/* Metadata Badges */}
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 9, color: "rgba(255, 255, 255, 0.42)", marginTop: 1 }}>
+                        {isPinned && (
+                          <span style={{ color: "#eab308", fontWeight: 700, display: "flex", alignItems: "center", gap: 2.5 }}>
+                            <Star size={9} fill="#eab308" /> Pinned
+                          </span>
+                        )}
+                        {isArchived && (
+                          <span style={{ color: "#38bdf8", fontWeight: 700, display: "flex", alignItems: "center", gap: 2.5 }}>
+                            <Archive size={9} /> Archived
+                          </span>
+                        )}
+                        <span style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                          <Clock size={10} />
+                          {(() => {
+                            try {
+                              const ts = note.updatedAt || note.createdAt;
+                              const d = ts ? new Date(ts) : new Date();
+                              return isNaN(d.getTime()) ? "Recent" : d.toLocaleDateString([], { month: "short", day: "numeric" });
+                            } catch {
+                              return "Recent";
+                            }
+                          })()}
+                        </span>
+                        {Array.isArray(note.tags) && note.tags.length > 0 && (
+                          <span style={{ color: "#34d399", fontWeight: 700 }}>
+                            {note.tags.filter(t => typeof t === "string").map(t => `#${t}`).join(" ")}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

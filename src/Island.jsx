@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing, Keyboard } from "lucide-react";
+import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Droplets, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing, Keyboard, Inbox } from "lucide-react";
 import "./App.css";
 import AppLauncher from "./components/AppLauncher";
 import QuickNotes from "./components/QuickNotes";
+import Shelf, { extractFilePathsFromDataTransfer } from "./components/Shelf";
+import Prayer from "./components/Prayer";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 // Helper format file sizes (Bytes -> KB -> MB)
@@ -72,6 +74,31 @@ function playTimerAlarmSound() {
   }
 }
 
+// Play peaceful dual-tone harmonic chime for prayer time notification
+function playPrayerChime() {
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    [659.25, 987.77].forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + idx * 0.15);
+      gain.gain.setValueAtTime(0, now + idx * 0.15);
+      gain.gain.linearRampToValueAtTime(0.2, now + idx * 0.15 + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + idx * 0.15 + 2.5);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + idx * 0.15);
+      osc.stop(now + idx * 0.15 + 2.5);
+    });
+  } catch (err) {
+    console.error("Failed to play prayer chime:", err);
+  }
+}
+
 const TimerCircleProgress = ({ progress = 1, size = 18, strokeWidth = 2.5 }) => {
   const safeProgress = Math.min(1, Math.max(0, progress));
   const r = (size - strokeWidth) / 2;
@@ -103,54 +130,6 @@ const TimerCircleProgress = ({ progress = 1, size = 18, strokeWidth = 2.5 }) => 
         animate={{ strokeDashoffset: offset }}
         transition={{ duration: 0.4, ease: "linear" }}
         style={{ filter: `drop-shadow(0 0 ${glowRadius}px rgba(255, 149, 0, ${0.3 + safeProgress * 0.5}))` }}
-      />
-    </svg>
-  );
-};
-
-const ProgressMiniRing = ({ progress = null, size = 18, strokeWidth = 2.5, status = "running" }) => {
-  const isFailed = status === "failed";
-  const isCompleted = status === "completed";
-  const color = isFailed ? "#ef4444" : isCompleted ? "#22c55e" : "#38bdf8";
-
-  if (isFailed) return <AlertCircle size={size} color={color} />;
-  if (isCompleted) return <CheckCircle2 size={size} color={color} />;
-
-  const safeProgress = typeof progress === "number" ? Math.min(1, Math.max(0, progress / 100)) : null;
-
-  if (safeProgress === null) {
-    return (
-      <div style={{ width: size, height: size, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <RefreshCw size={size - 4} color={color} className="spin-anim" />
-      </div>
-    );
-  }
-
-  const r = (size - strokeWidth) / 2;
-  const circ = 2 * Math.PI * r;
-  const offset = circ * (1 - safeProgress);
-
-  return (
-    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', overflow: 'visible', display: 'block' }}>
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke="rgba(255, 255, 255, 0.15)"
-        strokeWidth={strokeWidth}
-      />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={r}
-        fill="none"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeDasharray={circ}
-        strokeDashoffset={offset}
-        strokeLinecap="round"
-        style={{ transition: 'stroke-dashoffset 0.3s linear' }}
       />
     </svg>
   );
@@ -405,6 +384,1023 @@ const WeatherIcon = ({ status, size = 16, color = "currentColor" }) => {
   return <Sun size={size} color={color} />;
 };
 
+function getOrdinalSuffix(n) {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+// Clean SF-Symbol / Reference-Image-1 style white line-art weather icon for the 3-column hourly forecast
+const HourlyLineWeatherIcon = React.memo(({ status = "", size = 26, color = "#ffffff" }) => {
+  const s = (status || "").toLowerCase();
+  const isThunder = s.includes("thunder") || s.includes("storm");
+  const isSnow = s.includes("snow") || s.includes("sleet") || s.includes("ice") || s.includes("blizzard");
+  const isRain = s.includes("rain") || s.includes("drizzle") || s.includes("shower");
+  const isCloudy = s.includes("overcast") || (s.includes("cloud") && !s.includes("partly"));
+  const isClear = (s.includes("sunny") || s.includes("clear")) && !s.includes("partly") && !s.includes("cloud");
+
+  if (isClear) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}>
+        <circle cx="14" cy="14" r="5" stroke={color} strokeWidth="1.9" />
+        <line x1="14" y1="3.5" x2="14" y2="6" stroke={color} strokeWidth="1.9" strokeLinecap="round" />
+        <line x1="14" y1="22" x2="14" y2="24.5" stroke={color} strokeWidth="1.9" strokeLinecap="round" />
+        <line x1="3.5" y1="14" x2="6" y2="14" stroke={color} strokeWidth="1.9" strokeLinecap="round" />
+        <line x1="22" y1="14" x2="24.5" y2="14" stroke={color} strokeWidth="1.9" strokeLinecap="round" />
+        <line x1="6.6" y1="6.6" x2="8.4" y2="8.4" stroke={color} strokeWidth="1.9" strokeLinecap="round" />
+        <line x1="19.6" y1="19.6" x2="21.4" y2="21.4" stroke={color} strokeWidth="1.9" strokeLinecap="round" />
+        <line x1="21.4" y1="6.6" x2="19.6" y2="8.4" stroke={color} strokeWidth="1.9" strokeLinecap="round" />
+        <line x1="8.4" y1="19.6" x2="6.6" y2="21.4" stroke={color} strokeWidth="1.9" strokeLinecap="round" />
+      </svg>
+    );
+  }
+
+  if (isThunder) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}>
+        <path d="M8.5 18.5H7.2C5.1 18.5 3.5 16.9 3.5 14.9C3.5 13.1 4.8 11.6 6.6 11.4C7.2 8.3 9.9 6 13.2 6C16.9 6 19.9 8.9 20 12.6C21.7 12.9 23 14.3 23 16.1C23 17.5 22 18.5 20.5 18.5H18" stroke={color} strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M14.2 16.5L11.5 21H14.8L13.2 25.2" stroke={color} strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  if (isSnow) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}>
+        <path d="M8 18.5H7.2C5.1 18.5 3.5 16.9 3.5 14.9C3.5 13.1 4.8 11.6 6.6 11.4C7.2 8.3 9.9 6 13.2 6C16.9 6 19.9 8.9 20 12.6C21.7 12.9 23 14.3 23 16.1C23 17.5 21.8 18.5 20.2 18.5H19" stroke={color} strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+        <circle cx="10" cy="21.5" r="1.1" fill={color} />
+        <circle cx="13.5" cy="23.5" r="1.1" fill={color} />
+        <circle cx="17" cy="21.5" r="1.1" fill={color} />
+      </svg>
+    );
+  }
+
+  if (isCloudy && !isRain) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}>
+        <path d="M7.5 20.5H19.8C21.9 20.5 23.5 18.9 23.5 16.9C23.5 15.1 22.1 13.6 20.3 13.4C19.8 9.7 16.7 7 12.9 7C9.1 7 6 9.8 5.6 13.5C4.1 14 3 15.4 3 17.1C3 19 4.6 20.5 6.5 20.5H7.5Z" stroke={color} strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    );
+  }
+
+  // Default / Sun + Cloud + Rain Streaks (matches Reference Image 1's iconic weather glyph)
+  const showRainBars = isRain || (!s.includes("partly") && !s.includes("cloud") && !s.includes("sun") && !s.includes("clear"));
+  return (
+    <svg width={size} height={size} viewBox="0 0 28 28" fill="none" style={{ flexShrink: 0, filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.4))' }}>
+      {/* Sun peeking from top-right of cloud (like Image 1) */}
+      <path d="M16.2 7.4C16.9 6.6 17.9 6.1 19.1 6.1C21.2 6.1 22.9 7.8 22.9 9.9C22.9 10.9 22.5 11.8 21.8 12.5" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="19.1" y1="2.8" x2="19.1" y2="4.2" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="24.1" y1="4.9" x2="23.1" y2="5.9" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="26.2" y1="9.9" x2="24.8" y2="9.9" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="24.1" y1="14.9" x2="23.1" y2="13.9" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      <line x1="14.2" y1="4.9" x2="15.1" y2="5.8" stroke={color} strokeWidth="1.8" strokeLinecap="round" />
+      {/* Cloud body */}
+      <path d="M8.2 18.2H6.8C4.8 18.2 3.2 16.6 3.2 14.7C3.2 12.9 4.5 11.4 6.2 11.2C6.8 8.5 9.2 6.5 12.1 6.5C15.3 6.5 17.9 8.9 18.1 12.1C19.6 12.3 20.8 13.6 20.8 15.2C20.8 16.9 19.4 18.2 17.7 18.2H16.2" stroke={color} strokeWidth="1.85" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Vertical rain bars (Image 1 style) or closed cloud bottom */}
+      {showRainBars ? (
+        <>
+          <line x1="9.2" y1="17.8" x2="9.2" y2="23.2" stroke={color} strokeWidth="1.85" strokeLinecap="round" />
+          <line x1="12.2" y1="18.8" x2="12.2" y2="24.8" stroke={color} strokeWidth="1.85" strokeLinecap="round" />
+          <line x1="15.2" y1="17.8" x2="15.2" y2="22.6" stroke={color} strokeWidth="1.85" strokeLinecap="round" />
+        </>
+      ) : (
+        <line x1="8.2" y1="18.2" x2="16.2" y2="18.2" stroke={color} strokeWidth="1.85" strokeLinecap="round" />
+      )}
+    </svg>
+  );
+});
+
+// 3D Dark-Themed iOS Analog Clock (Combines Image 1's 3D bezel & depth with Image 2's iOS dial & hands)
+const IOS3DAnalogClock = React.memo(({ size = 122 }) => {
+  const [now, setNow] = useState(() => new Date());
+
+  useEffect(() => {
+    let timeoutId;
+    let isMounted = true;
+
+    const scheduleNextTick = () => {
+      if (!isMounted) return;
+      const current = new Date();
+      setNow(current);
+      const msUntilNextSecond = 1000 - current.getMilliseconds();
+      timeoutId = setTimeout(scheduleNextTick, Math.max(50, msUntilNextSecond));
+    };
+
+    scheduleNextTick();
+    return () => {
+      isMounted = false;
+      clearTimeout(timeoutId);
+    };
+  }, []);
+
+  // Track cumulative seconds so the CSS spring transition never spins 354° backward at 59s -> 0s
+  const cumulativeSecondsRef = useRef(null);
+  const rawSeconds = now.getSeconds();
+  if (cumulativeSecondsRef.current === null) {
+    cumulativeSecondsRef.current = rawSeconds;
+  } else {
+    const prevMod = ((cumulativeSecondsRef.current % 60) + 60) % 60;
+    let delta = rawSeconds - prevMod;
+    if (delta < 0) delta += 60;
+    cumulativeSecondsRef.current += delta;
+  }
+
+  const hours = now.getHours() % 12;
+  const minutes = now.getMinutes();
+  const seconds = rawSeconds;
+
+  const hourAngle = hours * 30 + minutes * 0.5 + seconds * (0.5 / 60);
+  const minuteAngle = minutes * 6 + seconds * 0.1;
+  const secondAngle = cumulativeSecondsRef.current * 6;
+
+  const ticks = useMemo(() => {
+    return Array.from({ length: 60 }, (_, i) => {
+      const isHour = i % 5 === 0;
+      const angleDeg = i * 6;
+      return { i, isHour, angleDeg };
+    });
+  }, []);
+
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        position: 'relative',
+        flexShrink: 0,
+        // 3D Outer Bezel (Dark Metallic Slate with Directional Lighting & Cast Shadow like Image 1)
+        background: 'linear-gradient(145deg, #323238 0%, #202025 48%, #111114 100%)',
+        boxShadow: [
+          '6px 8px 18px rgba(0, 0, 0, 0.78)',
+          '-2px -2px 8px rgba(255, 255, 255, 0.05)',
+          'inset 1.5px 2px 3px rgba(255, 255, 255, 0.22)',
+          'inset -2px -2.5px 4px rgba(0, 0, 0, 0.85)'
+        ].join(', '),
+        padding: 9,
+        boxSizing: 'border-box',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        userSelect: 'none'
+      }}
+    >
+      {/* Inner Bezel Step Rim (Metallic Lip before the Dial Cavity) */}
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          borderRadius: '50%',
+          background: 'linear-gradient(145deg, #16161a 0%, #29292f 100%)',
+          padding: 2.5,
+          boxSizing: 'border-box',
+          boxShadow: 'inset 2px 2px 4px rgba(0,0,0,0.85), 0 1px 1px rgba(255,255,255,0.08)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        {/* Deep Matte Charcoal Dial Face with 3D Overhang Cavity Shadow */}
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            position: 'relative',
+            background: 'radial-gradient(circle at 38% 32%, #1e1e24 0%, #151519 65%, #101013 100%)',
+            boxShadow: [
+              'inset 3px 4px 8px rgba(0, 0, 0, 0.92)',
+              'inset -1px -1px 4px rgba(255, 255, 255, 0.05)',
+              'inset 0 0 12px rgba(0, 0, 0, 0.7)'
+            ].join(', '),
+            overflow: 'hidden'
+          }}
+        >
+          {/* iOS-Style Recessed Inner Circle Well (from Reference Image 2, in Dark Theme) */}
+          <div
+            style={{
+              position: 'absolute',
+              top: '50%',
+              left: '50%',
+              width: '50%',
+              height: '50%',
+              transform: 'translate(-50%, -50%)',
+              borderRadius: '50%',
+              background: 'linear-gradient(145deg, #121216 0%, #19191f 100%)',
+              boxShadow: 'inset 1.5px 2px 4px rgba(0, 0, 0, 0.75), 0 1px 1px rgba(255, 255, 255, 0.06)',
+              border: '0.5px solid rgba(255, 255, 255, 0.03)',
+              pointerEvents: 'none'
+            }}
+          />
+
+          {/* SVG Dial Face: 60 Ticks + Bold iOS Numerals (12, 3, 6, 9) + 3D Hands */}
+          <svg
+            viewBox="0 0 100 100"
+            style={{
+              width: '100%',
+              height: '100%',
+              position: 'absolute',
+              inset: 0,
+              overflow: 'visible'
+            }}
+          >
+            <defs>
+              {/* 3D Elevation Drop Shadow for Hour & Minute Hands */}
+              <filter id="ios-clock-hand-shadow" x="-40%" y="-40%" width="180%" height="180%">
+                <feDropShadow dx="1.2" dy="2.2" stdDeviation="1.4" floodColor="#000000" floodOpacity="0.82" />
+              </filter>
+              {/* Elevated Drop Shadow for Second Hand */}
+              <filter id="ios-clock-sec-shadow" x="-50%" y="-50%" width="200%" height="200%">
+                <feDropShadow dx="1.5" dy="2.6" stdDeviation="1.3" floodColor="#000000" floodOpacity="0.75" />
+              </filter>
+              {/* Subtle Gradient for White 3D Baton Hands */}
+              <linearGradient id="ios-hand-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#ffffff" />
+                <stop offset="100%" stopColor="#e2e4ea" />
+              </linearGradient>
+            </defs>
+
+            {/* 60 Perimeter Tick Marks (Image 2 iOS style: bold pill ticks for hours, crisp ticks for minutes) */}
+            {ticks.map(({ i, isHour, angleDeg }) => (
+              <line
+                key={i}
+                x1="50"
+                y1={isHour ? "4.2" : "4.2"}
+                x2="50"
+                y2={isHour ? "10.6" : "7.6"}
+                stroke={isHour ? "#ffffff" : "rgba(255, 255, 255, 0.45)"}
+                strokeWidth={isHour ? "2.1" : "0.95"}
+                strokeLinecap="round"
+                transform={`rotate(${angleDeg} 50 50)`}
+              />
+            ))}
+
+            {/* Cardinal iOS Numerals: 12, 3, 6, 9 */}
+            <text
+              x="50"
+              y="20.5"
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="#ffffff"
+              style={{
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Display", "OpenRunde", sans-serif',
+                fontSize: '12.5px',
+                fontWeight: 800,
+                letterSpacing: '-0.4px'
+              }}
+            >
+              12
+            </text>
+            <text
+              x="79.5"
+              y="50.5"
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="#ffffff"
+              style={{
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Display", "OpenRunde", sans-serif',
+                fontSize: '12.5px',
+                fontWeight: 800
+              }}
+            >
+              3
+            </text>
+            <text
+              x="50"
+              y="79.5"
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="#ffffff"
+              style={{
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Display", "OpenRunde", sans-serif',
+                fontSize: '12.5px',
+                fontWeight: 800
+              }}
+            >
+              6
+            </text>
+            <text
+              x="20.5"
+              y="50.5"
+              textAnchor="middle"
+              dominantBaseline="central"
+              fill="#ffffff"
+              style={{
+                fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Rounded", "SF Pro Display", "OpenRunde", sans-serif',
+                fontSize: '12.5px',
+                fontWeight: 800
+              }}
+            >
+              9
+            </text>
+
+            {/* HOUR HAND (iOS two-stage baton: narrow neck from center, wider rounded paddle body) */}
+            <g
+              transform={`rotate(${hourAngle} 50 50)`}
+              style={{ filter: 'drop-shadow(1px 2px 2px rgba(0, 0, 0, 0.85))' }}
+            >
+              {/* Narrow inner shaft */}
+              <rect
+                x="48.8"
+                y="38.5"
+                width="2.4"
+                height="11.5"
+                rx="1.2"
+                fill="url(#ios-hand-grad)"
+              />
+              {/* Main rounded baton body */}
+              <rect
+                x="47.7"
+                y="24"
+                width="4.6"
+                height="18"
+                rx="2.3"
+                fill="url(#ios-hand-grad)"
+              />
+            </g>
+
+            {/* MINUTE HAND (iOS two-stage baton extending near minute track) */}
+            <g
+              transform={`rotate(${minuteAngle} 50 50)`}
+              style={{ filter: 'drop-shadow(1.2px 2.4px 2.2px rgba(0, 0, 0, 0.85))' }}
+            >
+              {/* Narrow inner shaft */}
+              <rect
+                x="48.95"
+                y="37.5"
+                width="2.1"
+                height="12.5"
+                rx="1.05"
+                fill="url(#ios-hand-grad)"
+              />
+              {/* Main rounded baton body */}
+              <rect
+                x="48.1"
+                y="11.5"
+                width="3.8"
+                height="29"
+                rx="1.9"
+                fill="url(#ios-hand-grad)"
+              />
+            </g>
+
+            {/* Outer Dark Metallic Center Hub Collar (underneath second hand) */}
+            <circle
+              cx="50"
+              cy="50"
+              r="4.2"
+              fill="#1f1f24"
+              stroke="#ffffff"
+              strokeWidth="1.2"
+              style={{ filter: 'drop-shadow(0px 1.5px 2px rgba(0, 0, 0, 0.85))' }}
+            />
+          </svg>
+
+          {/* SECOND HAND LAYER (Separate DOM layer for smooth CSS spring bounce on each 1s mechanical tick) */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              width: '100%',
+              height: '100%',
+              transform: `rotate(${secondAngle}deg)`,
+              transition: 'transform 0.26s cubic-bezier(0.34, 1.65, 0.64, 1)',
+              willChange: 'transform',
+              pointerEvents: 'none'
+            }}
+          >
+            <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+              <g style={{ filter: 'drop-shadow(1.2px 2.2px 2px rgba(0, 0, 0, 0.8))' }}>
+                {/* Counterweight tail + main sweeping needle in iOS Red (#FF3B30) */}
+                <rect
+                  x="49.3"
+                  y="8.8"
+                  width="1.4"
+                  height="53.2"
+                  rx="0.7"
+                  fill="#FF3B30"
+                />
+                {/* Red Center Cap */}
+                <circle cx="50" cy="50" r="2.7" fill="#FF3B30" />
+                {/* Center Pin Specular Dot */}
+                <circle cx="50" cy="50" r="0.95" fill="#18181c" />
+              </g>
+            </svg>
+          </div>
+
+          {/* Subtle Top-Left 3D Glass Reflection Overlay */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 45%)',
+              pointerEvents: 'none'
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const ThreeDInstrumentDial = React.memo(({
+  label = "CPU",
+  sublabel = "LOAD",
+  value = 0,
+  accentColor = "#0a84ff",
+  size = 114
+}) => {
+  const clamped = Math.max(0, Math.min(100, Number(value) || 0));
+  const totalTicks = 28;
+  const activeTicks = Math.round((clamped / 100) * totalTicks);
+  const startAngle = -125;
+  const endAngle = 125;
+  const angleSpan = endAngle - startAngle;
+  const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
+
+  const ticks = useMemo(() => {
+    return Array.from({ length: totalTicks + 1 }, (_, i) => {
+      const deg = startAngle + (i / totalTicks) * angleSpan;
+      const isMajor = i % 7 === 0;
+      const isActive = i <= activeTicks && clamped > 0;
+      return { deg, isMajor, isActive };
+    });
+  }, [activeTicks, clamped, startAngle, angleSpan]);
+
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: '50%',
+        position: 'relative',
+        flexShrink: 0,
+        padding: 7,
+        boxSizing: 'border-box',
+        background: 'linear-gradient(145deg, #2a2a32 0%, #17171d 55%, #0c0c10 100%)',
+        boxShadow: `
+          0 10px 22px rgba(0, 0, 0, 0.85),
+          0 3px 7px rgba(0, 0, 0, 0.65),
+          inset 0 1.5px 2px rgba(255, 255, 255, 0.2),
+          inset 0 -2px 4px rgba(0, 0, 0, 0.9),
+          0 0 16px ${accentColor}14
+        `,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        userSelect: 'none'
+      }}
+    >
+      {/* Inner Bezel Step */}
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          borderRadius: '50%',
+          padding: 2.5,
+          boxSizing: 'border-box',
+          background: 'linear-gradient(145deg, #09090c 0%, #23232b 100%)',
+          boxShadow: 'inset 0 2px 5px rgba(0, 0, 0, 0.95)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        {/* Recessed Matte Dial Cavity */}
+        <div
+          style={{
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            position: 'relative',
+            background: 'radial-gradient(circle at 50% 42%, #191920 0%, #111116 72%, #0a0a0e 100%)',
+            boxShadow: 'inset 0 5px 11px rgba(0, 0, 0, 0.92), inset 0 -1px 3px rgba(255, 255, 255, 0.05)',
+            overflow: 'hidden'
+          }}
+        >
+          <svg viewBox="0 0 100 100" style={{ width: '100%', height: '100%', display: 'block' }}>
+            {/* Sunken Center Well */}
+            <circle
+              cx="50"
+              cy="50"
+              r="29"
+              fill="#0e0e13"
+              stroke="rgba(255,255,255,0.05)"
+              strokeWidth="0.8"
+            />
+
+            {/* 250-degree Instrument Scale Ticks */}
+            {ticks.map((t, idx) => (
+              <rect
+                key={idx}
+                x={t.isMajor ? "48.9" : "49.2"}
+                y="6.2"
+                width={t.isMajor ? "2.2" : "1.6"}
+                height={t.isMajor ? "7.2" : "4.8"}
+                rx="0.9"
+                fill={t.isActive ? accentColor : "rgba(255, 255, 255, 0.16)"}
+                transform={`rotate(${t.deg} 50 50)`}
+                style={t.isActive ? { filter: `drop-shadow(0 0 2.5px ${accentColor}99)` } : undefined}
+              />
+            ))}
+          </svg>
+
+          {/* Center Readout Stack */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: iosFontStack,
+              paddingTop: 4
+            }}
+          >
+            <span
+              style={{
+                fontSize: 20,
+                fontWeight: 800,
+                color: '#ffffff',
+                letterSpacing: '-0.6px',
+                lineHeight: 1,
+                textShadow: '0 2px 6px rgba(0,0,0,0.85)'
+              }}
+            >
+              {value !== null && value !== undefined ? `${clamped}%` : 'N/A'}
+            </span>
+            <span
+              style={{
+                fontSize: 8.5,
+                fontWeight: 700,
+                color: 'rgba(255, 255, 255, 0.48)',
+                letterSpacing: '0.6px',
+                marginTop: 2,
+                textTransform: 'uppercase'
+              }}
+            >
+              {sublabel}
+            </span>
+          </div>
+
+          {/* Bottom Recessed Pill Badge */}
+          <div
+            style={{
+              position: 'absolute',
+              bottom: 8,
+              left: '50%',
+              transform: 'translateX(-50%)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              padding: '1.5px 7px',
+              borderRadius: 999,
+              background: 'rgba(0, 0, 0, 0.65)',
+              border: `1px solid ${accentColor}44`,
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.9)'
+            }}
+          >
+            <span
+              style={{
+                width: 4.5,
+                height: 4.5,
+                borderRadius: '50%',
+                background: accentColor,
+                boxShadow: `0 0 6px ${accentColor}`
+              }}
+            />
+            <span
+              style={{
+                fontSize: 8.5,
+                fontWeight: 800,
+                color: accentColor,
+                letterSpacing: '0.5px',
+                fontFamily: iosFontStack
+              }}
+            >
+              {label}
+            </span>
+          </div>
+
+          {/* Specular Top-Left Glint */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0) 45%)',
+              pointerEvents: 'none'
+            }}
+          />
+        </div>
+      </div>
+    </div>
+  );
+});
+
+const TimerTickRulerSelector = ({
+  customTimerSetup,
+  setCustomTimerSetup,
+  onStartCustom,
+  onStartPreset
+}) => {
+  const rulerRef = useRef(null);
+  const isDraggingRef = useRef(false);
+  const selectedMinutes = Math.max(1, Math.min(120, Math.round((customTimerSetup || 900) / 60)));
+  const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
+
+  // Keep 0..32 visible when selectedMinutes <= 25 so 0, 5, 10, 15, 20, 25, 30 matches img1,
+  // and pan the 32-minute window smoothly when selectedMinutes > 25 up to 120.
+  const visibleSpan = 32;
+  const startMin = selectedMinutes <= 25
+    ? 0
+    : Math.min(120 - visibleSpan, selectedMinutes - 16);
+
+  const updateMinutesFromClientX = useCallback((clientX) => {
+    if (!rulerRef.current) return;
+    const rect = rulerRef.current.getBoundingClientRect();
+    const padX = 12;
+    const usableW = Math.max(1, rect.width - padX * 2);
+    const relX = Math.max(0, Math.min(usableW, clientX - rect.left - padX));
+    const ratio = relX / usableW;
+    const pickedMin = Math.max(1, Math.min(120, Math.round(startMin + ratio * visibleSpan)));
+    setCustomTimerSetup(pickedMin * 60);
+  }, [startMin, visibleSpan, setCustomTimerSetup]);
+
+  const handlePointerDown = (e) => {
+    e.stopPropagation();
+    isDraggingRef.current = true;
+    if (e.currentTarget.setPointerCapture) {
+      try { e.currentTarget.setPointerCapture(e.pointerId); } catch (_) {}
+    }
+    updateMinutesFromClientX(e.clientX);
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDraggingRef.current) return;
+    e.stopPropagation();
+    updateMinutesFromClientX(e.clientX);
+  };
+
+  const handlePointerUp = (e) => {
+    if (!isDraggingRef.current) return;
+    e.stopPropagation();
+    isDraggingRef.current = false;
+  };
+
+  const handleRulerWheel = (e) => {
+    e.stopPropagation();
+    const delta = e.deltaY !== 0 ? e.deltaY : e.deltaX;
+    if (delta === 0) return;
+    const step = e.shiftKey ? 5 : 1;
+    const dir = delta > 0 ? 1 : -1;
+    const nextMin = Math.max(1, Math.min(120, selectedMinutes + dir * step));
+    setCustomTimerSetup(nextMin * 60);
+  };
+
+  const ticks = [];
+  for (let m = startMin; m <= startMin + visibleSpan; m++) {
+    ticks.push(m);
+  }
+
+  const pointerIndex = selectedMinutes - startMin;
+  const pointerPercent = (pointerIndex / visibleSpan) * 100;
+  const formattedReadout = `${String(selectedMinutes).padStart(2, '0')}:00`;
+
+  const presets = [
+    { label: '5m', sec: 300 },
+    { label: '15m', sec: 900 },
+    { label: '30m', sec: 1800 },
+    { label: '60m', sec: 3600 }
+  ];
+
+  return (
+    <div
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 12,
+        padding: '2px 0',
+        boxSizing: 'border-box',
+        userSelect: 'none',
+        fontFamily: iosFontStack
+      }}
+    >
+      {/* Left Main Panel (~72%): img1 3D Recessed Tick-Ruler + 'Start Timer' Pill + Big Orange Digital Readout */}
+      <div
+        style={{
+          flex: 1,
+          minWidth: 0,
+          height: '100%',
+          borderRadius: 18,
+          padding: '10px 16px 10px 16px',
+          boxSizing: 'border-box',
+          background: 'linear-gradient(180deg, #131216 0%, #0b0a0d 100%)',
+          border: '1px solid rgba(255, 159, 10, 0.16)',
+          boxShadow: `
+            0 8px 20px rgba(0, 0, 0, 0.8),
+            inset 0 4px 12px rgba(0, 0, 0, 0.92),
+            inset 0 1px 1px rgba(255, 255, 255, 0.06)
+          `,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          position: 'relative',
+          overflow: 'hidden'
+        }}
+      >
+        {/* Interactive Horizontal Tick-Ruler Area (Numbers + Vertical Tick Bars + Triangle Indicator) */}
+        <div
+          ref={rulerRef}
+          data-scrollable="true"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onWheel={handleRulerWheel}
+          title="Drag or scroll to adjust minutes"
+          style={{
+            width: '100%',
+            padding: '0 12px',
+            boxSizing: 'border-box',
+            cursor: 'ew-resize',
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative',
+            maskImage: 'linear-gradient(to right, rgba(0,0,0,0.2) 0%, rgba(0,0,0,1) 12%, rgba(0,0,0,1) 86%, rgba(0,0,0,0.12) 100%)',
+            WebkitMaskImage: 'linear-gradient(to right, rgba(0,0,0,0.2) 0%, rgba(0,0,0,1) 12%, rgba(0,0,0,1) 86%, rgba(0,0,0,0.12) 100%)'
+          }}
+        >
+          {/* Top Major Numbers Row (0, 5, 10, 15, 20, 25, 30...) */}
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: 17,
+              marginBottom: 4
+            }}
+          >
+            {ticks.map((m, idx) => {
+              if (m % 5 !== 0) return null;
+              const leftPct = (idx / visibleSpan) * 100;
+              const distFromSelected = Math.abs(m - selectedMinutes);
+              const isSelected = m === selectedMinutes;
+              const opacity = isSelected
+                ? 1
+                : Math.max(0.28, 0.88 - (distFromSelected / visibleSpan) * 0.65);
+
+              return (
+                <span
+                  key={`num-${m}`}
+                  style={{
+                    position: 'absolute',
+                    left: `${leftPct}%`,
+                    transform: 'translateX(-50%)',
+                    fontSize: 12.5,
+                    fontWeight: isSelected ? 700 : 600,
+                    color: '#FF9F0A',
+                    opacity,
+                    letterSpacing: '-0.2px',
+                    textShadow: isSelected ? '0 0 8px rgba(255, 159, 10, 0.5)' : '0 1px 2px rgba(0,0,0,0.9)',
+                    transition: 'opacity 0.12s ease'
+                  }}
+                >
+                  {m}
+                </span>
+              );
+            })}
+          </div>
+
+          {/* Middle Vertical Rounded Tick Bars Row */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              width: '100%',
+              height: 30,
+              position: 'relative'
+            }}
+          >
+            {ticks.map((m) => {
+              const isFilled = m <= selectedMinutes;
+              const isSelected = m === selectedMinutes;
+              const isMajor = m % 5 === 0;
+              return (
+                <div
+                  key={`tick-${m}`}
+                  style={{
+                    width: isSelected ? 3.2 : 2.6,
+                    height: isSelected ? 29 : (isMajor ? 27 : 25),
+                    borderRadius: 999,
+                    background: isFilled
+                      ? 'linear-gradient(180deg, #FFB340 0%, #FF9F0A 55%, #D97706 100%)'
+                      : 'linear-gradient(180deg, rgba(255, 159, 10, 0.26) 0%, rgba(180, 100, 10, 0.16) 100%)',
+                    boxShadow: isFilled
+                      ? (isSelected
+                          ? '0 0 8px rgba(255, 159, 10, 0.65), 0 2px 4px rgba(0,0,0,0.85)'
+                          : '0 2px 4px rgba(0, 0, 0, 0.8), 0 0 4px rgba(255, 159, 10, 0.25)')
+                      : 'inset 0 1px 2px rgba(0, 0, 0, 0.85)',
+                    transition: 'background 0.1s ease, height 0.1s ease'
+                  }}
+                />
+              );
+            })}
+          </div>
+
+          {/* Upward Orange Triangle Pointer (▲) directly under selected tick */}
+          <div
+            style={{
+              position: 'relative',
+              width: '100%',
+              height: 12,
+              marginTop: 3
+            }}
+          >
+            <div
+              style={{
+                position: 'absolute',
+                left: `${pointerPercent}%`,
+                transform: 'translateX(-50%)',
+                transition: isDraggingRef.current ? 'none' : 'left 0.12s cubic-bezier(0.22, 1, 0.36, 1)',
+                filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.85)) drop-shadow(0 0 5px rgba(255, 159, 10, 0.45))'
+              }}
+            >
+              <svg width="12" height="10" viewBox="0 0 12 10">
+                <path
+                  d="M5.15 1.1C5.53 0.45 6.47 0.45 6.85 1.1L10.85 8.0C11.23 8.65 10.76 9.48 10.0 9.48H2.0C1.24 9.48 0.77 8.65 1.15 8.0L5.15 1.1Z"
+                  fill="#FF9F0A"
+                />
+              </svg>
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Row: Left 3D Dark-Bronze 'Start Timer' Pill + Right Large iOS '15:00' Digital Readout */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            marginTop: 1
+          }}
+        >
+          <motion.button
+            whileHover={{ scale: 1.03, filter: 'brightness(1.1)' }}
+            whileTap={{ scale: 0.96 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartCustom(selectedMinutes * 60);
+            }}
+            style={{
+              height: 34,
+              padding: '0 18px',
+              borderRadius: 999,
+              background: 'linear-gradient(180deg, #33200d 0%, #231507 100%)',
+              border: '1px solid rgba(255, 159, 10, 0.28)',
+              boxShadow: `
+                0 5px 12px rgba(0, 0, 0, 0.75),
+                inset 0 1px 1px rgba(255, 195, 100, 0.22),
+                inset 0 -1.5px 3px rgba(0, 0, 0, 0.85)
+              `,
+              color: '#FF9F0A',
+              fontSize: 13.5,
+              fontWeight: 600,
+              letterSpacing: '-0.1px',
+              fontFamily: iosFontStack,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            Start Timer
+          </motion.button>
+
+          <div
+            style={{
+              fontSize: 33,
+              fontWeight: 400,
+              color: '#FF9F0A',
+              fontFamily: iosFontStack,
+              letterSpacing: '-0.8px',
+              lineHeight: 1,
+              fontVariantNumeric: 'tabular-nums',
+              textShadow: '0 2px 10px rgba(255, 159, 10, 0.28), 0 2px 4px rgba(0, 0, 0, 0.9)'
+            }}
+          >
+            {formattedReadout}
+          </div>
+        </div>
+      </div>
+
+      {/* Right Side Column (~28%): Sunken 3D Well with 2x2 Tactile Preset Buttons (Instant Start) */}
+      <div
+        style={{
+          width: 132,
+          height: '100%',
+          flexShrink: 0,
+          borderRadius: 18,
+          padding: '8px',
+          boxSizing: 'border-box',
+          background: 'linear-gradient(180deg, #121216 0%, #0a0a0d 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: `
+            0 8px 20px rgba(0, 0, 0, 0.75),
+            inset 0 4px 10px rgba(0, 0, 0, 0.9),
+            inset 0 1px 1px rgba(255, 255, 255, 0.05)
+          `,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          gap: 6
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '0 3px'
+          }}
+        >
+          <span
+            style={{
+              fontSize: 9.5,
+              fontWeight: 700,
+              color: 'rgba(255, 159, 10, 0.85)',
+              letterSpacing: '0.6px',
+              textTransform: 'uppercase'
+            }}
+          >
+            Quick Presets
+          </span>
+          <Timer size={11} color="#FF9F0A" style={{ opacity: 0.85 }} />
+        </div>
+
+        <div
+          style={{
+            flex: 1,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gridTemplateRows: 'repeat(2, 1fr)',
+            gap: 6
+          }}
+        >
+          {presets.map((preset) => {
+            const isMatched = selectedMinutes * 60 === preset.sec;
+            return (
+              <motion.button
+                key={preset.label}
+                whileHover={{ scale: 1.04, y: -1 }}
+                whileTap={{ scale: 0.94 }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onStartPreset(preset.sec);
+                }}
+                title={`Start ${preset.label} timer immediately`}
+                style={{
+                  background: isMatched
+                    ? 'linear-gradient(180deg, #35210d 0%, #221407 100%)'
+                    : 'linear-gradient(180deg, #212128 0%, #15151a 100%)',
+                  border: isMatched
+                    ? '1px solid rgba(255, 159, 10, 0.45)'
+                    : '1px solid rgba(255, 255, 255, 0.09)',
+                  borderRadius: 11,
+                  boxShadow: `
+                    0 4px 10px rgba(0, 0, 0, 0.7),
+                    inset 0 1px 1px rgba(255, 255, 255, 0.14),
+                    inset 0 -1.5px 2px rgba(0, 0, 0, 0.85)
+                  `,
+                  color: isMatched ? '#FF9F0A' : '#ffffff',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: iosFontStack,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: 0
+                }}
+              >
+                <span>{preset.label}</span>
+              </motion.button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 function openApp(app) {
   if (!app) return;
   const trimmedApp = app.trim();
@@ -485,11 +1481,11 @@ const TABS = [
   { id: 0, name: "Browser Search", icon: (color) => <Search size={16} color={color} /> },
   { id: 1, name: "Weather", icon: (color) => <CloudSun size={16} color={color} /> },
   { id: 2, name: "Overview", icon: (color) => <Sun size={16} color={color} /> },
-  { id: 11, name: "Battery Hub", icon: (color) => <BatteryCharging size={16} color={color} /> },
   { id: 12, name: "Audio Mixer", icon: (color) => <SlidersHorizontal size={16} color={color} /> },
-  { id: 13, name: "Progress Island", icon: (color) => <Layers size={16} color={color} /> },
   { id: 14, name: "App Launcher", icon: (color) => <Compass size={16} color={color} /> },
   { id: 15, name: "Quick Notes", icon: (color) => <FileText size={16} color={color} /> },
+  { id: 16, name: "Shelf", icon: (color) => <Inbox size={16} color={color} /> },
+  { id: 17, name: "Prayer", icon: (color) => <Moon size={16} color={color} /> },
   { id: 3, name: "Now Playing", icon: (color) => <Music size={16} color={color} /> },
   { id: 4, name: "Calendar", icon: (color) => <CalendarIcon size={16} color={color} /> },
   { id: 5, name: "Notifications", icon: (color) => <Bell size={16} color={color} /> },
@@ -504,11 +1500,11 @@ const DEFAULT_TAB_SHORTCUTS = {
   0: "Alt+B",   // Browser Search
   1: "Alt+W",   // Weather
   2: "Alt+O",   // Overview
-  11: "Alt+H",  // Battery Hub
   12: "Alt+A",  // Audio Mixer
-  13: "Alt+P",  // Progress Island
   14: "Alt+L",  // App Launcher
   15: "Alt+Q",  // Quick Notes
+  16: "Alt+F",  // Shelf
+  17: "Alt+P",  // Prayer
   3: "Alt+M",   // Now Playing
   4: "Alt+C",   // Calendar
   5: "Alt+N",   // Notifications
@@ -519,7 +1515,7 @@ const DEFAULT_TAB_SHORTCUTS = {
   9: "Alt+S"    // Settings
 };
 
-const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSeek }) => {
+const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSeek, accentColor = "#ff2d55" }) => {
   const [animTime, setAnimTime] = useState(0);
   const [scrubPos, setScrubPos] = useState(null);
 
@@ -540,9 +1536,9 @@ const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSee
 
   const currentPos = scrubPos !== null ? scrubPos : position;
   const progress = duration > 0 ? Math.min(1, Math.max(0, currentPos / duration)) : 0;
-  const width = 330;
-  const height = 24;
-  const centerY = 12;
+  const width = 300;
+  const height = 22;
+  const centerY = 11;
   const barHeight = 6;
   const playedX = Math.max(0, Math.min(width, progress * width));
 
@@ -554,9 +1550,9 @@ const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSee
     const x = t * playedX;
     const envelope = Math.sin(t * Math.PI);
     const waveAmp = isPlaying
-      ? Math.sin(t * 8 - animTime * 3) * 5 * envelope
-      : Math.sin(t * 4 + animTime) * 1.5 * envelope;
-    const y = (centerY - barHeight / 2) - Math.max(0, waveAmp + 4 * envelope);
+      ? Math.sin(t * 8 - animTime * 3) * 4.5 * envelope
+      : Math.sin(t * 4 + animTime) * 1.2 * envelope;
+    const y = (centerY - barHeight / 2) - Math.max(0, waveAmp + 3.5 * envelope);
     topPoints.push(`${x.toFixed(1)},${y.toFixed(1)}`);
   }
 
@@ -583,38 +1579,62 @@ const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSee
   };
 
   return (
-    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 6, cursor: 'pointer', marginTop: 8 }} onClick={handleScrubClick}>
-      <svg width="100%" height="24" viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
-        {/* Unplayed Track (Background Bar) */}
+    <div
+      style={{
+        width: '100%',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 3,
+        cursor: 'pointer',
+        padding: '4px 8px 3px 8px',
+        boxSizing: 'border-box',
+        borderRadius: 10,
+        background: 'rgba(8, 8, 12, 0.72)',
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: 'inset 0 3px 7px rgba(0, 0, 0, 0.88), inset 0 -1px 1px rgba(255, 255, 255, 0.05)'
+      }}
+      onClick={handleScrubClick}
+    >
+      <svg width="100%" height="18" viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="scrubber-wave-grad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor={accentColor} />
+            <stop offset="100%" stopColor="#ffffff" />
+          </linearGradient>
+        </defs>
+        {/* Sunken Unplayed Trough */}
         <rect
           x="0"
           y={centerY - barHeight / 2}
           width={width}
           height={barHeight}
           rx={barHeight / 2}
-          fill="rgba(255, 255, 255, 0.25)"
+          fill="rgba(255, 255, 255, 0.14)"
         />
 
         {/* Played Fluid Wave Mountain Ribbon Fill */}
         {playedX > 0 && (
           <path
             d={filledPathD}
-            fill="rgba(240, 240, 240, 0.88)"
+            fill="url(#scrubber-wave-grad)"
+            style={{ filter: `drop-shadow(0 0 5px ${accentColor}77)` }}
           />
         )}
 
-        {/* Slider Handle Knob (Thumb) */}
+        {/* 3D Beveled Slider Handle Knob */}
         <circle
           cx={playedX}
           cy={centerY}
-          r="8"
+          r="6.5"
           fill="#ffffff"
-          style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.4))' }}
+          stroke={accentColor}
+          strokeWidth="1.5"
+          style={{ filter: 'drop-shadow(0 2px 5px rgba(0,0,0,0.75))' }}
         />
       </svg>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 500, color: 'rgba(255,255,255,0.55)', fontFamily: 'OpenRunde, sans-serif' }}>
-        <span>{formatTime(currentPos)}</span>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.55)', fontFamily: 'OpenRunde, sans-serif', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ color: accentColor }}>{formatTime(currentPos)}</span>
         <span>{formatTime(duration)}</span>
       </div>
     </div>
@@ -633,30 +1653,36 @@ const AppleSwitch = ({ checked, onChange, disabled = false }) => (
       if (!disabled && onChange) onChange(!checked);
     }}
     style={{
-      width: 38,
+      width: 40,
       height: 22,
       borderRadius: 11,
-      background: checked ? '#34c759' : 'rgba(255, 255, 255, 0.16)',
-      border: 'none',
+      background: checked
+        ? 'linear-gradient(180deg, #1f8a3c 0%, #28b84c 100%)'
+        : 'linear-gradient(180deg, #0a0a0e 0%, #15151c 100%)',
+      border: checked
+        ? '1px solid rgba(52, 199, 89, 0.5)'
+        : '1px solid rgba(255, 255, 255, 0.08)',
       padding: 2,
       display: 'inline-flex',
       alignItems: 'center',
       cursor: disabled ? 'not-allowed' : 'pointer',
       position: 'relative',
-      transition: 'background 0.2s ease',
-      boxShadow: checked ? '0 0 10px rgba(52, 199, 89, 0.35)' : 'none',
+      transition: 'all 0.2s ease',
+      boxShadow: checked
+        ? 'inset 0 2px 5px rgba(0, 0, 0, 0.5), 0 0 10px rgba(52, 199, 89, 0.28)'
+        : 'inset 0 3px 6px rgba(0, 0, 0, 0.9), inset 0 -1px 1px rgba(255, 255, 255, 0.05)',
       flexShrink: 0
     }}
   >
     <motion.div
-      animate={{ x: checked ? 16 : 0 }}
+      animate={{ x: checked ? 17 : 0 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
       style={{
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        background: '#ffffff',
-        boxShadow: '0 2px 5px rgba(0, 0, 0, 0.35)'
+        width: 17,
+        height: 17,
+        borderRadius: '50%',
+        background: 'linear-gradient(180deg, #ffffff 0%, #d4d4d8 100%)',
+        boxShadow: '0 2px 5px rgba(0, 0, 0, 0.75), inset 0 1px 1px rgba(255, 255, 255, 0.9)'
       }}
     />
   </button>
@@ -665,10 +1691,11 @@ const AppleSwitch = ({ checked, onChange, disabled = false }) => (
 const AppleSegmented = ({ value, options, onChange }) => (
   <div style={{
     display: 'inline-flex',
-    background: 'rgba(255, 255, 255, 0.08)',
-    borderRadius: 8,
-    padding: 2,
-    border: '1px solid rgba(255, 255, 255, 0.08)'
+    background: '#0b0b0f',
+    borderRadius: 9,
+    padding: 2.5,
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.9)'
   }}>
     {options.map((opt) => {
       const isSelected = value === opt.value;
@@ -681,16 +1708,20 @@ const AppleSegmented = ({ value, options, onChange }) => (
             onChange(opt.value);
           }}
           style={{
-            background: isSelected ? 'rgba(255, 255, 255, 0.22)' : 'transparent',
-            border: 'none',
-            color: isSelected ? '#ffffff' : 'rgba(255, 255, 255, 0.6)',
-            borderRadius: 6,
+            background: isSelected
+              ? 'linear-gradient(180deg, #1b3358 0%, #102039 100%)'
+              : 'transparent',
+            border: isSelected ? '1px solid rgba(10, 132, 255, 0.4)' : '1px solid transparent',
+            color: isSelected ? '#60a5fa' : 'rgba(255, 255, 255, 0.55)',
+            borderRadius: 6.5,
             padding: '3px 9px',
             fontSize: 11,
             fontWeight: isSelected ? 700 : 500,
             cursor: 'pointer',
             transition: 'all 0.15s ease',
-            boxShadow: isSelected ? '0 1px 4px rgba(0,0,0,0.2)' : 'none'
+            boxShadow: isSelected
+              ? '0 2px 6px rgba(0,0,0,0.65), inset 0 1px 1px rgba(255,255,255,0.15)'
+              : 'none'
           }}
         >
           {opt.label}
@@ -937,374 +1968,6 @@ const QuotemanAvatar = ({ quote, size = 50 }) => {
     </div>
   );
 };
-
-// Apple Dynamic Island Liquid Wave Battery Capsule (Horizontal Fill: Left-to-Right / Fluid Flow: Right-to-Left)
-const AppleBatteryCapsule = ({ percent = 100, charging = false, width = 168, height = 66 }) => {
-  const safePercent = typeof percent === "number" && !isNaN(percent) ? Math.min(100, Math.max(0, percent)) : 85;
-  const canvasRef = useRef(null);
-  const fillXRef = useRef((safePercent / 100) * (width - 10));
-
-  // Apple System Palette for Liquid & Meniscus Waves
-  const frontColor = charging
-    ? '#30D158'
-    : (safePercent <= 10 ? '#FF453A' : (safePercent <= 20 ? '#FFD60A' : '#30D158'));
-  const frontTopColor = charging
-    ? '#34E065'
-    : (safePercent <= 10 ? '#FF6961' : (safePercent <= 20 ? '#FFE043' : '#34E065'));
-  const frontBottomColor = charging
-    ? '#24B046'
-    : (safePercent <= 10 ? '#D32F2F' : (safePercent <= 20 ? '#D4A000' : '#24B046'));
-  const backColor = charging
-    ? '#15803D'
-    : (safePercent <= 10 ? '#991B1B' : (safePercent <= 20 ? '#B45309' : '#15803D'));
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    let animationFrameId;
-    const startTime = performance.now();
-
-    // High-DPI Canvas scaling for Retina / crisp rendering
-    const dpr = window.devicePixelRatio || 2;
-    const rect = canvas.getBoundingClientRect();
-    const w = rect.width || (width - 10);
-    const h = rect.height || (height - 10);
-
-    canvas.width = Math.round(w * dpr);
-    canvas.height = Math.round(h * dpr);
-    ctx.scale(dpr, dpr);
-
-    // Initial fill target
-    const targetFillX = (safePercent / 100) * w;
-    if (fillXRef.current === undefined) fillXRef.current = targetFillX;
-
-    // Organic rising micro-bubbles inside the liquid
-    const bubbleCount = charging ? 8 : 5;
-    const bubbles = Array.from({ length: bubbleCount }, (_, i) => ({
-      xRatio: 0.08 + (i / bubbleCount) * 0.84,
-      y: Math.random() * (h - 12) + 8,
-      radius: 1.4 + Math.random() * 2.0,
-      speedY: 0.45 + Math.random() * 0.65,
-      wobbleSpeed: 1.8 + Math.random() * 1.6,
-      wobbleAmp: 1.4 + Math.random() * 1.4,
-      phase: Math.random() * Math.PI * 2,
-      alpha: 0.35 + Math.random() * 0.35
-    }));
-
-    const render = (now) => {
-      const elapsed = (now - startTime) / 1000;
-
-      // Smoothly interpolate current fillX towards targetFillX
-      fillXRef.current += (targetFillX - fillXRef.current) * 0.08;
-      const currentFillX = Math.max(0, Math.min(w, fillXRef.current));
-
-      // Clear Canvas
-      ctx.clearRect(0, 0, w, h);
-
-      // Clip canvas to rounded capsule interior
-      ctx.save();
-      ctx.beginPath();
-      if (ctx.roundRect) {
-        ctx.roundRect(0, 0, w, h, 13);
-      } else {
-        ctx.rect(0, 0, w, h);
-      }
-      ctx.clip();
-
-      const isNearlyFull = currentFillX >= w - 2.5;
-
-      // --- 1. BACK WAVE LAYER (Darker emerald / amber / red depth) ---
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(0, h);
-      ctx.lineTo(0, 0);
-
-      if (isNearlyFull) {
-        // When nearly 100% full, liquid reaches right wall with subtle wave sloshing along top
-        for (let x = 0; x <= w; x += 3) {
-          const topY = Math.max(0, Math.sin(x * 0.05 + elapsed * 2.2) * 2.4 + 2);
-          ctx.lineTo(x, topY);
-        }
-        ctx.lineTo(w, h);
-      } else {
-        // Meniscus wave along right liquid edge
-        ctx.lineTo(Math.max(0, currentFillX - 3), 0);
-        for (let y = 0; y <= h; y += 2) {
-          const wave1 = Math.sin(y * 0.08 + elapsed * 2.2) * 3.4;
-          const wave2 = Math.cos(y * 0.16 - elapsed * 1.5) * 1.8;
-          const wx = Math.max(0, Math.min(w, currentFillX - 3 + wave1 + wave2));
-          ctx.lineTo(wx, y);
-        }
-        ctx.lineTo(0, h);
-      }
-      ctx.closePath();
-      ctx.fillStyle = backColor;
-      ctx.globalAlpha = 0.75;
-      ctx.fill();
-      ctx.restore();
-
-      // --- 2. FRONT WAVE LAYER (Vibrant Apple green / yellow / red gradient) ---
-      ctx.save();
-      ctx.beginPath();
-      ctx.moveTo(0, h);
-      ctx.lineTo(0, 0);
-
-      if (isNearlyFull) {
-        // Wave along top moving continuously from RIGHT TO LEFT (+ elapsed * 2.8)
-        for (let x = 0; x <= w; x += 3) {
-          const topY = Math.max(0, Math.sin(x * 0.045 + elapsed * 2.8 + 0.9) * 2.8 + 2.2);
-          ctx.lineTo(x, topY);
-        }
-        // Down the right wall with gentle surge against glass
-        for (let y = 0; y <= h; y += 3) {
-          const rightX = w - Math.max(0, Math.sin(y * 0.09 + elapsed * 2.5) * 1.8);
-          ctx.lineTo(rightX, y);
-        }
-        ctx.lineTo(0, h);
-      } else {
-        // Meniscus wave along right liquid edge
-        ctx.lineTo(Math.max(0, currentFillX), 0);
-        for (let y = 0; y <= h; y += 2) {
-          const wave1 = Math.sin(y * 0.07 + elapsed * 2.7) * 4.2;
-          const wave2 = Math.cos(y * 0.14 - elapsed * 1.9 + 1.0) * 2.4;
-          const wx = Math.max(0, Math.min(w, currentFillX + wave1 + wave2));
-          ctx.lineTo(wx, y);
-        }
-        ctx.lineTo(0, h);
-      }
-      ctx.closePath();
-
-      const frontGrad = ctx.createLinearGradient(0, 0, 0, h);
-      frontGrad.addColorStop(0, frontTopColor);
-      frontGrad.addColorStop(1, frontBottomColor);
-      ctx.fillStyle = frontGrad;
-      ctx.globalAlpha = 0.96;
-      ctx.fill();
-
-      // Luminous surface-tension meniscus crest highlight
-      if (!isNearlyFull && currentFillX > 5) {
-        ctx.beginPath();
-        for (let y = 0; y <= h; y += 2) {
-          const wave1 = Math.sin(y * 0.07 + elapsed * 2.7) * 4.2;
-          const wave2 = Math.cos(y * 0.14 - elapsed * 1.9 + 1.0) * 2.4;
-          const wx = Math.max(0, Math.min(w, currentFillX + wave1 + wave2));
-          if (y === 0) ctx.moveTo(wx, y);
-          else ctx.lineTo(wx, y);
-        }
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.42)';
-        ctx.lineWidth = 1.5;
-        ctx.globalAlpha = 0.85;
-        ctx.stroke();
-      }
-      ctx.restore();
-
-      // --- 3. INTERNAL FLUID SHIMMER / LIGHT WAVE (Travels RIGHT TO LEFT) ---
-      const activeLiquidWidth = Math.min(w, currentFillX + 4);
-      if (activeLiquidWidth > 12) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(0, 0, activeLiquidWidth, h);
-        ctx.clip();
-
-        // Shimmer ribbon 1 sweeps continuously from right to left
-        const shimmerOffset1 = (elapsed * 38) % (w + 100);
-        const shimmerX1 = (w + 50) - shimmerOffset1;
-        const shimmerGrad1 = ctx.createLinearGradient(shimmerX1 - 35, 0, shimmerX1 + 35, 0);
-        shimmerGrad1.addColorStop(0, 'rgba(255, 255, 255, 0)');
-        shimmerGrad1.addColorStop(0.5, 'rgba(255, 255, 255, 0.15)');
-        shimmerGrad1.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = shimmerGrad1;
-        ctx.fillRect(0, 0, activeLiquidWidth, h);
-
-        // Shimmer ribbon 2 sweeps at secondary cadence
-        const shimmerOffset2 = (elapsed * 24 + 60) % (w + 100);
-        const shimmerX2 = (w + 50) - shimmerOffset2;
-        const shimmerGrad2 = ctx.createLinearGradient(shimmerX2 - 25, 0, shimmerX2 + 25, 0);
-        shimmerGrad2.addColorStop(0, 'rgba(255, 255, 255, 0)');
-        shimmerGrad2.addColorStop(0.5, 'rgba(255, 255, 255, 0.09)');
-        shimmerGrad2.addColorStop(1, 'rgba(255, 255, 255, 0)');
-        ctx.fillStyle = shimmerGrad2;
-        ctx.fillRect(0, 0, activeLiquidWidth, h);
-
-        ctx.restore();
-      }
-
-      // --- 4. RISING MICRO-BUBBLES (Buoyant, swaying, zero seam) ---
-      if (activeLiquidWidth > 15) {
-        for (let i = 0; i < bubbles.length; i++) {
-          const b = bubbles[i];
-          b.y -= b.speedY;
-          if (b.y < 5) {
-            b.y = h + Math.random() * 8;
-            b.xRatio = 0.08 + Math.random() * 0.84;
-            b.radius = 1.4 + Math.random() * 2.0;
-            b.speedY = 0.45 + Math.random() * 0.65;
-          }
-
-          const currentBx = b.xRatio * activeLiquidWidth + Math.sin(elapsed * b.wobbleSpeed + b.phase) * b.wobbleAmp;
-
-          if (currentBx > 5 && currentBx < activeLiquidWidth - 4 && b.y <= h && b.y >= 4) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(currentBx, b.y, b.radius, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(255, 255, 255, ${b.alpha})`;
-            ctx.fill();
-
-            // Specular shine point
-            ctx.beginPath();
-            ctx.arc(currentBx - b.radius * 0.3, b.y - b.radius * 0.3, b.radius * 0.35, 0, Math.PI * 2);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
-            ctx.fill();
-            ctx.restore();
-          }
-        }
-      }
-
-      ctx.restore(); // Restore outer clip
-
-      animationFrameId = requestAnimationFrame(render);
-    };
-
-    animationFrameId = requestAnimationFrame(render);
-
-    return () => {
-      if (animationFrameId) cancelAnimationFrame(animationFrameId);
-    };
-  }, [safePercent, charging, frontColor, frontTopColor, frontBottomColor, backColor, width, height]);
-
-  return (
-    <div
-      style={{
-        position: 'relative',
-        display: 'inline-flex',
-        alignItems: 'center',
-        userSelect: 'none',
-        paddingRight: 5
-      }}
-    >
-      {/* Outer Apple Battery Chassis */}
-      <div
-        style={{
-          position: 'relative',
-          width,
-          height,
-          borderRadius: 18,
-          background: 'rgba(255, 255, 255, 0.05)',
-          border: '2px solid rgba(255, 255, 255, 0.22)',
-          boxSizing: 'border-box',
-          padding: 3,
-          overflow: 'hidden'
-        }}
-      >
-        {/* Liquid Wave Tank Cavity */}
-        <div
-          style={{
-            position: 'relative',
-            width: '100%',
-            height: '100%',
-            borderRadius: 13,
-            overflow: 'hidden',
-            background: 'rgba(0, 0, 0, 0.42)'
-          }}
-        >
-          {/* Smooth 60fps Liquid Physics Canvas */}
-          <canvas
-            ref={canvasRef}
-            style={{
-              position: 'absolute',
-              inset: 0,
-              width: '100%',
-              height: '100%',
-              display: 'block'
-            }}
-          />
-
-          {/* Glass Wall Reflection Pill (Apple Dynamic Island style) */}
-          <div
-            style={{
-              position: 'absolute',
-              left: 6,
-              top: 12,
-              width: 4.5,
-              height: 36,
-              borderRadius: 2.5,
-              backgroundColor: 'rgba(255, 255, 255, 0.22)',
-              pointerEvents: 'none',
-              zIndex: 6
-            }}
-          />
-
-          {/* Top Curved Sheen Glare */}
-          <div
-            style={{
-              position: 'absolute',
-              top: 1,
-              left: 4,
-              right: 4,
-              height: '35%',
-              background: 'linear-gradient(to bottom, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.01) 100%)',
-              borderRadius: '12px 12px 4px 4px',
-              pointerEvents: 'none',
-              zIndex: 7
-            }}
-          />
-
-          {/* Center Typography & Charging Bolt */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 5,
-              zIndex: 10,
-              pointerEvents: 'none'
-            }}
-          >
-            {charging && (
-              <motion.div
-                animate={{ opacity: [0.85, 1, 0.85], scale: [0.96, 1.06, 0.96] }}
-                transition={{ duration: 1.8, repeat: Infinity, ease: 'easeInOut' }}
-                style={{ display: 'flex', alignItems: 'center' }}
-              >
-                <Zap size={18} color="#ffffff" fill="#ffffff" />
-              </motion.div>
-            )}
-            <span
-              style={{
-                fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
-                fontSize: 27,
-                fontWeight: 700,
-                color: '#ffffff',
-                letterSpacing: '-0.5px',
-                textShadow: '0 1px 4px rgba(0, 0, 0, 0.85), 0 2px 8px rgba(0, 0, 0, 0.7)'
-              }}
-            >
-              {safePercent}%
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* Apple Terminal Bump */}
-      <div
-        style={{
-          width: 5,
-          height: 22,
-          borderRadius: '0 4px 4px 0',
-          backgroundColor: 'rgba(255, 255, 255, 0.22)',
-          marginLeft: -1,
-          flexShrink: 0
-        }}
-      />
-    </div>
-  );
-};
-const BigAnimatedBattery = AppleBatteryCapsule;
 
 const FlipCard = ({ digit, width = 72, height = 64, fontSize = 38 }) => {
   const [currentDigit, setCurrentDigit] = useState(digit);
@@ -1587,42 +2250,43 @@ export default function Island() {
   const [mode, setMode] = useState("still");
   const [tabOrder, setTabOrder] = useState(() => {
     try {
-      const saved = JSON.parse(localStorage.getItem("tab-order") || "null");
-      if (Array.isArray(saved)) {
-        if (!saved.includes(11)) {
-          const idx2 = saved.indexOf(2);
-          if (idx2 !== -1) saved.splice(idx2 + 1, 0, 11);
-          else saved.push(11);
-          localStorage.setItem("tab-order", JSON.stringify(saved));
-        }
+      const rawSaved = JSON.parse(localStorage.getItem("tab-order") || "null");
+      if (Array.isArray(rawSaved)) {
+        const saved = rawSaved.filter(id => id !== 11 && id !== 13);
         if (!saved.includes(12)) {
-          const idx11 = saved.indexOf(11);
-          if (idx11 !== -1) saved.splice(idx11 + 1, 0, 12);
+          const idx2 = saved.indexOf(2);
+          if (idx2 !== -1) saved.splice(idx2 + 1, 0, 12);
           else saved.push(12);
-          localStorage.setItem("tab-order", JSON.stringify(saved));
-        }
-        if (!saved.includes(13)) {
-          const idx12 = saved.indexOf(12);
-          if (idx12 !== -1) saved.splice(idx12 + 1, 0, 13);
-          else saved.push(13);
-          localStorage.setItem("tab-order", JSON.stringify(saved));
         }
         if (!saved.includes(14)) {
-          const idx13 = saved.indexOf(13);
-          if (idx13 !== -1) saved.splice(idx13 + 1, 0, 14);
+          const idx12 = saved.indexOf(12);
+          if (idx12 !== -1) saved.splice(idx12 + 1, 0, 14);
           else saved.push(14);
-          localStorage.setItem("tab-order", JSON.stringify(saved));
         }
         if (!saved.includes(15)) {
           const idx14 = saved.indexOf(14);
           if (idx14 !== -1) saved.splice(idx14 + 1, 0, 15);
           else saved.push(15);
-          localStorage.setItem("tab-order", JSON.stringify(saved));
         }
+        if (!saved.includes(16)) {
+          const idx15 = saved.indexOf(15);
+          if (idx15 !== -1) saved.splice(idx15 + 1, 0, 16);
+          else saved.push(16);
+        }
+        if (!saved.includes(17)) {
+          const idx16 = saved.indexOf(16);
+          if (idx16 !== -1) saved.splice(idx16 + 1, 0, 17);
+          else saved.push(17);
+        }
+        // Self-healing: ensure any valid tab from TABS is included in tabOrder
+        TABS.forEach(t => {
+          if (!saved.includes(t.id)) saved.push(t.id);
+        });
+        localStorage.setItem("tab-order", JSON.stringify(saved));
         return saved;
       }
     } catch {}
-    return [2, 11, 12, 13, 14, 15, 4, 5, 6, 7, 8, 10, 0, 1, 3, 9];
+    return [2, 12, 14, 15, 16, 17, 4, 5, 6, 7, 8, 10, 0, 1, 3, 9];
   });
   const [hiddenTabs, setHiddenTabs] = useState(() => JSON.parse(localStorage.getItem("hidden-tabs") || "[6]"));
   const [defaultTabId, setDefaultTabId] = useState(() => Number(localStorage.getItem("default-tab") || 2));
@@ -1650,6 +2314,27 @@ export default function Island() {
       return newHidden;
     });
   };
+
+  // Self-healing synchronization: guarantee all tabs defined in TABS exist in tabOrder
+  useEffect(() => {
+    setTabOrder((prev) => {
+      let changed = false;
+      const updated = [...prev];
+      TABS.forEach((t) => {
+        if (!updated.includes(t.id)) {
+          updated.push(t.id);
+          changed = true;
+        }
+      });
+      if (changed) {
+        try {
+          localStorage.setItem("tab-order", JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      }
+      return prev;
+    });
+  }, []);
 
   const [calendarDate, setCalendarDate] = useState(new Date());
   const [systemStats, setSystemStats] = useState({ cpu: 0, ram: 0 });
@@ -1685,7 +2370,7 @@ export default function Island() {
     localStorage.getItem("show-info-when-idle") !== "false"
   );
   const [hourFormat, setHourFormat] = useState((localStorage.getItem("hour-format") || "12-hr") === "12-hr");
-  const [weather, setWeather] = useState({ temp: "", status: "", humidity: "", wind: "" });
+  const [weather, setWeather] = useState({ temp: "", status: "", humidity: "", wind: "", hourly: [] });
   const [weatherUnit, setweatherUnit] = useState(localStorage.getItem("weather-unit") || "c");
   const [theme, setTheme] = useState("default");
   const [bgColor, setBgColor] = useState(localStorage.getItem("bg-color") || "#000000");
@@ -1710,21 +2395,6 @@ export default function Island() {
   const [clipboard, setClipboard] = useState([]);
   const [charging, setCharging] = useState(false);
   const [chargingAlert, setChargingAlert] = useState(false);
-  const [batteryDischargingTime, setBatteryDischargingTime] = useState(null);
-  const [batteryChargingTime, setBatteryChargingTime] = useState(null);
-  const [batteryHistory, setBatteryHistory] = useState(() => {
-    try {
-      const saved = localStorage.getItem("quick_pill_battery_history");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          const cutoff = Date.now() - 6 * 60 * 60 * 1000;
-          return parsed.filter(s => s.timestamp > cutoff);
-        }
-      }
-    } catch {}
-    return [];
-  });
   const [spotifyTrack, setSpotifyTrack] = useState(null);
   const [bluetooth, setBluetooth] = useState({ connected: false, devices: [] });
   const [bluetoothAlert, setBluetoothAlert] = useState(false);
@@ -1735,7 +2405,19 @@ export default function Island() {
   const captureAlertQueue = useRef([]);
   const captureAlertTimer = useRef(null);
   const captureAlertDisplayed = useRef({ camera: false, microphone: false });
-  const [tasks, setTasks] = useState(JSON.parse(localStorage.getItem("tasks") || "[]"));
+  const [tasks, setTasks] = useState(() => {
+    try {
+      const stored = localStorage.getItem("tasks");
+      if (!stored) return [];
+      const parsed = JSON.parse(stored);
+      if (Array.isArray(parsed)) {
+        return parsed.map(t => typeof t === "string" ? t : (t?.title || t?.text || t?.name || "Untitled Task"));
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  });
   const [taskText, setTaskText] = useState("");
   const [isHovered, setIsHovered] = useState(false);
   const isHoveredRef = useRef(false);
@@ -1760,15 +2442,23 @@ export default function Island() {
   // Ctrl+Hover Click-Through State
   const [ctrlHeld, setCtrlHeld] = useState(false);
   const ctrlHeldRef = useRef(false);
-  const lastIgnoreRef = useRef({ ignore: true, forward: true });
+  const lastIgnoreRef = useRef({ ignore: true, forward: true, isCtrl: false });
+  const isExternalFileDragRef = useRef(false);
+  const externalFileDragTimeoutRef = useRef(null);
+  const isShelfDragOutActiveRef = useRef(false);
 
-  const updateMouseIgnore = useCallback((ignore, forward = true) => {
-    if (lastIgnoreRef.current?.ignore === ignore && lastIgnoreRef.current?.forward === forward) {
+  const updateMouseIgnore = useCallback((ignore, forward = true, isCtrlOverride = undefined) => {
+    const isCtrlFlag = isCtrlOverride !== undefined ? Boolean(isCtrlOverride) : Boolean(ignore && ctrlHeldRef.current);
+    if (
+      lastIgnoreRef.current?.ignore === ignore &&
+      lastIgnoreRef.current?.forward === forward &&
+      lastIgnoreRef.current?.isCtrl === isCtrlFlag
+    ) {
       return;
     }
-    lastIgnoreRef.current = { ignore, forward };
+    lastIgnoreRef.current = { ignore, forward, isCtrl: isCtrlFlag };
     if (window.electronAPI?.setIgnoreMouseEvents) {
-      window.electronAPI.setIgnoreMouseEvents(ignore, forward);
+      window.electronAPI.setIgnoreMouseEvents(ignore, forward, isCtrlFlag);
     }
   }, []);
 
@@ -1796,6 +2486,46 @@ export default function Island() {
   const [notificationAlert, setNotificationAlert] = useState(null);
   const notificationAlertTimeout = useRef(null);
   const seenNotificationIds = useRef(new Set());
+
+  // Prayer Time Alert State (Banner & Chime)
+  const [prayerAlert, setPrayerAlert] = useState(null);
+  const prayerAlertTimeout = useRef(null);
+  const lastAlertedPrayerKey = useRef(null);
+
+  useEffect(() => {
+    const checkPrayerTime = () => {
+      try {
+        const cached = localStorage.getItem("quick_pill_prayer_timings");
+        if (!cached) return;
+        const timings = JSON.parse(cached);
+        const now = new Date();
+        const curH = now.getHours().toString().padStart(2, "0");
+        const curM = now.getMinutes().toString().padStart(2, "0");
+        const curTimeStr = `${curH}:${curM}`;
+
+        for (const [key, t] of Object.entries(timings)) {
+          if (t === curTimeStr && lastAlertedPrayerKey.current !== `${key}-${curTimeStr}`) {
+            lastAlertedPrayerKey.current = `${key}-${curTimeStr}`;
+            setPrayerAlert({ prayerName: key, time: t });
+            playPrayerChime();
+
+            if (prayerAlertTimeout.current) clearTimeout(prayerAlertTimeout.current);
+            prayerAlertTimeout.current = setTimeout(() => {
+              prayerAlertTimeout.current = null;
+              setPrayerAlert(null);
+            }, 15000);
+            break;
+          }
+        }
+      } catch (_) {}
+    };
+
+    const interval = setInterval(checkPrayerTime, 10000);
+    return () => {
+      clearInterval(interval);
+      if (prayerAlertTimeout.current) clearTimeout(prayerAlertTimeout.current);
+    };
+  }, []);
 
   // Auto-Updater State & Handlers
   const [appVersion, setAppVersion] = useState("5.1.0");
@@ -2275,77 +3005,6 @@ export default function Island() {
     });
   }, [masterAudioMuted, activeAudioDeviceId]);
 
-  // --- Universal Progress Island State & Handlers ---
-  const [progressSnapshot, setProgressSnapshot] = useState({
-    active: [],
-    history: [],
-    summary: {
-      activeCount: 0,
-      runningCount: 0,
-      pausedCount: 0,
-      failedCount: 0,
-      completedCount: 0,
-      totalBytesPerSecond: 0,
-      overallPercentage: null,
-      hasIndeterminate: false
-    },
-    compactDisplay: null
-  });
-  const [progressFilter, setProgressFilter] = useState("all"); // 'all' | 'active' | 'history'
-  const [isStartingProgressTest, setIsStartingProgressTest] = useState(false);
-
-  useEffect(() => {
-    if (window.electronAPI?.progress?.getSnapshot) {
-      window.electronAPI.progress.getSnapshot().then(snap => {
-        if (snap) setProgressSnapshot(snap);
-      }).catch(() => {});
-    }
-
-    if (window.electronAPI?.progress?.onUpdate) {
-      const unsub = window.electronAPI.progress.onUpdate((snap) => {
-        if (snap) setProgressSnapshot(snap);
-      });
-      return unsub;
-    }
-  }, []);
-
-  const handleProgressAction = useCallback(async (operationId, action, params = {}) => {
-    if (window.electronAPI?.progress?.executeAction) {
-      try {
-        await window.electronAPI.progress.executeAction(operationId, action, params);
-      } catch (err) {
-        console.error("Progress action error:", err);
-      }
-    }
-  }, []);
-
-  const handleClearProgressHistory = useCallback(async () => {
-    if (window.electronAPI?.progress?.clearHistory) {
-      try {
-        await window.electronAPI.progress.clearHistory();
-      } catch (err) {
-        console.error("Clear progress history error:", err);
-      }
-    }
-  }, []);
-
-  const handleStartFileHashTest = useCallback(async () => {
-    if (isStartingProgressTest) return;
-    setIsStartingProgressTest(true);
-    try {
-      if (window.electronAPI?.progress?.selectFile && window.electronAPI?.progress?.startHashOperation) {
-        const filePath = await window.electronAPI.progress.selectFile();
-        if (filePath) {
-          await window.electronAPI.progress.startHashOperation({ sourcePath: filePath });
-        }
-      }
-    } catch (err) {
-      console.error("Failed to start file hash test:", err);
-    } finally {
-      setIsStartingProgressTest(false);
-    }
-  }, [isStartingProgressTest]);
-
   // Daily Quote feature state & handlers
   const [dailyQuoteIndex, setDailyQuoteIndex] = useState(() => {
     try {
@@ -2526,7 +3185,7 @@ export default function Island() {
 
     // For vertical wheel scrolling, check if pointer is inside a scrollable container
     if (!isHorizontalSwipe) {
-      let scrollableElem = e.target.closest("#clipboard, .notifications-container, #task-list, .task-list-scrollable, #settings-sidebar, .settings-sidebar, .settings-sidebar-scrollable, #settings-content, .settings-content, .settings-content-scrollable, #settings-container, .calendar-container, .audio-mixer-scrollable, .progress-island-scrollable, .launcher-scrollable, .notes-scrollable, [data-scrollable='true']");
+      let scrollableElem = e.target.closest("#clipboard, .notifications-container, #task-list, .task-list-scrollable, #settings-sidebar, .settings-sidebar, .settings-sidebar-scrollable, #settings-content, .settings-content, .settings-content-scrollable, #settings-container, .calendar-container, .audio-mixer-scrollable, .launcher-scrollable, .notes-scrollable, [data-scrollable='true']");
       if (scrollableElem && scrollableElem.scrollHeight <= scrollableElem.clientHeight + 2) {
         const innerScrollable = e.target.closest("#settings-sidebar, #settings-content, .settings-sidebar-scrollable, .settings-content-scrollable, [data-scrollable='true']");
         if (innerScrollable) {
@@ -2582,7 +3241,9 @@ export default function Island() {
       target?.closest?.("button") ||
       target?.closest?.(".radio-label") ||
       target?.closest?.(".clipboard-row") ||
-      target?.closest?.(".notification-card")
+      target?.closest?.(".notification-card") ||
+      target?.closest?.(".shelf-item") ||
+      target?.closest?.("[draggable='true']")
     );
   };
 
@@ -2644,24 +3305,23 @@ export default function Island() {
   const isPlaying = spotifyTrack?.state === 'playing';
   const nowPlayingWidth = isHovered ? 135 : 110;
   const isNotificationBanner = Boolean(notificationAlert && mode !== "large");
-  const hasActiveProgress = Boolean(progressSnapshot?.compactDisplay && mode !== "large" && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert);
-  const width = isNotificationBanner
-    ? 300
+  const isPrayerBanner = Boolean(prayerAlert && mode !== "large");
+  const isAnyBanner = isNotificationBanner || isPrayerBanner;
+  const width = isAnyBanner
+    ? (isPrayerBanner ? 320 : 300)
     : mode === "large"
-      ? (currentTab === 14 ? 885 : (currentTab === 9 ? 620 : (currentTab === 12 || currentTab === 13 || currentTab === 15 ? 590 : (currentTab === 2 || currentTab === 11 ? 560 : 540))))
-      : hasActiveProgress
-        ? 285
-        : (mode === "quick" && isPlaying && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert)
-          ? nowPlayingWidth
-          : (mode === "quick" || alert || chargingAlert || bluetoothAlert || cameraAlert || microphoneAlert || volumeAlert || keyLockAlert || usbAlert || notificationAlert)
-            ? 260
-            : isPlaying
-              ? nowPlayingWidth
-              : 170;
-  const height = isNotificationBanner
+      ? (currentTab === 14 ? 885 : (currentTab === 9 ? 620 : (currentTab === 12 || currentTab === 15 ? 590 : (currentTab === 16 || currentTab === 17 ? 560 : (currentTab === 2 ? 560 : (currentTab === 1 ? 555 : 540))))))
+      : (mode === "quick" && isPlaying && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !volumeAlert && !keyLockAlert && !usbAlert && !notificationAlert && !prayerAlert)
+        ? nowPlayingWidth
+        : (mode === "quick" || alert || chargingAlert || bluetoothAlert || cameraAlert || microphoneAlert || volumeAlert || keyLockAlert || usbAlert || notificationAlert || prayerAlert)
+          ? 260
+          : isPlaying
+            ? nowPlayingWidth
+            : 170;
+  const height = isAnyBanner
     ? 46
     : mode === "large"
-      ? (currentTab === 14 ? 278 : (currentTab === 9 ? 220 : (currentTab === 15 ? 185 : (currentTab === 12 || currentTab === 13 ? 175 : 145))))
+      ? (currentTab === 14 ? 278 : (currentTab === 9 ? 220 : (currentTab === 15 ? 185 : (currentTab === 16 || currentTab === 17 ? 175 : (currentTab === 12 ? 175 : (currentTab === 1 ? 162 : 145))))))
       : 40;
 
   useEffect(() => {
@@ -2870,15 +3530,11 @@ export default function Island() {
         const update = () => {
           setPercent(Math.round(battery.level * 100));
           setCharging(battery.charging);
-          setBatteryDischargingTime(battery.dischargingTime);
-          setBatteryChargingTime(battery.chargingTime);
         };
         handler = update;
         update();
         battery.addEventListener("chargingchange", handler);
         battery.addEventListener("levelchange", handler);
-        battery.addEventListener("chargingtimechange", handler);
-        battery.addEventListener("dischargingtimechange", handler);
       } catch {
         setPercent(null);
       }
@@ -2888,191 +3544,9 @@ export default function Island() {
       if (battery && handler) {
         battery.removeEventListener("levelchange", handler);
         battery.removeEventListener("chargingchange", handler);
-        battery.removeEventListener("chargingtimechange", handler);
-        battery.removeEventListener("dischargingtimechange", handler);
       }
     };
   }, []);
-
-  // Continuous Battery Drain & Charge Telemetry Collector (Sampled every 30s + on state change)
-  useEffect(() => {
-    if (percent === null) return;
-
-    const recordSample = () => {
-      const now = Date.now();
-      setBatteryHistory(prev => {
-        const lastSample = prev[prev.length - 1];
-        if (
-          lastSample &&
-          (now - lastSample.timestamp < 15000) &&
-          lastSample.percent === percent &&
-          lastSample.charging === charging
-        ) {
-          return prev;
-        }
-        const cutoff = now - 6 * 60 * 60 * 1000; // 6-hour sliding retention window
-        const updated = [...prev.filter(s => s.timestamp > cutoff), { timestamp: now, percent, charging }];
-        try {
-          localStorage.setItem("quick_pill_battery_history", JSON.stringify(updated));
-        } catch {}
-        return updated;
-      });
-    };
-
-    recordSample();
-    const interval = setInterval(recordSample, 30000);
-    return () => clearInterval(interval);
-  }, [percent, charging]);
-
-  // Intelligent Battery Runtime, Drain Velocity & Power Profile Analytics Engine (Apple HIG)
-  const batteryAnalytics = useMemo(() => {
-    const currentPercent = percent !== null ? Math.min(100, Math.max(0, percent)) : 85;
-    const isCharging = charging;
-    const now = Date.now();
-
-    // 1. Analyze historical sliding window drain / charge velocity
-    let measuredDrainRate = null; // % per hour
-    let measuredChargeRate = null; // % per hour
-
-    if (batteryHistory.length >= 2) {
-      const matchingSamples = batteryHistory.filter(s => s.charging === isCharging);
-      if (matchingSamples.length >= 2) {
-        const oldest = matchingSamples[0];
-        const newest = matchingSamples[matchingSamples.length - 1];
-        const timeDiffHours = (newest.timestamp - oldest.timestamp) / (1000 * 60 * 60);
-
-        if (timeDiffHours >= 0.02) {
-          const pctDiff = newest.percent - oldest.percent;
-          if (!isCharging && pctDiff < 0) {
-            measuredDrainRate = Math.abs(pctDiff) / timeDiffHours;
-          } else if (isCharging && pctDiff > 0) {
-            measuredChargeRate = pctDiff / timeDiffHours;
-          }
-        }
-      }
-    }
-
-    // 2. Hardware CPU-modulated baseline drain rate
-    const cpuLoad = (systemStats && typeof systemStats.cpu === "number") ? systemStats.cpu : 15;
-    const baselineDrainRate = 8.0 + (cpuLoad / 100) * 16.0;
-
-    let effectiveDrainRate = baselineDrainRate;
-    if (measuredDrainRate && measuredDrainRate >= 3 && measuredDrainRate <= 50) {
-      effectiveDrainRate = measuredDrainRate * 0.7 + baselineDrainRate * 0.3;
-    }
-
-    let effectiveChargeRate = 42.0;
-    if (measuredChargeRate && measuredChargeRate >= 10 && measuredChargeRate <= 90) {
-      effectiveChargeRate = measuredChargeRate * 0.75 + 42.0 * 0.25;
-    }
-
-    let minutesRemaining = 0;
-    let timeRemainingStr = "";
-    let endTargetTimeStr = "";
-    let rateText = "";
-    let powerModeTag = "Normal Power";
-
-    if (isCharging) {
-      powerModeTag = "AC Power";
-      if (currentPercent >= 100) {
-        timeRemainingStr = "Fully Charged";
-        endTargetTimeStr = "Power Adapter Connected";
-        rateText = "100%";
-      } else {
-        if (batteryChargingTime && isFinite(batteryChargingTime) && batteryChargingTime > 0 && batteryChargingTime < 86400) {
-          minutesRemaining = Math.max(1, Math.round(batteryChargingTime / 60));
-        } else {
-          const needed = 100 - currentPercent;
-          const hours = needed / effectiveChargeRate;
-          minutesRemaining = Math.max(1, Math.round(hours * 60));
-        }
-
-        const hrs = Math.floor(minutesRemaining / 60);
-        const mins = minutesRemaining % 60;
-        timeRemainingStr = hrs > 0 ? (mins > 0 ? `${hrs} hr ${mins} min` : `${hrs} hr`) : `${mins} min`;
-
-        const targetDate = new Date(now + minutesRemaining * 60 * 1000);
-        let targetHours = targetDate.getHours();
-        const targetMins = targetDate.getMinutes().toString().padStart(2, '0');
-        if (hourFormat) {
-          const ampm = targetHours >= 12 ? 'PM' : 'AM';
-          targetHours = targetHours % 12 || 12;
-          endTargetTimeStr = `Full by ~${targetHours}:${targetMins} ${ampm}`;
-        } else {
-          endTargetTimeStr = `Full by ~${targetHours.toString().padStart(2, '0')}:${targetMins}`;
-        }
-
-        rateText = `+${Math.round(effectiveChargeRate)}% / hr`;
-      }
-    } else {
-      // Discharging (Battery Mode)
-      if (currentPercent <= 20) {
-        powerModeTag = "Low Power";
-      } else if (effectiveDrainRate > 17) {
-        powerModeTag = "High Usage";
-      } else {
-        powerModeTag = "Normal Power";
-      }
-
-      if (batteryDischargingTime && isFinite(batteryDischargingTime) && batteryDischargingTime > 60 && batteryDischargingTime < 86400) {
-        minutesRemaining = Math.max(1, Math.round(batteryDischargingTime / 60));
-      } else {
-        const hours = currentPercent / effectiveDrainRate;
-        minutesRemaining = Math.max(1, Math.min(1080, Math.round(hours * 60)));
-      }
-
-      const hrs = Math.floor(minutesRemaining / 60);
-      const mins = minutesRemaining % 60;
-      timeRemainingStr = hrs > 0 ? (mins > 0 ? `${hrs} hr ${mins} min` : `${hrs} hr`) : `${mins} min`;
-
-      const targetDate = new Date(now + minutesRemaining * 60 * 1000);
-      let targetHours = targetDate.getHours();
-      const targetMins = targetDate.getMinutes().toString().padStart(2, '0');
-      if (hourFormat) {
-        const ampm = targetHours >= 12 ? 'PM' : 'AM';
-        targetHours = targetHours % 12 || 12;
-        endTargetTimeStr = `Depletes at ~${targetHours}:${targetMins} ${ampm}`;
-      } else {
-        endTargetTimeStr = `Depletes at ~${targetHours.toString().padStart(2, '0')}:${targetMins}`;
-      }
-
-      rateText = `~${effectiveDrainRate.toFixed(1)}% / hr`;
-    }
-
-    // Generate 8-bar Apple Activity graph
-    const activityBars = [];
-    const barCount = 8;
-    if (batteryHistory.length >= barCount) {
-      const step = Math.floor(batteryHistory.length / barCount);
-      for (let i = 0; i < barCount; i++) {
-        const idx = Math.min(batteryHistory.length - 1, i * step);
-        const lvl = batteryHistory[idx].percent;
-        activityBars.push({
-          height: Math.max(20, Math.min(100, lvl)),
-          isCurrent: i === barCount - 1
-        });
-      }
-    } else {
-      for (let i = 0; i < barCount; i++) {
-        const offset = (barCount - 1 - i) * (isCharging ? -1.5 : 1.2);
-        const val = Math.max(20, Math.min(100, currentPercent + offset));
-        activityBars.push({
-          height: val,
-          isCurrent: i === barCount - 1
-        });
-      }
-    }
-
-    return {
-      currentPercent,
-      isCharging,
-      timeRemainingStr,
-      endTargetTimeStr,
-      rateText,
-      powerModeTag,
-      activityBars
-    };
-  }, [percent, charging, batteryDischargingTime, batteryChargingTime, batteryHistory, systemStats, hourFormat]);
 
   // Battery alerts
   useEffect(() => {
@@ -3137,29 +3611,60 @@ export default function Island() {
     }
   }, [standbyBorderEnabled, largeStandbyEnabled]);
 
-  // Get Weather
+  // Get Weather (including 3-slot hourly forecast for Overview screen)
   useEffect(() => {
     let isCancelled = false;
     const getWeather = async () => {
       const loc = localStorage.getItem("location") || weatherLocation;
       const unit = localStorage.getItem("weather-unit") || weatherUnit || "f";
       const q = loc && loc.trim() ? encodeURIComponent(loc.trim()) : "auto:ip";
+      const tempKey = unit === "c" ? "temp_c" : "temp_f";
 
       try {
         const response = await fetch(
-          `https://api.weatherapi.com/v1/current.json?key=0b18c67c443543e0a6045401250911&q=${q}&aqi=no`
+          `https://api.weatherapi.com/v1/forecast.json?key=0b18c67c443543e0a6045401250911&q=${q}&days=2&aqi=no&alerts=no`
         );
         if (response.ok) {
           const data = await response.json();
           if (data?.current && !isCancelled) {
-            const key = unit === "c" ? "temp_c" : "temp_f";
-            const tempVal = Math.round(data.current[key]);
+            const tempVal = Math.round(data.current[tempKey]);
             if (!isNaN(tempVal)) {
+              const statusText = data.current.condition?.text || "Partly Cloudy";
+              const nowHour = new Date().getHours();
+              const allHours = [
+                ...(data.forecast?.forecastday?.[0]?.hour || []),
+                ...(data.forecast?.forecastday?.[1]?.hour || [])
+              ];
+              const h1Obj = allHours[nowHour + 1];
+              const h2Obj = allHours[nowHour + 2];
+
+              const hourlySlots = [
+                {
+                  temp: tempVal,
+                  status: statusText,
+                  hour24: nowHour,
+                  isNow: true
+                },
+                {
+                  temp: h1Obj && !isNaN(Math.round(h1Obj[tempKey])) ? Math.round(h1Obj[tempKey]) : tempVal - 1,
+                  status: h1Obj?.condition?.text || statusText,
+                  hour24: (nowHour + 1) % 24,
+                  isNow: false
+                },
+                {
+                  temp: h2Obj && !isNaN(Math.round(h2Obj[tempKey])) ? Math.round(h2Obj[tempKey]) : tempVal - 2,
+                  status: h2Obj?.condition?.text || statusText,
+                  hour24: (nowHour + 2) % 24,
+                  isNow: false
+                }
+              ];
+
               setWeather({
                 temp: tempVal,
-                status: data.current.condition?.text || "",
+                status: statusText,
                 humidity: data.current.humidity ? `${data.current.humidity}%` : "",
-                wind: data.current.wind_mph ? `${Math.round(data.current.wind_mph)} mph` : ""
+                wind: data.current.wind_mph ? `${Math.round(data.current.wind_mph)} mph` : "",
+                hourly: hourlySlots
               });
               return;
             }
@@ -3180,11 +3685,19 @@ export default function Island() {
             const rawTemp = unit === "c" ? parseFloat(current.temp_C) : parseFloat(current.temp_F);
             const tempVal = Math.round(rawTemp);
             if (!isNaN(tempVal)) {
+              const statusText = current.weatherDesc?.[0]?.value || "Partly Cloudy";
+              const nowHour = new Date().getHours();
+              const hourlySlots = [
+                { temp: tempVal, status: statusText, hour24: nowHour, isNow: true },
+                { temp: tempVal - 1, status: statusText, hour24: (nowHour + 1) % 24, isNow: false },
+                { temp: tempVal - 2, status: statusText, hour24: (nowHour + 2) % 24, isNow: false }
+              ];
               setWeather({
                 temp: tempVal,
-                status: current.weatherDesc?.[0]?.value || "",
+                status: statusText,
                 humidity: current.humidity ? `${current.humidity}%` : "",
-                wind: current.windspeedMiles ? `${current.windspeedMiles} mph` : ""
+                wind: current.windspeedMiles ? `${current.windspeedMiles} mph` : "",
+                hourly: hourlySlots
               });
             }
           }
@@ -3793,21 +4306,19 @@ export default function Island() {
           if (!ctrlHeldRef.current) {
             setCtrlState(true);
           }
-          updateMouseIgnore(true, true);
+          updateMouseIgnore(true, true, true);
         } else {
           if (ctrlHeldRef.current) {
             setCtrlState(false);
           }
-          if (isHoveredRef.current) {
-            updateMouseIgnore(false, true);
-          }
+          updateMouseIgnore(false, true, false);
         }
       } else {
         if (ctrlHeldRef.current) {
           setCtrlState(false);
         }
-        if (!isDraggingRef.current) {
-          updateMouseIgnore(true, true);
+        if (!isDraggingRef.current && !isExternalFileDragRef.current && !isShelfDragOutActiveRef.current) {
+          updateMouseIgnore(true, true, false);
         }
       }
     };
@@ -3881,7 +4392,14 @@ export default function Island() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => localStorage.setItem("tasks", JSON.stringify(tasks)), [tasks]);
+  useEffect(() => {
+    try {
+      const safeTasks = Array.isArray(tasks)
+        ? tasks.map(t => typeof t === "string" ? t : (t?.title || t?.text || t?.name || "Untitled Task"))
+        : [];
+      localStorage.setItem("tasks", JSON.stringify(safeTasks));
+    } catch (_) {}
+  }, [tasks]);
 
   function copyToClipboard(text) {
     if (!text) return;
@@ -3982,6 +4500,124 @@ export default function Island() {
     return () => clearTimeout(maxHold);
   }, [ctrlHeld, updateMouseIgnore, setCtrlState]);
 
+  // Keep main process informed of #Island bounds so native cursor-in-notch watcher
+  // can wake the window during external OS file drags (DoDragDrop)
+  const syncIslandBoundsToMain = useCallback(() => {
+    if (!window.electronAPI?.updateIslandBounds) return;
+    const elem = document.getElementById("Island");
+    if (!elem) return;
+    const rect = elem.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      window.electronAPI.updateIslandBounds({
+        left: Math.round(rect.left),
+        top: Math.round(rect.top),
+        right: Math.round(rect.right),
+        bottom: Math.round(rect.bottom)
+      });
+    }
+  }, []);
+
+  useEffect(() => {
+    syncIslandBoundsToMain();
+    const t1 = setTimeout(syncIslandBoundsToMain, 180);
+    const t2 = setTimeout(syncIslandBoundsToMain, 400);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
+  }, [mode, currentTab, width, height, positionMode, islandX, islandY, isTransitioning, syncIslandBoundsToMain]);
+
+  // Global file drag-and-drop & native cursor watcher integration
+  useEffect(() => {
+    const hasFilesInDrag = (e) => {
+      const types = e?.dataTransfer?.types;
+      if (!types) return false;
+      return Array.from(types).includes("Files");
+    };
+
+    const handleWindowFileDragOver = (e) => {
+      if (!hasFilesInDrag(e)) return;
+      if (isShelfDragOutActiveRef.current) return;
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
+      }
+      if (mouseLeaveTimer.current) {
+        clearTimeout(mouseLeaveTimer.current);
+        mouseLeaveTimer.current = null;
+      }
+      isExternalFileDragRef.current = true;
+      setHoverState(true);
+      updateMouseIgnore(false, true);
+      setMode("large");
+      setTabState((prev) => (prev[0] === 16 ? prev : [16, 1]));
+      window.dispatchEvent(new CustomEvent("quick-pill-file-drag-over"));
+
+      if (externalFileDragTimeoutRef.current) {
+        clearTimeout(externalFileDragTimeoutRef.current);
+      }
+      externalFileDragTimeoutRef.current = setTimeout(() => {
+        isExternalFileDragRef.current = false;
+        window.dispatchEvent(new CustomEvent("quick-pill-file-drag-end"));
+      }, 280);
+    };
+
+    const handleNativeDragStart = () => {
+      isShelfDragOutActiveRef.current = true;
+      lastIgnoreRef.current = { ignore: true, forward: true, isCtrl: false };
+      if (mouseLeaveTimer.current) {
+        clearTimeout(mouseLeaveTimer.current);
+        mouseLeaveTimer.current = null;
+      }
+    };
+
+    let unsubDragEnd = null;
+    if (window.electronAPI?.shelf?.onDragEnded) {
+      unsubDragEnd = window.electronAPI.shelf.onDragEnded(() => {
+        isShelfDragOutActiveRef.current = false;
+        lastIgnoreRef.current = { ignore: true, forward: true, isCtrl: false };
+      });
+    }
+
+    let unsubCursorEntered = null;
+    if (window.electronAPI?.onIslandCursorEntered) {
+      unsubCursorEntered = window.electronAPI.onIslandCursorEntered(() => {
+        lastIgnoreRef.current = { ignore: false, forward: true, isCtrl: false };
+      });
+    }
+
+    let unsubCursorOutside = null;
+    if (window.electronAPI?.onIslandCursorOutside) {
+      unsubCursorOutside = window.electronAPI.onIslandCursorOutside(() => {
+        if (isDraggingRef.current || isShelfDragOutActiveRef.current || isExternalFileDragRef.current) {
+          return;
+        }
+        setHoverState(false);
+        updateMouseIgnore(true, true);
+        if (standbyBorderEnabled) {
+          setMode("quick");
+        } else if (largeStandbyEnabled) {
+          setMode("large");
+        } else {
+          setMode("still");
+        }
+      });
+    }
+
+    window.addEventListener("dragenter", handleWindowFileDragOver);
+    window.addEventListener("dragover", handleWindowFileDragOver);
+    window.addEventListener("shelf-native-drag-start", handleNativeDragStart);
+
+    return () => {
+      window.removeEventListener("dragenter", handleWindowFileDragOver);
+      window.removeEventListener("dragover", handleWindowFileDragOver);
+      window.removeEventListener("shelf-native-drag-start", handleNativeDragStart);
+      if (typeof unsubDragEnd === "function") unsubDragEnd();
+      if (typeof unsubCursorEntered === "function") unsubCursorEntered();
+      if (typeof unsubCursorOutside === "function") unsubCursorOutside();
+    };
+  }, [setHoverState, updateMouseIgnore, standbyBorderEnabled, largeStandbyEnabled]);
+
   useEffect(() => {
     const handleFocusOut = () => {
       // Reset album hover state when window loses focus
@@ -3989,9 +4625,10 @@ export default function Island() {
       setAlbumRotation({ x: 0, y: 0 });
 
       setTimeout(() => {
-        if (!isHovered) {
+        if (!isHovered && !isExternalFileDragRef.current && !isShelfDragOutActiveRef.current) {
           const activeTag = document.activeElement?.tagName;
-          if (activeTag !== "INPUT" && activeTag !== "TEXTAREA" && activeTag !== "SELECT") {
+          const isLauncher = currentTab === 14;
+          if (isLauncher || (activeTag !== "INPUT" && activeTag !== "TEXTAREA" && activeTag !== "SELECT")) {
             if (standbyBorderEnabled) {
               setMode("quick");
             } else if (largeStandbyEnabled) {
@@ -4006,12 +4643,16 @@ export default function Island() {
 
     window.addEventListener("focusout", handleFocusOut);
     return () => window.removeEventListener("focusout", handleFocusOut);
-  }, [isHovered, standbyBorderEnabled, largeStandbyEnabled]);
+  }, [isHovered, standbyBorderEnabled, largeStandbyEnabled, currentTab]);
 
   useEffect(() => {
-    if (!isDragging && !isHovered) {
+    if (!isDragging && !isHovered && !isExternalFileDragRef.current && !isShelfDragOutActiveRef.current) {
       const activeTag = document.activeElement?.tagName;
-      if (activeTag !== "INPUT" && activeTag !== "TEXTAREA") {
+      const isLauncher = currentTab === 14;
+      if (isLauncher && (activeTag === "INPUT" || activeTag === "TEXTAREA")) {
+        document.activeElement?.blur();
+      }
+      if (isLauncher || (activeTag !== "INPUT" && activeTag !== "TEXTAREA")) {
         if (standbyBorderEnabled) {
           setMode("quick");
         } else if (largeStandbyEnabled) {
@@ -4021,7 +4662,7 @@ export default function Island() {
         }
       }
     }
-  }, [isDragging, isHovered, standbyBorderEnabled, largeStandbyEnabled]);
+  }, [isDragging, isHovered, standbyBorderEnabled, largeStandbyEnabled, currentTab]);
 
   const handleDragEndChecks = (e) => {
     updateDragging(false);
@@ -4063,6 +4704,66 @@ export default function Island() {
   return (
     <motion.div
       id="Island"
+      onDragEnter={(e) => {
+        const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+        if (types.includes("Files") && !isShelfDragOutActiveRef.current) {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+          isExternalFileDragRef.current = true;
+          setHoverState(true);
+          updateMouseIgnore(false, true);
+          setMode("large");
+          if (currentTab !== 16) {
+            setTabState([16, 1]);
+          }
+          window.dispatchEvent(new CustomEvent("quick-pill-file-drag-over"));
+        }
+      }}
+      onDragOver={(e) => {
+        const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
+        if (types.includes("Files") && !isShelfDragOutActiveRef.current) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
+          isExternalFileDragRef.current = true;
+          setHoverState(true);
+          updateMouseIgnore(false, true);
+          setMode("large");
+          if (currentTab !== 16) {
+            setTabState([16, 1]);
+          }
+          window.dispatchEvent(new CustomEvent("quick-pill-file-drag-over"));
+        }
+      }}
+      onDrop={async (e) => {
+        if (externalFileDragTimeoutRef.current) {
+          clearTimeout(externalFileDragTimeoutRef.current);
+          externalFileDragTimeoutRef.current = null;
+        }
+        isExternalFileDragRef.current = false;
+        window.dispatchEvent(new CustomEvent("quick-pill-file-drag-end"));
+
+        if (isShelfDragOutActiveRef.current) {
+          isShelfDragOutActiveRef.current = false;
+          return;
+        }
+
+        const filePaths = extractFilePathsFromDataTransfer(e.dataTransfer);
+        if (filePaths.length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          updateMouseIgnore(false, true);
+          setMode("large");
+          setTabState([16, 1]);
+          if (window.electronAPI?.shelf?.addFiles) {
+            try {
+              await window.electronAPI.shelf.addFiles(filePaths);
+            } catch (err) {
+              console.error("Failed to add files via global notch drop:", err);
+            }
+          }
+        }
+      }}
       onMouseEnter={(e) => {
         if (mouseLeaveTimer.current) {
           clearTimeout(mouseLeaveTimer.current);
@@ -4075,12 +4776,20 @@ export default function Island() {
           updateMouseIgnore(true, true);
         } else {
           setCtrlState(false);
-          // If a temporary notification alert is currently active, DO NOT force large mode!
+          // If a temporary notification alert or prayer alert is currently active, DO NOT force large mode!
           // Keep the notification banner visible and pause the auto-dismiss timer so user can read or click it.
           if (notificationAlert) {
             if (notificationAlertTimeout.current) {
               clearTimeout(notificationAlertTimeout.current);
               notificationAlertTimeout.current = null;
+            }
+            updateMouseIgnore(false, true);
+            return;
+          }
+          if (prayerAlert) {
+            if (prayerAlertTimeout.current) {
+              clearTimeout(prayerAlertTimeout.current);
+              prayerAlertTimeout.current = null;
             }
             updateMouseIgnore(false, true);
             return;
@@ -4104,7 +4813,7 @@ export default function Island() {
         if (ctrlHeldRef.current) {
           setCtrlState(false);
         }
-        if (isDraggingRef.current) return;
+        if (isDraggingRef.current || isExternalFileDragRef.current || isShelfDragOutActiveRef.current) return;
         if (mouseLeaveTimer.current) clearTimeout(mouseLeaveTimer.current);
         mouseLeaveTimer.current = setTimeout(() => {
           mouseLeaveTimer.current = null;
@@ -4112,7 +4821,12 @@ export default function Island() {
           updateMouseIgnore(true, true);
 
           const activeTag = document.activeElement?.tagName;
-          if (activeTag === "INPUT" || activeTag === "TEXTAREA") return;
+          const isLauncher = currentTab === 14;
+          if (isLauncher && (activeTag === "INPUT" || activeTag === "TEXTAREA")) {
+            document.activeElement?.blur();
+          } else if (activeTag === "INPUT" || activeTag === "TEXTAREA") {
+            return;
+          }
 
           // If a notification alert is still active, resume the auto-dismiss countdown
           if (notificationAlert) {
@@ -4609,7 +5323,47 @@ export default function Island() {
                   </motion.button>
                 </div>
               </motion.div>
-          ) : (isPlaying || showPausedQuickView) && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !keyLockAlert && !usbAlert && !notificationAlert && !isTimerRunning && timerSeconds === 0 ? (
+          ) : prayerAlert && !keyLockAlert && !usbAlert ? (
+            <motion.div
+              key={`prayer-alert-${prayerAlert.prayerName}`}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.16 }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                width: '100%',
+                padding: '0 20px',
+                boxSizing: 'border-box',
+                overflow: 'hidden',
+                cursor: 'pointer'
+              }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setPrayerAlert(null);
+                if (prayerAlertTimeout.current) {
+                  clearTimeout(prayerAlertTimeout.current);
+                  prayerAlertTimeout.current = null;
+                }
+                setMode('large');
+                setTabState([17, 1]);
+              }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <span style={{ fontSize: 15, fontWeight: 700, color: '#ffffff', lineHeight: 1.2 }}>
+                  {prayerAlert.prayerName}
+                </span>
+                <span style={{ fontSize: 11.5, color: '#9ca3af', lineHeight: 1.2 }}>
+                  It's time to pray
+                </span>
+              </div>
+              <span style={{ fontSize: 16, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.01em' }}>
+                {prayerAlert.time}
+              </span>
+            </motion.div>
+          ) : (isPlaying || showPausedQuickView) && !alert && !chargingAlert && !bluetoothAlert && !cameraAlert && !microphoneAlert && !keyLockAlert && !usbAlert && !notificationAlert && !prayerAlert && !isTimerRunning && timerSeconds === 0 ? (
             <motion.div
               key={spotifyTrack?.name ? `playing-${spotifyTrack.name}-${spotifyTrack.artist}` : "playing"}
               initial={{ opacity: 0, scale: 0.99 }}
@@ -4744,80 +5498,6 @@ export default function Island() {
                 </AnimatePresence>
               </div>
             </motion.div>
-          ) : hasActiveProgress ? (
-            <motion.div
-              key="compact-progress"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.14, ease: [0.16, 1, 0.3, 1] }}
-              onClick={(e) => {
-                e.stopPropagation();
-                setMode("large");
-                setTabState([13, 1]);
-              }}
-              style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '0 14px',
-                boxSizing: 'border-box',
-                cursor: 'pointer'
-              }}
-              title="Click to view Progress Island"
-            >
-              {/* Left: Mini Ring + Title */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, maxWidth: '65%' }}>
-                <ProgressMiniRing
-                  progress={progressSnapshot.compactDisplay.progress}
-                  status={progressSnapshot.compactDisplay.status}
-                  size={18}
-                  strokeWidth={2.5}
-                />
-                <span style={{
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  color: '#ffffff',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  lineHeight: 1
-                }}>
-                  {progressSnapshot.compactDisplay.title}
-                </span>
-              </div>
-
-              {/* Right: Percent/Status + Multi-badge + Speed */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                {progressSnapshot.compactDisplay.bytesPerSecond > 0 && (
-                  <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.5)' }}>
-                    {formatBytes(progressSnapshot.compactDisplay.bytesPerSecond)}/s
-                  </span>
-                )}
-                <span style={{
-                  fontSize: 12,
-                  fontWeight: 700,
-                  color: progressSnapshot.compactDisplay.status === "failed" ? "#ef4444" : progressSnapshot.compactDisplay.status === "completed" ? "#22c55e" : "#38bdf8",
-                  lineHeight: 1
-                }}>
-                  {progressSnapshot.compactDisplay.formattedProgress}
-                </span>
-                {progressSnapshot.compactDisplay.hasMultiple && (
-                  <span style={{
-                    fontSize: 9,
-                    fontWeight: 700,
-                    padding: '1px 5px',
-                    borderRadius: 6,
-                    background: 'rgba(255, 255, 255, 0.12)',
-                    color: 'rgba(255, 255, 255, 0.75)'
-                  }}>
-                    {progressSnapshot.compactDisplay.badgeText}
-                  </span>
-                )}
-              </div>
-            </motion.div>
           ) : (
             <motion.div
               key={keyLockAlert ? "keylock" : usbAlert ? "usb" : chargingAlert ? "charging" : alert ? "battery" : bluetoothAlert ? "bluetooth" : cameraAlert ? "camera" : microphoneAlert ? "microphone" : (isTimerRunning || timerSeconds > 0) ? "timer" : "time"}
@@ -4936,106 +5616,602 @@ export default function Island() {
               borderRadius: "inherit"
             }}
           >
-            {/*Browser Search*/}
-            {currentTab === 0 && (
-              <div style={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
-                <input
-                  id="browser-searchbar"
-                  placeholder="Search google or enter URL"
-                  value={browserSearch}
-                  onChange={(e) => setBrowserSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      searchBrowser();
-                    }
-                  }}
-                  style={{ color: textColor }}
-                />
-              </div>
-            )}
+            {/* Browser Search (3D Spotlight Command Deck — #DA3A28 Accent) */}
+            {currentTab === 0 && (() => {
+              const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
+              const searchAccent = '#DA3A28';
+              const quickEngines = [
+                {
+                  label: 'Google',
+                  searchUrl: 'https://www.google.com/search?q=',
+                  homeUrl: 'https://www.google.com',
+                  icon: (
+                    <svg width="12" height="12" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                      <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+                    </svg>
+                  )
+                },
+                {
+                  label: 'YouTube',
+                  searchUrl: 'https://www.youtube.com/results?search_query=',
+                  homeUrl: 'https://www.youtube.com',
+                  icon: (
+                    <svg width="13" height="13" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
+                      <path fill="#FF0000" d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814z" />
+                      <path fill="#FFFFFF" d="M9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+                    </svg>
+                  )
+                },
+                {
+                  label: 'GitHub',
+                  searchUrl: 'https://github.com/search?q=',
+                  homeUrl: 'https://github.com',
+                  icon: (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="#ffffff" style={{ flexShrink: 0 }}>
+                      <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12" />
+                    </svg>
+                  )
+                },
+                {
+                  label: 'ChatGPT',
+                  searchUrl: 'https://chatgpt.com/?q=',
+                  homeUrl: 'https://chatgpt.com',
+                  icon: (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="#10A37F" style={{ flexShrink: 0 }}>
+                      <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.43a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.795.795 0 0 0 .392-.681v-6.737l2.02 1.168a.071.071 0 0 1 .038.052v5.583a4.504 4.504 0 0 1-4.494 4.494zM3.6 18.304a4.47 4.47 0 0 1-.535-3.014l.142.085 4.783 2.759a.771.771 0 0 0 .78 0l5.843-3.369v2.332a.08.08 0 0 1-.033.062L9.74 19.95a4.5 4.5 0 0 1-6.14-1.646zM2.34 7.896a4.485 4.485 0 0 1 2.366-1.973V11.6a.766.766 0 0 0 .388.676l5.815 3.355-2.02 1.168a.076.076 0 0 1-.071 0l-4.83-2.786A4.504 4.504 0 0 1 2.34 7.872zm16.597 3.855l-5.833-3.387L15.119 7.2a.076.076 0 0 1 .071 0l4.83 2.791a4.494 4.494 0 0 1-.676 8.105v-5.678a.79.79 0 0 0-.407-.667zm2.01-3.023l-.141-.085-4.774-2.782a.776.776 0 0 0-.785 0L9.409 9.23V6.897a.066.066 0 0 1 .028-.061l4.83-2.787a4.5 4.5 0 0 1 6.68 4.66zm-12.64 4.135l-2.02-1.164a.08.08 0 0 1-.038-.057V6.075a4.5 4.5 0 0 1 7.375-3.453l-.142.08L8.704 5.46a.795.795 0 0 0-.393.681zm1.097-2.365l2.602-1.5 2.607 1.5v2.999l-2.597 1.5-2.607-1.5z" />
+                    </svg>
+                  )
+                },
+                {
+                  label: 'Claude.ai',
+                  searchUrl: 'https://claude.ai/new?q=',
+                  homeUrl: 'https://claude.ai',
+                  icon: (
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="#D97757" style={{ flexShrink: 0 }}>
+                      <path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128H9.2l-.79-.048-2.698-.073-2.339-.097-2.266-.122-.571-.121L0 11.784l.055-.352.48-.321.686.06 1.52.103 2.278.158 1.652.097 2.449.255h.389l.055-.157-.134-.098-.103-.097-2.358-1.596-2.552-1.688-1.336-.972-.724-.491-.364-.462-.158-1.008.656-.722.881.06.225.061.893.686 1.908 1.476 2.491 1.833.365.304.145-.103.019-.073-.164-.274-1.355-2.446-1.446-2.49-.644-1.032-.17-.619a2.97 2.97 0 01-.104-.729L6.283.134 6.696 0l.996.134.42.364.62 1.414 1.002 2.229 1.555 3.03.456.898.243.832.091.255h.158V9.01l.128-1.706.237-2.095.23-2.695.08-.76.376-.91.747-.492.584.28.48.685-.067.444-.286 1.851-.559 2.903-.364 1.942h.212l.243-.242.985-1.306 1.652-2.064.73-.82.85-.904.547-.431h1.033l.76 1.129-.34 1.166-1.064 1.347-.881 1.142-1.264 1.7-.79 1.36.073.11.188-.02 2.856-.606 1.543-.28 1.841-.315.833.388.091.395-.328.807-1.969.486-2.309.462-3.439.813-.042.03.049.061 1.549.146.662.036h1.622l3.02.225.79.522.474.638-.079.485-1.215.62-1.64-.389-3.829-.91-1.312-.329h-.182v.11l1.093 1.068 2.006 1.81 2.509 2.33.127.578-.322.455-.34-.049-2.205-1.657-.851-.747-1.926-1.62h-.128v.17l.444.649 2.345 3.521.122 1.08-.17.353-.608.213-.668-.122-1.374-1.925-1.415-2.167-1.143-1.943-.14.08-.674 7.254-.316.37-.729.28-.607-.461-.322-.747.322-1.476.389-1.924.315-1.53.286-1.9.17-.632-.012-.042-.14.018-1.434 1.967-2.18 2.945-1.726 1.845-.414.164-.717-.37.067-.662.401-.589 2.388-3.036 1.44-1.882.93-1.086-.006-.158h-.055L4.132 18.56l-1.13.146-.487-.456.061-.746.231-.243 1.908-1.312-.006.006z" />
+                    </svg>
+                  )
+                }
+              ];
 
-            {/* Weather Dashboard (Redesigned per Image 2: 3D Animated Icons, Sky Glass Layout & 3-Day Forecast) */}
+              const triggerQuickEngine = (eng) => {
+                const q = (browserSearch || '').trim();
+                const targetUrl = q ? `${eng.searchUrl}${encodeURIComponent(q)}` : eng.homeUrl;
+                window.electronAPI?.openExternal?.(targetUrl);
+                setBrowserSearch('');
+              };
+
+              return (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    padding: '12px 20px',
+                    boxSizing: 'border-box',
+                    userSelect: 'none',
+                    fontFamily: iosFontStack
+                  }}
+                >
+                  {/* Top Header Row */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                      <div
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 6,
+                          background: 'linear-gradient(180deg, #3b1510 0%, #220b08 100%)',
+                          border: '1px solid rgba(218, 58, 40, 0.45)',
+                          boxShadow: '0 3px 8px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.18)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                      >
+                        <Search size={11} color={searchAccent} />
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.1px' }}>
+                        Web & URL Command
+                      </span>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: 9.5,
+                        fontWeight: 700,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        background: '#0a0909',
+                        border: '1px solid rgba(218, 58, 40, 0.32)',
+                        boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.85)',
+                        color: searchAccent,
+                        letterSpacing: '0.4px',
+                        textTransform: 'uppercase'
+                      }}
+                    >
+                      {(browserSearch || '').includes('.') && !(browserSearch || '').includes(' ') ? 'Direct URL' : 'Search Query'}
+                    </span>
+                  </div>
+
+                  {/* Center Sunken 3D Search Trough */}
+                  <div
+                    style={{
+                      width: '100%',
+                      height: 44,
+                      borderRadius: 14,
+                      background: 'linear-gradient(180deg, #090809 0%, #121012 100%)',
+                      border: '1px solid rgba(218, 58, 40, 0.32)',
+                      boxShadow: `
+                        0 6px 16px rgba(0, 0, 0, 0.75),
+                        inset 0 4px 10px rgba(0, 0, 0, 0.95),
+                        inset 0 -1px 1px rgba(255, 255, 255, 0.06)
+                      `,
+                      display: 'flex',
+                      alignItems: 'center',
+                      padding: '0 6px 0 14px',
+                      boxSizing: 'border-box',
+                      gap: 10
+                    }}
+                  >
+                    <Search size={15} color={searchAccent} style={{ flexShrink: 0, filter: 'drop-shadow(0 0 5px rgba(218, 58, 40, 0.45))' }} />
+                    <input
+                      id="browser-searchbar"
+                      placeholder="Search Google, type a query, or enter URL..."
+                      value={browserSearch}
+                      onChange={(e) => setBrowserSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          searchBrowser();
+                        }
+                      }}
+                      style={{
+                        flex: 1,
+                        width: '100%',
+                        height: '100%',
+                        background: 'transparent',
+                        border: 'none',
+                        outline: 'none',
+                        boxShadow: 'none',
+                        padding: 0,
+                        margin: 0,
+                        color: '#ffffff',
+                        fontSize: 13.5,
+                        fontWeight: 500,
+                        fontFamily: iosFontStack
+                      }}
+                    />
+                    <motion.button
+                      whileHover={{ scale: 1.03, filter: 'brightness(1.12)' }}
+                      whileTap={{ scale: 0.96 }}
+                      type="button"
+                      onClick={() => searchBrowser()}
+                      style={{
+                        height: 32,
+                        padding: '0 14px',
+                        borderRadius: 10,
+                        background: 'linear-gradient(180deg, #3b1510 0%, #220b08 100%)',
+                        border: '1px solid rgba(218, 58, 40, 0.48)',
+                        boxShadow: `
+                          0 4px 10px rgba(0, 0, 0, 0.75),
+                          inset 0 1px 1px rgba(255, 255, 255, 0.2),
+                          inset 0 -1.5px 2px rgba(0, 0, 0, 0.85)
+                        `,
+                        color: searchAccent,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        fontFamily: iosFontStack,
+                        cursor: 'pointer',
+                        flexShrink: 0
+                      }}
+                    >
+                      Launch
+                    </motion.button>
+                  </div>
+
+                  {/* Bottom Row: 5 Tactile 3D Quick-Engine / Site Capsules */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(5, 1fr)',
+                      gap: 7,
+                      width: '100%'
+                    }}
+                  >
+                    {quickEngines.map((eng) => (
+                      <motion.button
+                        key={eng.label}
+                        type="button"
+                        whileHover={{ y: -1.5, scale: 1.03 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => triggerQuickEngine(eng)}
+                        style={{
+                          height: 27,
+                          borderRadius: 9,
+                          background: 'linear-gradient(180deg, #1d1e26 0%, #121318 100%)',
+                          border: '1px solid rgba(255, 255, 255, 0.09)',
+                          boxShadow: `
+                            0 4px 9px rgba(0, 0, 0, 0.7),
+                            inset 0 1px 1px rgba(255, 255, 255, 0.12),
+                            inset 0 -1px 2px rgba(0, 0, 0, 0.85)
+                          `,
+                          color: 'rgba(255, 255, 255, 0.88)',
+                          fontSize: 10.5,
+                          fontWeight: 600,
+                          fontFamily: iosFontStack,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 5.5,
+                          padding: '0 6px'
+                        }}
+                      >
+                        {eng.icon}
+                        <span>{eng.label}</span>
+                      </motion.button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Weather Dashboard (Redesigned per Reference Image: Left 3D Hero Pod with stacked condition, Sunrise/Sunset, Wind/Humidity + Right 3-Row Stacked Forecast + Bottom-Right 3D Cloud) */}
             {currentTab === 1 && (() => {
               const locName = localStorage.getItem("location") || weatherLocation || "CHATTOGRAM";
               const tempVal = typeof weather.temp === "number" && !isNaN(weather.temp) ? weather.temp : 28;
               const statusStr = weather.status || "Partly Sunny";
               const humidityVal = weather.humidity || "65%";
               const windVal = weather.wind || "12 km/h";
-              const precipVal = "2 mm";
+              const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
+
+              // Day / Night detection based on status or current local hour (18:00 - 06:00 is night)
+              const d = new Date();
+              const currentHour = d.getHours();
+              const statusLower = (statusStr || "").toLowerCase();
+              const isNightTime = statusLower.includes("night") || statusLower.includes("moon") || (currentHour >= 18 || currentHour < 6);
+
+              // Stealth night theme matching reference image: deep charcoal canvas (#0B0C10) with frosted ice-blue accents (#D4ECFA)
+              // Day theme: warm dark charcoal with vibrant sun gold accents (#FFD801)
+              const iceBlueAccent = "#D4ECFA";
+              const sunGoldAccent = "#FFD801";
+
+              // Format date & time for top-right header: e.g. "11 Nov, 12:20 AM"
+              const dateStr = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+              let timeStr = "";
+              if (hourFormat) {
+                const h12 = currentHour % 12 || 12;
+                const m = String(d.getMinutes()).padStart(2, '0');
+                const ampm = currentHour >= 12 ? "PM" : "AM";
+                timeStr = `${h12}:${m} ${ampm}`;
+              } else {
+                const h24 = String(currentHour).padStart(2, '0');
+                const m = String(d.getMinutes()).padStart(2, '0');
+                timeStr = `${h24}:${m}`;
+              }
+
+              // Parse condition text into uppercase lines
+              const conditionWords = (statusStr || "PARTLY CLOUDY").trim().toUpperCase().split(/\s+/);
+              const firstWord = conditionWords[0] || "PARTLY";
+              const restWords = conditionWords.slice(1).join(" ");
+
+              // Sunrise & sunset times (from data or realistic astronomical fallback)
+              const sunriseTime = weather.sunrise || "6:24 AM";
+              const sunsetTime = weather.sunset || "7:08 PM";
+
+              // 3-day forecast items with Today highlighted in 3D active pod
+              const forecastRows = [
+                {
+                  id: "today",
+                  day: "Today",
+                  icon: isNightTime ? "Night Cloudy" : statusStr,
+                  hi: `${tempVal + 2}°`,
+                  lo: `${tempVal - 6}°`,
+                  rain: "5%",
+                  isActive: true
+                },
+                {
+                  id: "tomorrow",
+                  day: "Tomorrow",
+                  icon: "Partly Cloudy",
+                  hi: `${tempVal}°`,
+                  lo: `${tempVal - 7}°`,
+                  rain: "15%",
+                  isActive: false
+                },
+                {
+                  id: "next_day",
+                  day: "Next Day",
+                  icon: "Rain",
+                  hi: `${tempVal - 3}°`,
+                  lo: `${tempVal - 9}°`,
+                  rain: "80%",
+                  isActive: false
+                }
+              ];
 
               return (
                 <div style={{
+                  position: 'relative',
                   width: '100%',
                   height: '100%',
                   display: 'flex',
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '10px 16px',
+                  padding: '9px 13px',
                   boxSizing: 'border-box',
-                  gap: 16,
-                  userSelect: 'none'
+                  gap: 13,
+                  userSelect: 'none',
+                  overflow: 'hidden',
+                  fontFamily: iosFontStack
                 }}>
-                  {/* Left Column: 3D Weather Icon + Location + Temp & Condition */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 175, flexShrink: 0 }}>
-                    <Animated3DWeatherIcon status={statusStr} size={42} />
-                    <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', letterSpacing: '0.5px', textTransform: 'uppercase', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                        {locName}
-                      </span>
-                      <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif', lineHeight: 1.1 }}>
-                        {tempVal}°{weatherUnit === 'f' ? 'F' : 'C'}
+                  {/* Decorative 3D Atmospheric Cloud in Bottom-Right Corner (from Reference Image) */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: -16,
+                      right: -10,
+                      pointerEvents: 'none',
+                      zIndex: 1,
+                      opacity: isNightTime ? 0.78 : 0.88,
+                      filter: 'drop-shadow(0 -4px 14px rgba(147, 197, 253, 0.28))'
+                    }}
+                  >
+                    <svg width="128" height="85" viewBox="0 0 128 85" fill="none">
+                      <defs>
+                        <linearGradient id="cloudBodyGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                          <stop offset="0%" stopColor={isNightTime ? "#dbeafe" : "#ffffff"} />
+                          <stop offset="50%" stopColor={isNightTime ? "#93c5fd" : "#e0f2fe"} />
+                          <stop offset="100%" stopColor={isNightTime ? "#3b82f6" : "#7dd3fc"} />
+                        </linearGradient>
+                        <linearGradient id="cloudHighlightGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+                          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
+                          <stop offset="100%" stopColor={isNightTime ? "#93c5fd" : "#bae6fd"} stopOpacity="0.25" />
+                        </linearGradient>
+                      </defs>
+                      {/* Back cloud lobe with depth */}
+                      <ellipse cx="94" cy="50" rx="30" ry="24" fill="url(#cloudBodyGrad)" opacity="0.65" />
+                      {/* Base cloud volumetric mass */}
+                      <path
+                        d="M26 72 C26 58 40 48 54 48 C60 36 74 27 90 31 C104 35 114 47 114 60 C122 63 126 70 122 76 C118 82 110 83 100 83 L36 83 C29 83 26 78 26 72 Z"
+                        fill="url(#cloudBodyGrad)"
+                      />
+                      {/* Soft 3D volumetric highlights */}
+                      <ellipse cx="68" cy="50" rx="18" ry="14" fill="url(#cloudHighlightGrad)" />
+                      <ellipse cx="96" cy="46" rx="15" ry="11" fill="url(#cloudHighlightGrad)" />
+                    </svg>
+                  </div>
+
+                  {/* LEFT HERO CARD: 3D Beveled Stealth Well */}
+                  <div
+                    style={{
+                      width: 218,
+                      height: '100%',
+                      flexShrink: 0,
+                      borderRadius: 16,
+                      padding: '8px 11px',
+                      boxSizing: 'border-box',
+                      background: isNightTime
+                        ? 'linear-gradient(155deg, #181921 0%, #0e1015 55%, #08090d 100%)'
+                        : 'linear-gradient(155deg, #2b2514 0%, #17150c 55%, #0b0905 100%)',
+                      border: isNightTime
+                        ? '1px solid rgba(255, 255, 255, 0.09)'
+                        : '1px solid rgba(255, 216, 1, 0.25)',
+                      boxShadow: `
+                        0 8px 20px rgba(0, 0, 0, 0.85),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.12),
+                        inset 0 -2px 4px rgba(0, 0, 0, 0.9)
+                      `,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      position: 'relative',
+                      zIndex: 2
+                    }}
+                  >
+                    {/* Top Row: Weather Sphere + Giant Temp & H/L */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div style={{ filter: 'drop-shadow(0 3px 6px rgba(0,0,0,0.8))' }}>
+                        <Animated3DWeatherIcon status={statusStr} size={36} isNight={isNightTime} />
                       </div>
-                      <span style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)', fontFamily: 'OpenRunde, system-ui, sans-serif', marginTop: 2 }}>
-                        {statusStr}
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                        <div
+                          style={{
+                            fontSize: 27,
+                            fontWeight: 800,
+                            color: isNightTime ? iceBlueAccent : '#ffffff',
+                            letterSpacing: '-1px',
+                            lineHeight: 1,
+                            textShadow: isNightTime
+                              ? '0 2px 10px rgba(212, 236, 250, 0.35)'
+                              : '0 2px 10px rgba(255, 216, 1, 0.3)'
+                          }}
+                        >
+                          {tempVal}°{weatherUnit === 'f' ? 'F' : 'C'}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 9.5,
+                            fontWeight: 600,
+                            color: 'rgba(255, 255, 255, 0.45)',
+                            marginTop: 2.5
+                          }}
+                        >
+                          H {tempVal + 2}°  |  L {tempVal - 6}°
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Middle Row: Stacked Condition Text (Left) + Sunrise/Sunset (Right) */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6, margin: '2px 0' }}>
+                      {/* Left: Stacked Condition Typography */}
+                      <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.05 }}>
+                        <span style={{ fontSize: 13.5, fontWeight: 900, color: '#ffffff', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                          {firstWord}
+                        </span>
+                        {restWords ? (
+                          <span style={{ fontSize: 13.5, fontWeight: 900, color: '#ffffff', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                            {restWords}
+                          </span>
+                        ) : null}
+                      </div>
+
+                      {/* Right: Sunrise & Sunset with Icons */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 3.5 }}>
+                        {/* Sunrise */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.62)' }}>
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ color: isNightTime ? '#93c5fd' : '#fde047' }}>
+                            <path d="M2 13h12" />
+                            <path d="M4 10a4 4 0 0 1 8 0" />
+                            <path d="M8 2v4" />
+                            <path d="M6 4l2-2 2 2" />
+                          </svg>
+                          <span>{sunriseTime}</span>
+                        </div>
+                        {/* Sunset */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.62)' }}>
+                          <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" style={{ color: isNightTime ? '#f472b6' : '#fb923c' }}>
+                            <path d="M2 13h12" />
+                            <path d="M4 10a4 4 0 0 1 8 0" />
+                            <path d="M8 6v4" />
+                            <path d="M6 8l2 2 2-2" />
+                          </svg>
+                          <span>{sunsetTime}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Row: Wind & Humidity */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 2, borderTop: '1px solid rgba(255, 255, 255, 0.06)' }}>
+                      {/* Wind */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Wind size={13} color={isNightTime ? "#93c5fd" : "#FFD801"} style={{ opacity: 0.85 }} />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: 7.5, fontWeight: 800, color: 'rgba(255, 255, 255, 0.42)', letterSpacing: '0.5px' }}>WIND</span>
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#ffffff' }}>{windVal}</span>
+                        </div>
+                      </div>
+                      {/* Humidity */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                        <Droplets size={13} color={isNightTime ? "#93c5fd" : "#FFD801"} style={{ opacity: 0.85 }} />
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: 7.5, fontWeight: 800, color: 'rgba(255, 255, 255, 0.42)', letterSpacing: '0.5px' }}>HUMIDITY</span>
+                          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#ffffff' }}>{humidityVal}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Right Column: Stats Row + 3-Day Forecast Cards */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minWidth: 0, height: '100%', justifyContent: 'center' }}>
-                    {/* Middle Stats Row: Humidity | Precip | Wind */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, width: '100%' }}>
-                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '3px 2px' }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Hum</span>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginTop: 1 }}>{humidityVal}</div>
-                      </div>
-                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '3px 2px' }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Precip</span>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginTop: 1 }}>{precipVal}</div>
-                      </div>
-                      <div style={{ textAlign: 'center', background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 10, padding: '3px 2px' }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.6)' }}>Wind</span>
-                        <div style={{ fontSize: 12, fontWeight: 800, color: '#ffffff', marginTop: 1 }}>{windVal}</div>
+                  {/* RIGHT PANEL: Top Header Bar + 3-Row Stacked Forecast Deck */}
+                  <div style={{
+                    flex: 1,
+                    minWidth: 0,
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    position: 'relative',
+                    zIndex: 2
+                  }}>
+                    {/* Top Header Bar: Location (Left) + Live Date & Time (Right) */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 3px' }}>
+                      <span
+                        style={{
+                          fontSize: 10.5,
+                          fontWeight: 800,
+                          letterSpacing: '0.8px',
+                          color: isNightTime ? 'rgba(255, 255, 255, 0.85)' : '#FFD801',
+                          textTransform: 'uppercase',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          maxWidth: 150
+                        }}
+                      >
+                        {locName}
+                      </span>
+                      <div style={{ fontSize: 10, fontFamily: iosFontStack }}>
+                        <span style={{ color: 'rgba(255, 255, 255, 0.48)' }}>{dateStr}, </span>
+                        <span style={{ color: '#ffffff', fontWeight: 700 }}>{timeStr}</span>
                       </div>
                     </div>
 
-                    {/* Bottom Row: 3-Day Forecast Glass Cards */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, width: '100%' }}>
-                      {[
-                        { day: 'Today', icon: 'Partly Sunny', hi: `${tempVal}°`, lo: `${tempVal - 6}°`, rain: '5%' },
-                        { day: 'Tomorrow', icon: 'Partly Cloudy', hi: `${tempVal - 2}°`, lo: `${tempVal - 8}°`, rain: '15%' },
-                        { day: 'Wed', icon: 'Rain', hi: `${tempVal - 4}°`, lo: `${tempVal - 9}°`, rain: '80%' }
-                      ].map((fc) => (
+                    {/* 3 Stacked Horizontal Forecast Cards */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+                      {forecastRows.map((fc) => (
                         <motion.div
-                          key={fc.day}
-                          whileHover={{ y: -2, scale: 1.02 }}
+                          key={fc.id}
+                          whileHover={{ x: 2, scale: 1.01 }}
                           style={{
-                            background: 'rgba(255, 255, 255, 0.08)',
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
-                            borderRadius: 10,
-                            padding: '4px 2px',
+                            height: 33,
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'space-around',
-                            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.25)'
+                            justifyContent: 'space-between',
+                            padding: '0 10px',
+                            borderRadius: 10,
+                            boxSizing: 'border-box',
+                            background: fc.isActive
+                              ? (isNightTime
+                                ? 'linear-gradient(180deg, #1d202b 0%, #11131a 100%)'
+                                : 'linear-gradient(180deg, #2b2515 0%, #18150c 100%)')
+                              : (isNightTime
+                                ? 'linear-gradient(180deg, #13141a 0%, #090a0d 100%)'
+                                : 'linear-gradient(180deg, #1c180e 0%, #0d0c07 100%)'),
+                            border: fc.isActive
+                              ? (isNightTime
+                                ? '1px solid rgba(212, 236, 250, 0.24)'
+                                : '1px solid rgba(255, 216, 1, 0.32)')
+                              : '1px solid rgba(255, 255, 255, 0.06)',
+                            boxShadow: fc.isActive
+                              ? `0 4px 10px rgba(0, 0, 0, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.15), inset 0 -1px 2px rgba(0, 0, 0, 0.8)`
+                              : `0 2px 6px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.07)`,
+                            transition: 'all 0.12s ease'
                           }}
                         >
-                          <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.75)' }}>{fc.day}</span>
-                          <Animated3DWeatherIcon status={fc.icon} size={16} />
-                          <span style={{ fontSize: 10.5, fontWeight: 800, color: '#ffffff' }}>{fc.hi}</span>
-                          <span style={{ fontSize: 9, fontWeight: 600, color: '#4fc3f7' }}>{fc.rain}</span>
+                          {/* Left: Weather Icon + Day Name */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <Animated3DWeatherIcon status={fc.icon} size={20} isNight={isNightTime} />
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: fc.isActive ? 800 : 700,
+                                color: fc.isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.82)'
+                              }}
+                            >
+                              {fc.day}
+                            </span>
+                          </div>
+
+                          {/* Center: Rain Probability Pill */}
+                          <span
+                            style={{
+                              fontSize: 8.5,
+                              fontWeight: 700,
+                              padding: '1.5px 6px',
+                              borderRadius: 6,
+                              background: isNightTime ? 'rgba(56, 189, 248, 0.14)' : 'rgba(255, 216, 1, 0.14)',
+                              border: isNightTime ? '1px solid rgba(56, 189, 248, 0.3)' : '1px solid rgba(255, 216, 1, 0.3)',
+                              color: isNightTime ? '#7dd3fc' : '#fde047'
+                            }}
+                          >
+                            {fc.rain} rain
+                          </span>
+
+                          {/* Right: High & Low Temperature */}
+                          <div style={{ display: 'flex', alignItems: 'baseline', gap: 4 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: '#ffffff' }}>
+                              {fc.hi}
+                            </span>
+                            <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255, 255, 255, 0.42)' }}>
+                              {fc.lo}
+                            </span>
+                          </div>
                         </motion.div>
                       ))}
                     </div>
@@ -5043,20 +6219,38 @@ export default function Island() {
                 </div>
               );
             })()}
-            {/* Overview / StandBy Clock & Daily Quote Tab */}
+            {/* Overview / 3D iOS Analog Clock & Hourly Weather Tab */}
             {currentTab === 2 && (() => {
               const d = new Date();
-              let h = d.getHours();
-              if (hourFormat) {
-                h = h % 12;
-                h = h ? h : 12;
-              }
-              const hStr = hourFormat ? String(h) : String(h).padStart(2, '0');
-              const mStr = String(d.getMinutes()).padStart(2, '0');
-              const dayAbbr = d.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase();
-              const dayNum = d.getDate();
-              const tempVal = typeof weather?.temp === "number" && !isNaN(weather.temp) ? weather.temp : 58;
-              const currentQuote = DAILY_QUOTES[dailyQuoteIndex % DAILY_QUOTES.length];
+              const weekdayFull = d.toLocaleDateString('en-US', { weekday: 'long' });
+              const monthFull = d.toLocaleDateString('en-US', { month: 'long' });
+              const dayOrdinal = getOrdinalSuffix(d.getDate());
+              const unitChar = weatherUnit === 'f' ? 'F' : 'C';
+              const fallbackTemp = typeof weather?.temp === "number" && !isNaN(weather.temp)
+                ? weather.temp
+                : (weatherUnit === 'f' ? 68 : 24);
+              const fallbackStatus = weather?.status || "Partly Cloudy";
+              const nowHour = d.getHours();
+
+              const formatForecastHour = (h24, isNow) => {
+                if (isNow) return "Now";
+                const normalized = ((h24 % 24) + 24) % 24;
+                if (hourFormat) {
+                  const h12 = normalized % 12 || 12;
+                  return `${String(h12).padStart(2, '0')}:00`;
+                }
+                return `${String(normalized).padStart(2, '0')}:00`;
+              };
+
+              const rawSlots = Array.isArray(weather?.hourly) && weather.hourly.length === 3
+                ? weather.hourly
+                : [
+                    { temp: fallbackTemp, status: fallbackStatus, hour24: nowHour, isNow: true },
+                    { temp: fallbackTemp - 1, status: fallbackStatus, hour24: (nowHour + 1) % 24, isNow: false },
+                    { temp: fallbackTemp - 2, status: fallbackStatus, hour24: (nowHour + 2) % 24, isNow: false }
+                  ];
+
+              const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
 
               return (
                 <div style={{
@@ -5066,377 +6260,120 @@ export default function Island() {
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'space-between',
-                  padding: '12px 18px',
+                  padding: '10px 26px 10px 22px',
                   boxSizing: 'border-box',
-                  gap: 16,
+                  gap: 24,
                   userSelect: 'none'
                 }}>
-                  {/* Left: iOS StandBy Style Clock (Scaled to 80% height) */}
-                  <div style={{
-                    height: '82%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                    flexShrink: 0
-                  }}>
-                    {/* Big Bold Rounded Time Digits - 80% Notch Height */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      fontFamily: 'OpenRunde, -apple-system, system-ui, sans-serif',
-                      fontSize: 96,
-                      fontWeight: 800,
-                      letterSpacing: '-4px',
-                      lineHeight: 0.9,
-                      color: '#6ea8fe',
-                      userSelect: 'none'
-                    }}>
-                      <span>{hStr}</span>
-                      {/* Round Colon Dots */}
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 14,
-                        margin: '0 6px'
-                      }}>
-                        <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#6ea8fe' }} />
-                        <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#6ea8fe' }} />
-                      </div>
-                      <span>{mStr}</span>
-                    </div>
+                  {/* Left: 3D Dark-Themed iOS Analog Clock */}
+                  <IOS3DAnalogClock size={122} />
 
-                    {/* Day/Date & Temp Stack (e.g. TUE 6 / 58°) */}
+                  {/* Right: Date Header + Divider + 3-Column Hourly Weather Forecast (Image 1 Layout) */}
+                  <div style={{
+                    flex: 1,
+                    minWidth: 0,
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    fontFamily: iosFontStack
+                  }}>
+                    {/* Top Date Stack: Weekday ("Thursday") + Month & Ordinal Day ("November 5th") */}
                     <div style={{
                       display: 'flex',
                       flexDirection: 'column',
+                      alignItems: 'center',
                       justifyContent: 'center',
-                      gap: 4,
-                      fontFamily: 'OpenRunde, -apple-system, system-ui, sans-serif',
-                      marginLeft: 2
+                      width: '100%',
+                      marginBottom: 7
                     }}>
-                      <div style={{ fontSize: 15, fontWeight: 800, letterSpacing: '0.4px', lineHeight: 1.1 }}>
-                        <span style={{ color: '#6ea8fe' }}>{dayAbbr} </span>
-                        <span style={{ color: '#ffffff' }}>{dayNum}</span>
-                      </div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: '#ffffff', letterSpacing: '-0.4px', lineHeight: 1.1, marginTop: 1 }}>
-                        {tempVal}°
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Vertical Subtle Separator */}
-                  <div style={{
-                    width: 1,
-                    height: '65%',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    flexShrink: 0
-                  }} />
-
-                  {/* Right: Realigned Minimalist Quote & Quoteman's Pic (No headers/buttons) */}
-                  <motion.div
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.99 }}
-                    onClick={handleNextQuote}
-                    title="Click to cycle quote"
-                    style={{
-                      flex: 1,
-                      height: '100%',
-                      minWidth: 0,
-                      background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%)',
-                      border: '1px solid rgba(255, 255, 255, 0.09)',
-                      borderRadius: 14,
-                      padding: '10px 14px',
-                      boxSizing: 'border-box',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 12,
-                      position: 'relative',
-                      backdropFilter: 'blur(16px)',
-                      boxShadow: '0 4px 16px rgba(0, 0, 0, 0.2)',
-                      cursor: 'pointer',
-                      overflow: 'hidden'
-                    }}
-                  >
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={currentQuote.author + currentQuote.quote}
-                        initial={{ opacity: 0, x: 6 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: -6 }}
-                        transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          width: '100%',
-                          height: '100%'
-                        }}
-                      >
-                        {/* Quoteman's Pic Avatar */}
-                        <QuotemanAvatar quote={currentQuote} size={50} />
-
-                        {/* Quote & Author Details */}
-                        <div style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'center',
-                          flex: 1,
-                          minWidth: 0
-                        }}>
-                          <p style={{
-                            margin: 0,
-                            fontSize: 11.5,
-                            lineHeight: 1.35,
-                            color: 'rgba(255, 255, 255, 0.95)',
-                            fontStyle: 'italic',
-                            fontWeight: 500,
-                            fontFamily: 'OpenRunde, system-ui, sans-serif',
-                            display: '-webkit-box',
-                            WebkitLineClamp: 3,
-                            WebkitBoxOrient: 'vertical',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }}>
-                            “{currentQuote.quote}”
-                          </p>
-
-                          <div style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 5,
-                            marginTop: 5,
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }}>
-                            <span style={{
-                              fontSize: 11,
-                              fontWeight: 700,
-                              color: '#6ea8fe',
-                              fontFamily: 'OpenRunde, system-ui, sans-serif'
-                            }}>
-                              — {currentQuote.author}
-                            </span>
-                            <span style={{
-                              fontSize: 9.5,
-                              fontWeight: 500,
-                              color: 'rgba(255, 255, 255, 0.45)',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis'
-                            }}>
-                              • {currentQuote.title}
-                            </span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    </AnimatePresence>
-                  </motion.div>
-                </div>
-              );
-            })()}
-
-            {/* Battery Hub Screen (Apple Dynamic Island Design) */}
-            {currentTab === 11 && (() => {
-              const statusColor = batteryAnalytics.currentPercent <= 10
-                ? '#FF453A'
-                : (batteryAnalytics.currentPercent <= 20 ? '#FFD60A' : '#30D158');
-
-              return (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '14px 22px',
-                  boxSizing: 'border-box',
-                  gap: 18,
-                  userSelect: 'none'
-                }}>
-                  {/* Left Column: Apple Battery Graphic & Clean Status Caption */}
-                  <div style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8,
-                    width: 190,
-                    flexShrink: 0
-                  }}>
-                    <AppleBatteryCapsule
-                      percent={batteryAnalytics.currentPercent}
-                      charging={batteryAnalytics.isCharging}
-                      width={168}
-                      height={66}
-                    />
-
-                    {/* Apple Status Caption */}
-                    <div style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      fontSize: 12,
-                      fontWeight: 500,
-                      color: 'rgba(235, 235, 245, 0.65)',
-                      fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                    }}>
-                      {batteryAnalytics.isCharging ? (
-                        <>
-                          <Zap size={12} color="#30D158" fill="#30D158" />
-                          <span>Charging • AC Power</span>
-                        </>
-                      ) : (
-                        <>
-                          <div style={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            backgroundColor: statusColor
-                          }} />
-                          <span>{batteryAnalytics.currentPercent <= 20 ? 'Low Power Mode' : 'On Battery Power'}</span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Vertical Hairline Divider */}
-                  <div style={{
-                    width: 1,
-                    height: '70%',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    flexShrink: 0
-                  }} />
-
-                  {/* Right Column: Apple-style Estimated Runtime & Usage */}
-                  <div style={{
-                    flex: 1,
-                    height: '100%',
-                    minWidth: 0,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    justifyContent: 'space-between',
-                    padding: '3px 0'
-                  }}>
-                    {/* Header Row: Label & Power Mode */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{
-                        fontSize: 10.5,
+                        fontSize: 13.5,
+                        fontWeight: 500,
+                        color: 'rgba(255, 255, 255, 0.88)',
+                        letterSpacing: '-0.1px',
+                        lineHeight: 1.15,
+                        fontFamily: iosFontStack
+                      }}>
+                        {weekdayFull}
+                      </span>
+                      <span style={{
+                        fontSize: 26,
                         fontWeight: 600,
-                        letterSpacing: '0.06em',
-                        color: 'rgba(235, 235, 245, 0.5)',
-                        textTransform: 'uppercase',
-                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                      }}>
-                        {batteryAnalytics.isCharging ? 'Time Until Full' : 'Estimated Remaining'}
-                      </span>
-
-                      <span style={{
-                        fontSize: 10.5,
-                        fontWeight: 500,
-                        color: 'rgba(235, 235, 245, 0.6)',
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        padding: '2px 8px',
-                        borderRadius: 6,
-                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                      }}>
-                        {batteryAnalytics.powerModeTag}
-                      </span>
-                    </div>
-
-                    {/* Hero Runtime Display */}
-                    <div style={{ marginTop: 1 }}>
-                      <div style={{
-                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
-                        fontSize: 32,
-                        fontWeight: 700,
                         color: '#ffffff',
-                        letterSpacing: '-0.8px',
-                        lineHeight: 1
+                        letterSpacing: '-0.6px',
+                        lineHeight: 1.12,
+                        marginTop: 1,
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        fontFamily: iosFontStack
                       }}>
-                        {batteryAnalytics.timeRemainingStr}
-                      </div>
-                      <div style={{
-                        fontSize: 12.5,
-                        fontWeight: 500,
-                        color: batteryAnalytics.isCharging ? '#30D158' : 'rgba(235, 235, 245, 0.65)',
-                        fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif',
-                        marginTop: 4
-                      }}>
-                        {batteryAnalytics.endTargetTimeStr}
-                      </div>
+                        {monthFull} {dayOrdinal}
+                      </span>
                     </div>
 
-                    {/* Apple-style Activity Level & Pace Card */}
+                    {/* Thin Horizontal Divider Line */}
                     <div style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      borderRadius: 10,
-                      padding: '6px 12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 12
-                    }}>
-                      {/* Recent Activity Bar Graph */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 16 }}>
-                          {batteryAnalytics.activityBars.map((bar, i) => (
-                            <div
-                              key={i}
-                              style={{
-                                width: 3.5,
-                                height: `${bar.height}%`,
-                                minHeight: 4,
-                                borderRadius: 2,
-                                backgroundColor: bar.isCurrent
-                                  ? (batteryAnalytics.currentPercent <= 10
-                                      ? '#FF453A'
-                                      : (batteryAnalytics.currentPercent <= 20 ? '#FFD60A' : '#30D158'))
-                                  : 'rgba(255, 255, 255, 0.22)',
-                                transition: 'height 0.3s ease'
-                              }}
-                            />
-                          ))}
-                        </div>
-                        <span style={{
-                          fontSize: 11,
-                          fontWeight: 500,
-                          color: 'rgba(235, 235, 245, 0.6)',
-                          fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                        }}>
-                          Recent Activity
-                        </span>
-                      </div>
+                      width: '92%',
+                      height: 1,
+                      background: 'rgba(255, 255, 255, 0.22)',
+                      marginBottom: 8,
+                      flexShrink: 0
+                    }} />
 
-                      {/* Average Pace */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{
-                          fontSize: 11,
-                          fontWeight: 500,
-                          color: 'rgba(235, 235, 245, 0.5)',
-                          fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                        }}>
-                          {batteryAnalytics.isCharging ? 'Charge Pace' : 'Discharge'}
-                        </span>
-                        <span style={{
-                          fontSize: 12,
-                          fontWeight: 700,
-                          color: batteryAnalytics.isCharging ? '#30D158' : '#ffffff',
-                          fontFamily: 'OpenRunde, -apple-system, BlinkMacSystemFont, "SF Pro Display", sans-serif'
-                        }}>
-                          {batteryAnalytics.rateText}
-                        </span>
-                      </div>
+                    {/* Bottom 3-Column Hourly Weather Row (Now | +1 hr | +2 hr) */}
+                    <div style={{
+                      width: '94%',
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(3, 1fr)',
+                      alignItems: 'center',
+                      justifyItems: 'center',
+                      gap: 10
+                    }}>
+                      {rawSlots.map((slot, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 2
+                          }}
+                        >
+                          <HourlyLineWeatherIcon status={slot.status} size={25} color="#ffffff" />
+                          <span style={{
+                            fontSize: 16,
+                            fontWeight: 600,
+                            color: '#ffffff',
+                            letterSpacing: '-0.3px',
+                            lineHeight: 1.15,
+                            marginTop: 1,
+                            fontFamily: iosFontStack
+                          }}>
+                            {slot.temp}°{unitChar}
+                          </span>
+                          <span style={{
+                            fontSize: 11,
+                            fontWeight: 500,
+                            color: 'rgba(255, 255, 255, 0.78)',
+                            letterSpacing: '-0.1px',
+                            lineHeight: 1.1,
+                            fontFamily: iosFontStack
+                          }}>
+                            {formatForecastHour(slot.hour24, slot.isNow)}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
               );
             })()}
 
-            {/* Quick Pill Per-App Audio Mixer */}
+            {/* Quick Pill Per-App Audio Mixer (Studio Hardware Console — Electric Violet Accent) */}
             {currentTab === 12 && (() => {
               const filteredSessions = audioSessions.filter(s => {
                 if (!audioSearch.trim()) return true;
@@ -5448,6 +6385,7 @@ export default function Island() {
               const currentDev = audioDevices.find(d => d.id === activeAudioDeviceId) ||
                                  audioDevices.find(d => d.isDefault) ||
                                  audioDevices[0];
+              const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
 
               return (
                 <div style={{
@@ -5459,60 +6397,83 @@ export default function Island() {
                   justifyContent: 'space-between',
                   padding: '10px 16px',
                   boxSizing: 'border-box',
-                  gap: 14,
+                  gap: 12,
                   userSelect: 'none',
-                  position: 'relative'
+                  position: 'relative',
+                  fontFamily: iosFontStack
                 }}>
-                  {/* Left Column: Device Info + Master Volume + Search/Refresh */}
+                  {/* Left Column: 3D Master Studio Console + Sunken Filter Trough */}
                   <div style={{
-                    width: 175,
+                    width: 180,
                     height: '100%',
                     display: 'flex',
                     flexDirection: 'column',
                     justifyContent: 'space-between',
-                    flexShrink: 0
+                    flexShrink: 0,
+                    gap: 7
                   }}>
-                    {/* Top Device Card */}
+                    {/* Top 3D Beveled Master Output Console */}
                     <div style={{
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      border: '1px solid rgba(255, 255, 255, 0.08)',
-                      borderRadius: 12,
+                      flex: 1,
+                      background: 'linear-gradient(165deg, #211c2d 0%, #14111c 60%, #0c0a11 100%)',
+                      border: '1px solid rgba(168, 85, 247, 0.25)',
+                      borderRadius: 15,
                       padding: '8px 10px',
+                      boxShadow: `
+                        0 8px 18px rgba(0, 0, 0, 0.8),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.14),
+                        inset 0 -2px 4px rgba(0, 0, 0, 0.85)
+                      `,
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 6
+                      justifyContent: 'space-between'
                     }}>
                       {/* Header Row */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <SlidersHorizontal size={13} color="#a855f7" />
-                          <span style={{ fontSize: 11, fontWeight: 800, color: '#ffffff', letterSpacing: '0.3px', textTransform: 'uppercase' }}>
-                            Audio Mixer
+                          <div style={{
+                            width: 18,
+                            height: 18,
+                            borderRadius: 5,
+                            background: 'linear-gradient(180deg, #321952 0%, #1d0e31 100%)',
+                            border: '1px solid rgba(192, 132, 252, 0.4)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.7)'
+                          }}>
+                            <SlidersHorizontal size={10} color="#c084fc" />
+                          </div>
+                          <span style={{ fontSize: 10.5, fontWeight: 800, color: '#ffffff', letterSpacing: '0.4px', textTransform: 'uppercase' }}>
+                            Studio Mixer
                           </span>
                         </div>
                         <span style={{
                           fontSize: 9,
                           fontWeight: 700,
-                          padding: '1px 5px',
-                          borderRadius: 8,
-                          background: audioSessions.length > 0 ? 'rgba(168, 85, 247, 0.2)' : 'rgba(255, 255, 255, 0.1)',
-                          color: audioSessions.length > 0 ? '#c084fc' : 'rgba(255, 255, 255, 0.5)'
+                          padding: '1px 6px',
+                          borderRadius: 999,
+                          background: '#09080d',
+                          border: '1px solid rgba(168, 85, 247, 0.32)',
+                          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.9)',
+                          color: '#c084fc'
                         }}>
-                          {audioSessions.length} {audioSessions.length === 1 ? 'app' : 'apps'}
+                          {audioSessions.length} {audioSessions.length === 1 ? 'ch' : 'chs'}
                         </span>
                       </div>
 
-                      {/* Device Selector Button */}
+                      {/* Sunken Output Device Selector Well */}
                       <div style={{ position: 'relative' }}>
                         <button
                           type="button"
                           onClick={() => setDeviceDropdownOpen(!deviceDropdownOpen)}
                           style={{
                             width: '100%',
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            border: '1px solid rgba(255, 255, 255, 0.1)',
-                            borderRadius: 8,
-                            padding: '4px 6px',
+                            background: '#0a090e',
+                            border: '1px solid rgba(168, 85, 247, 0.2)',
+                            boxShadow: 'inset 0 3px 6px rgba(0, 0, 0, 0.92)',
+                            borderRadius: 9,
+                            padding: '4.5px 7px',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'space-between',
@@ -5525,12 +6486,12 @@ export default function Island() {
                           title={currentDev?.name || "Select Output Device"}
                         >
                           <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0, overflow: 'hidden' }}>
-                            <Headphones size={11} color="rgba(255,255,255,0.7)" style={{ flexShrink: 0 }} />
+                            <Headphones size={11} color="#c084fc" style={{ flexShrink: 0 }} />
                             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                               {currentDev?.name ? currentDev.name.replace(/\s*\([^)]*\)$/, '') : "Speakers"}
                             </span>
                           </div>
-                          <ChevronLeft size={11} style={{ transform: deviceDropdownOpen ? 'rotate(-90deg)' : 'rotate(90deg)', flexShrink: 0, opacity: 0.6 }} />
+                          <ChevronLeft size={11} style={{ transform: deviceDropdownOpen ? 'rotate(-90deg)' : 'rotate(90deg)', flexShrink: 0, opacity: 0.65 }} />
                         </button>
 
                         {/* Device Dropdown Menu */}
@@ -5543,14 +6504,14 @@ export default function Island() {
                               left: 0,
                               right: 0,
                               marginTop: 4,
-                              background: '#121217',
-                              border: '1px solid rgba(255, 255, 255, 0.15)',
-                              borderRadius: 8,
-                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.7)',
+                              background: '#0e0d14',
+                              border: '1px solid rgba(168, 85, 247, 0.35)',
+                              borderRadius: 10,
+                              boxShadow: '0 10px 28px rgba(0, 0, 0, 0.9)',
                               zIndex: 100,
                               maxHeight: 110,
                               overflowY: 'auto',
-                              padding: 3
+                              padding: 4
                             }}
                           >
                             {audioDevices.map(d => (
@@ -5565,9 +6526,9 @@ export default function Island() {
                                 }}
                                 style={{
                                   width: '100%',
-                                  padding: '5px 6px',
-                                  borderRadius: 5,
-                                  background: (d.id === (currentDev?.id || activeAudioDeviceId)) ? 'rgba(168, 85, 247, 0.25)' : 'transparent',
+                                  padding: '5px 7px',
+                                  borderRadius: 6,
+                                  background: (d.id === (currentDev?.id || activeAudioDeviceId)) ? 'rgba(168, 85, 247, 0.22)' : 'transparent',
                                   border: 'none',
                                   color: (d.id === (currentDev?.id || activeAudioDeviceId)) ? '#c084fc' : 'rgba(255, 255, 255, 0.85)',
                                   fontSize: 10,
@@ -5589,8 +6550,17 @@ export default function Island() {
                         )}
                       </div>
 
-                      {/* Device Master Volume Row */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 1 }}>
+                      {/* Sunken Master Volume Fader Trough */}
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 6,
+                        padding: '3px 6px',
+                        borderRadius: 8,
+                        background: '#09080d',
+                        border: '1px solid rgba(255, 255, 255, 0.06)',
+                        boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.9)'
+                      }}>
                         <button
                           type="button"
                           onClick={() => handleToggleMasterMute()}
@@ -5600,12 +6570,11 @@ export default function Island() {
                             padding: 0,
                             cursor: 'pointer',
                             display: 'flex',
-                            alignItems: 'center',
-                            opacity: masterAudioMuted ? 0.6 : 0.9
+                            alignItems: 'center'
                           }}
                           title={masterAudioMuted ? "Unmute Master" : "Mute Master"}
                         >
-                          {masterAudioMuted ? <VolumeX size={12} color="#f87171" /> : <Volume2 size={12} color="#a855f7" />}
+                          {masterAudioMuted ? <VolumeX size={12} color="#f87171" /> : <Volume2 size={12} color="#c084fc" />}
                         </button>
                         <input
                           type="range"
@@ -5617,33 +6586,35 @@ export default function Island() {
                             flex: 1,
                             minWidth: 0,
                             width: '100%',
-                            height: 3,
+                            height: 4,
                             accentColor: '#a855f7',
                             cursor: 'pointer'
                           }}
                         />
-                        <span style={{ fontSize: 9.5, fontWeight: 700, color: masterAudioMuted ? '#f87171' : 'rgba(255,255,255,0.7)', width: 28, textAlign: 'right', flexShrink: 0 }}>
+                        <span style={{ fontSize: 9.5, fontWeight: 700, color: masterAudioMuted ? '#f87171' : '#c084fc', width: 28, textAlign: 'right', flexShrink: 0 }}>
                           {masterAudioMuted ? "M" : `${Math.round(masterAudioVolume * 100)}%`}
                         </span>
                       </div>
                     </div>
 
-                    {/* Bottom Search & Refresh Capsule */}
+                    {/* Bottom Sunken 3D Search & Refresh Trough */}
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 4,
+                      gap: 5,
                       width: '100%',
-                      background: 'rgba(255, 255, 255, 0.06)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: 10,
-                      padding: '3px 6px',
+                      height: 30,
+                      background: '#09080d',
+                      border: '1px solid rgba(168, 85, 247, 0.2)',
+                      boxShadow: 'inset 0 3px 8px rgba(0, 0, 0, 0.92), 0 3px 8px rgba(0, 0, 0, 0.6)',
+                      borderRadius: 11,
+                      padding: '0 8px',
                       boxSizing: 'border-box'
                     }}>
-                      <Search size={11} color="rgba(255, 255, 255, 0.4)" style={{ flexShrink: 0 }} />
+                      <Search size={11} color="#c084fc" style={{ flexShrink: 0, opacity: 0.8 }} />
                       <input
                         type="text"
-                        placeholder="Filter apps..."
+                        placeholder="Filter channels..."
                         value={audioSearch}
                         onChange={(e) => setAudioSearch(e.target.value)}
                         style={{
@@ -5652,12 +6623,13 @@ export default function Island() {
                           border: 'none',
                           outline: 'none',
                           color: '#ffffff',
-                          fontSize: 10,
+                          fontSize: 10.5,
+                          fontFamily: iosFontStack,
                           minWidth: 0
                         }}
                       />
                       <motion.button
-                        whileHover={{ scale: 1.1 }}
+                        whileHover={{ scale: 1.12 }}
                         whileTap={{ scale: 0.9 }}
                         onClick={() => {
                           fetchAudioDevices();
@@ -5670,7 +6642,7 @@ export default function Island() {
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          color: 'rgba(255, 255, 255, 0.6)'
+                          color: '#c084fc'
                         }}
                         title="Refresh sessions"
                       >
@@ -5679,7 +6651,7 @@ export default function Island() {
                     </div>
                   </div>
 
-                  {/* Right Column: Scrollable List of Applications */}
+                  {/* Right Column: Sunken Dark Rack of Per-App 3D Channel Strips */}
                   <div
                     className="audio-mixer-scrollable"
                     style={{
@@ -5691,7 +6663,11 @@ export default function Island() {
                       flexDirection: 'column',
                       gap: 6,
                       minWidth: 0,
-                      paddingRight: 4,
+                      padding: '6px 7px',
+                      borderRadius: 15,
+                      background: 'linear-gradient(180deg, #09080d 0%, #0d0c13 100%)',
+                      border: '1px solid rgba(255, 255, 255, 0.07)',
+                      boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.95)',
                       boxSizing: 'border-box'
                     }}
                   >
@@ -5702,15 +6678,14 @@ export default function Island() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         height: '100%',
-                        opacity: 0.5,
-                        gap: 6
+                        gap: 5
                       }}>
-                        <Volume2 size={24} color="rgba(255,255,255,0.4)" />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>
-                          No active audio sessions
+                        <Volume2 size={22} color="rgba(192, 132, 252, 0.45)" />
+                        <span style={{ fontSize: 11.5, fontWeight: 700, color: 'rgba(255,255,255,0.8)' }}>
+                          No Active Audio Channels
                         </span>
-                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>
-                          Play sound in any app to control it here
+                        <span style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.42)' }}>
+                          Play audio in any app to mix its level
                         </span>
                       </div>
                     ) : filteredSessions.length === 0 ? (
@@ -5720,11 +6695,10 @@ export default function Island() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         height: '100%',
-                        opacity: 0.5,
-                        gap: 4
+                        opacity: 0.6
                       }}>
                         <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>
-                          No apps match "{audioSearch}"
+                          No channels match "{audioSearch}"
                         </span>
                       </div>
                     ) : (
@@ -5742,19 +6716,26 @@ export default function Island() {
                               alignItems: 'center',
                               gap: 9,
                               padding: '5px 8px',
-                              background: 'rgba(255, 255, 255, 0.04)',
-                              border: '1px solid rgba(255, 255, 255, 0.07)',
-                              borderRadius: 10,
+                              background: 'linear-gradient(180deg, #1d1b26 0%, #13111a 100%)',
+                              border: '1px solid rgba(255, 255, 255, 0.09)',
+                              borderRadius: 11,
+                              boxShadow: `
+                                0 4px 10px rgba(0, 0, 0, 0.7),
+                                inset 0 1px 1px rgba(255, 255, 255, 0.12),
+                                inset 0 -1px 2px rgba(0, 0, 0, 0.85)
+                              `,
                               boxSizing: 'border-box',
                               userSelect: 'none'
                             }}
                           >
-                            {/* App Icon */}
+                            {/* Sunken App Icon Well */}
                             <div style={{
-                              width: 26,
-                              height: 26,
-                              borderRadius: 6,
-                              background: 'rgba(255, 255, 255, 0.06)',
+                              width: 28,
+                              height: 28,
+                              borderRadius: 8,
+                              background: '#09080d',
+                              border: '1px solid rgba(255, 255, 255, 0.08)',
+                              boxShadow: 'inset 0 2px 5px rgba(0, 0, 0, 0.9)',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -5767,18 +6748,17 @@ export default function Island() {
                                   src={s.icon}
                                   alt=""
                                   draggable={false}
-                                  style={{ width: 22, height: 22, objectFit: 'contain', pointerEvents: 'none' }}
+                                  style={{ width: 20, height: 20, objectFit: 'contain', pointerEvents: 'none' }}
                                   onError={(e) => { e.currentTarget.style.display = 'none'; }}
                                 />
                               ) : (
-                                <SlidersHorizontal size={14} color="rgba(255,255,255,0.7)" />
+                                <SlidersHorizontal size={13} color="#c084fc" />
                               )}
-                              {/* Audio peak activity indicator */}
                               {isAudioActive && (
                                 <span style={{
                                   position: 'absolute',
-                                  bottom: 1,
-                                  right: 1,
+                                  bottom: 2,
+                                  right: 2,
                                   width: 5,
                                   height: 5,
                                   borderRadius: '50%',
@@ -5788,7 +6768,7 @@ export default function Island() {
                               )}
                             </div>
 
-                            {/* Center: App Name & Volume Slider */}
+                            {/* Center: App Name & Sunken Volume Fader */}
                             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
@@ -5805,28 +6785,27 @@ export default function Island() {
                                   {s.sessionsCount > 1 && (
                                     <span style={{
                                       fontSize: 8,
-                                      fontWeight: 600,
+                                      fontWeight: 700,
                                       padding: '0 4px',
                                       borderRadius: 4,
-                                      background: 'rgba(255,255,255,0.1)',
-                                      color: 'rgba(255,255,255,0.6)'
+                                      background: 'rgba(168, 85, 247, 0.18)',
+                                      color: '#c084fc'
                                     }}>
-                                      {s.sessionsCount} streams
+                                      {s.sessionsCount}x
                                     </span>
                                   )}
                                 </div>
                                 <span style={{
                                   fontSize: 10,
                                   fontWeight: 700,
-                                  color: isAppMuted ? '#f87171' : 'rgba(255, 255, 255, 0.75)',
-                                  width: 32,
+                                  color: isAppMuted ? '#f87171' : '#c084fc',
+                                  width: 34,
                                   textAlign: 'right'
                                 }}>
                                   {isAppMuted ? "Muted" : `${pct}%`}
                                 </span>
                               </div>
 
-                              {/* Volume Slider Track */}
                               <input
                                 type="range"
                                 min="0"
@@ -5836,24 +6815,27 @@ export default function Island() {
                                 style={{
                                   width: '100%',
                                   height: 4,
-                                  accentColor: isAppMuted ? '#f87171' : '#38bdf8',
+                                  accentColor: isAppMuted ? '#f87171' : '#a855f7',
                                   cursor: 'pointer'
                                 }}
                               />
                             </div>
 
-                            {/* Mute Button */}
+                            {/* Tactile 3D Mute Button */}
                             <motion.button
-                              whileHover={{ scale: 1.1 }}
-                              whileTap={{ scale: 0.9 }}
+                              whileHover={{ scale: 1.08 }}
+                              whileTap={{ scale: 0.92 }}
                               type="button"
                               onClick={() => handleToggleAppMute(s)}
                               style={{
-                                width: 26,
-                                height: 26,
-                                borderRadius: 7,
-                                background: isAppMuted ? 'rgba(248, 113, 113, 0.15)' : 'rgba(255, 255, 255, 0.06)',
-                                border: `1px solid ${isAppMuted ? 'rgba(248, 113, 113, 0.3)' : 'rgba(255, 255, 255, 0.1)'}`,
+                                width: 27,
+                                height: 27,
+                                borderRadius: 8,
+                                background: isAppMuted
+                                  ? 'linear-gradient(180deg, #3b1419 0%, #240b0e 100%)'
+                                  : 'linear-gradient(180deg, #262235 0%, #171421 100%)',
+                                border: `1px solid ${isAppMuted ? 'rgba(248, 113, 113, 0.45)' : 'rgba(192, 132, 252, 0.28)'}`,
+                                boxShadow: '0 3px 8px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.14)',
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
@@ -5865,483 +6847,9 @@ export default function Island() {
                               {isAppMuted ? (
                                 <VolumeX size={13} color="#f87171" />
                               ) : (
-                                <Volume2 size={13} color="rgba(255, 255, 255, 0.85)" />
+                                <Volume2 size={13} color="#c084fc" />
                               )}
                             </motion.button>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
-
-            {/* Universal Progress Island Tab (Tab 13) */}
-            {currentTab === 13 && (() => {
-              const activeOps = progressSnapshot?.active || [];
-              const historyOps = progressSnapshot?.history || [];
-              const summary = progressSnapshot?.summary || {};
-
-              const displayedOps = progressFilter === "active"
-                ? activeOps
-                : progressFilter === "history"
-                  ? historyOps
-                  : [...activeOps, ...historyOps];
-
-              const getCategoryIcon = (category, size = 15, color = "#38bdf8") => {
-                switch (category) {
-                  case "download": return <Download size={size} color={color} />;
-                  case "upload": return <Upload size={size} color={color} />;
-                  case "file-operation": return <FileText size={size} color={color} />;
-                  case "update": return <RefreshCw size={size} color={color} />;
-                  case "installation": return <Package size={size} color={color} />;
-                  case "render": return <Film size={size} color={color} />;
-                  default: return <Layers size={size} color={color} />;
-                }
-              };
-
-              const getStatusBadge = (status) => {
-                switch (status) {
-                  case "running":
-                    return { text: "Running", bg: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", border: "rgba(56, 189, 248, 0.25)" };
-                  case "paused":
-                    return { text: "Paused", bg: "rgba(251, 191, 36, 0.12)", color: "#fbbf24", border: "rgba(251, 191, 36, 0.25)" };
-                  case "completed":
-                    return { text: "Completed", bg: "rgba(34, 197, 94, 0.12)", color: "#22c55e", border: "rgba(34, 197, 94, 0.25)" };
-                  case "failed":
-                    return { text: "Failed", bg: "rgba(239, 68, 68, 0.12)", color: "#ef4444", border: "rgba(239, 68, 68, 0.25)" };
-                  case "cancelled":
-                    return { text: "Cancelled", bg: "rgba(156, 163, 175, 0.12)", color: "#9ca3af", border: "rgba(156, 163, 175, 0.25)" };
-                  default:
-                    return { text: status, bg: "rgba(255, 255, 255, 0.08)", color: "rgba(255, 255, 255, 0.7)", border: "rgba(255, 255, 255, 0.1)" };
-                }
-              };
-
-              return (
-                <div style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  padding: '8px 14px',
-                  boxSizing: 'border-box',
-                  gap: 7,
-                  userSelect: 'none'
-                }}>
-                  {/* Top Header Bar */}
-                  <div style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    width: '100%',
-                    paddingBottom: 2,
-                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)'
-                  }}>
-                    {/* Left: Title + Active summary badge */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                      <div style={{
-                        width: 22,
-                        height: 22,
-                        borderRadius: 6,
-                        background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(99, 102, 241, 0.2))',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center'
-                      }}>
-                        <Layers size={13} color="#38bdf8" />
-                      </div>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>
-                        Universal Progress Island
-                      </span>
-                      {activeOps.length > 0 && (
-                        <span style={{
-                          fontSize: 9.5,
-                          fontWeight: 700,
-                          padding: '1px 6px',
-                          borderRadius: 8,
-                          background: 'rgba(56, 189, 248, 0.15)',
-                          color: '#38bdf8',
-                          border: '1px solid rgba(56, 189, 248, 0.3)'
-                        }}>
-                          {activeOps.length} active
-                        </span>
-                      )}
-                      {summary.totalBytesPerSecond > 0 && (
-                        <span style={{
-                          fontSize: 9.5,
-                          fontWeight: 600,
-                          color: 'rgba(255, 255, 255, 0.6)'
-                        }}>
-                          · {formatBytes(summary.totalBytesPerSecond)}/s
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Right: Filters & Test Tool */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {/* Filter Pills */}
-                      <div style={{
-                        display: 'flex',
-                        background: 'rgba(255, 255, 255, 0.06)',
-                        borderRadius: 7,
-                        padding: 2,
-                        gap: 2
-                      }}>
-                        {[
-                          { id: "all", label: `All (${activeOps.length + historyOps.length})` },
-                          { id: "active", label: `Active (${activeOps.length})` },
-                          { id: "history", label: `Done (${historyOps.length})` },
-                        ].map(f => (
-                          <button
-                            key={f.id}
-                            onClick={() => setProgressFilter(f.id)}
-                            style={{
-                              background: progressFilter === f.id ? 'rgba(255, 255, 255, 0.16)' : 'transparent',
-                              border: 'none',
-                              borderRadius: 5,
-                              padding: '2px 6px',
-                              color: progressFilter === f.id ? '#ffffff' : 'rgba(255, 255, 255, 0.5)',
-                              fontSize: 9.5,
-                              fontWeight: 600,
-                              cursor: 'pointer'
-                            }}
-                          >
-                            {f.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Clear History */}
-                      {historyOps.length > 0 && (
-                        <motion.button
-                          whileHover={{ scale: 1.1 }}
-                          whileTap={{ scale: 0.9 }}
-                          onClick={handleClearProgressHistory}
-                          title="Clear history"
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            padding: '2px 4px',
-                            color: 'rgba(255, 255, 255, 0.4)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center'
-                          }}
-                        >
-                          <Trash2 size={11} />
-                        </motion.button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Operations List Container */}
-                  <div
-                    className="progress-island-scrollable"
-                    style={{
-                      flex: 1,
-                      overflowY: 'auto',
-                      overflowX: 'hidden',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: 6,
-                      paddingRight: 3,
-                      boxSizing: 'border-box'
-                    }}
-                  >
-                    {displayedOps.length === 0 ? (
-                      <div style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        height: '100%',
-                        opacity: 0.6,
-                        gap: 5
-                      }}>
-                        <Layers size={22} color="rgba(255, 255, 255, 0.35)" />
-                        <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff' }}>
-                          No {progressFilter === "active" ? "active" : progressFilter === "history" ? "past" : ""} operations
-                        </span>
-                        <span style={{ fontSize: 9.5, color: 'rgba(255, 255, 255, 0.45)' }}>
-                          Background downloads, file transfers, and system updates appear here
-                        </span>
-                      </div>
-                    ) : (
-                      displayedOps.map(op => {
-                        const statusBadge = getStatusBadge(op.status);
-                        const isIndeterminate = op.progress === null || op.status === "indeterminate";
-                        const percentVal = typeof op.progress === "number" ? Math.round(op.progress) : null;
-                        const caps = op.capabilities || {};
-
-                        return (
-                          <div
-                            key={op.id}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 10,
-                              padding: '6px 10px',
-                              background: 'rgba(255, 255, 255, 0.04)',
-                              border: '1px solid rgba(255, 255, 255, 0.08)',
-                              borderRadius: 10,
-                              boxSizing: 'border-box'
-                            }}
-                          >
-                            {/* Category Icon */}
-                            <div style={{
-                              width: 28,
-                              height: 28,
-                              borderRadius: 8,
-                              background: 'rgba(255, 255, 255, 0.06)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
-                            }}>
-                              {getCategoryIcon(op.category, 15, statusBadge.color)}
-                            </div>
-
-                            {/* Main Content: Info & Progress Bar */}
-                            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
-                              {/* Row 1: Title + Application + Status */}
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-                                  <span style={{
-                                    fontSize: 11,
-                                    fontWeight: 700,
-                                    color: '#ffffff',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  }}>
-                                    {op.title}
-                                  </span>
-                                  {op.applicationName && (
-                                    <span style={{
-                                      fontSize: 8.5,
-                                      fontWeight: 600,
-                                      padding: '1px 4px',
-                                      borderRadius: 4,
-                                      background: 'rgba(255, 255, 255, 0.08)',
-                                      color: 'rgba(255, 255, 255, 0.6)',
-                                      whiteSpace: 'nowrap'
-                                    }}>
-                                      {op.applicationName}
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                  {/* Percent or working label */}
-                                  <span style={{ fontSize: 10, fontWeight: 700, color: statusBadge.color }}>
-                                    {percentVal !== null ? `${percentVal}%` : statusBadge.text}
-                                  </span>
-                                  {/* Status Tag */}
-                                  <span style={{
-                                    fontSize: 8.5,
-                                    fontWeight: 700,
-                                    padding: '1px 5px',
-                                    borderRadius: 4,
-                                    background: statusBadge.bg,
-                                    color: statusBadge.color,
-                                    border: `1px solid ${statusBadge.border}`
-                                  }}>
-                                    {statusBadge.text}
-                                  </span>
-                                </div>
-                              </div>
-
-                              {/* Progress Bar */}
-                              <div style={{
-                                width: '100%',
-                                height: 4,
-                                borderRadius: 2,
-                                background: 'rgba(255, 255, 255, 0.1)',
-                                overflow: 'hidden',
-                                position: 'relative'
-                              }}>
-                                {isIndeterminate ? (
-                                  <div className="progress-shimmer-bar" style={{
-                                    height: '100%',
-                                    width: '35%',
-                                    background: statusBadge.color,
-                                    borderRadius: 2
-                                  }} />
-                                ) : (
-                                  <div style={{
-                                    height: '100%',
-                                    width: `${percentVal}%`,
-                                    background: statusBadge.color,
-                                    borderRadius: 2,
-                                    transition: 'width 0.25s ease'
-                                  }} />
-                                )}
-                              </div>
-
-                              {/* Row 2: Subtitle / Transfer stats & ETA */}
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 9, color: 'rgba(255, 255, 255, 0.5)' }}>
-                                <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '65%' }}>
-                                  {op.errorMessage ? (
-                                    <span style={{ color: '#ef4444' }}>{op.errorMessage}</span>
-                                  ) : op.subtitle ? (
-                                    op.subtitle
-                                  ) : (
-                                    op.totalBytes ? `${formatBytes(op.bytesCompleted || 0)} / ${formatBytes(op.totalBytes)}` : ""
-                                  )}
-                                </span>
-
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                                  {op.bytesPerSecond > 0 && (
-                                    <span>{formatBytes(op.bytesPerSecond)}/s</span>
-                                  )}
-                                  {op.estimatedRemainingSeconds > 0 && (
-                                    <span>{op.estimatedRemainingSeconds < 60 ? `${op.estimatedRemainingSeconds}s left` : `${Math.ceil(op.estimatedRemainingSeconds / 60)}m left`}</span>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-
-                            {/* Actions Button Group */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-                              {caps.canPause && op.status === "running" && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "pause")}
-                                  title="Pause"
-                                  style={{
-                                    background: 'rgba(255, 255, 255, 0.08)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#ffffff',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <Pause size={10} />
-                                </motion.button>
-                              )}
-
-                              {caps.canResume && op.status === "paused" && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "resume")}
-                                  title="Resume"
-                                  style={{
-                                    background: 'rgba(56, 189, 248, 0.2)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#38bdf8',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <Play size={10} fill="#38bdf8" />
-                                </motion.button>
-                              )}
-
-                              {caps.canCancel && (op.status === "running" || op.status === "paused") && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "cancel")}
-                                  title="Cancel"
-                                  style={{
-                                    background: 'rgba(255, 255, 255, 0.08)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'rgba(255, 255, 255, 0.6)',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <X size={11} />
-                                </motion.button>
-                              )}
-
-                              {caps.canRetry && (op.status === "failed" || op.status === "cancelled") && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "retry")}
-                                  title="Retry"
-                                  style={{
-                                    background: 'rgba(56, 189, 248, 0.2)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#38bdf8',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <RotateCcw size={10} />
-                                </motion.button>
-                              )}
-
-                              {caps.canOpenDestination && op.destinationPath && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "openDestination")}
-                                  title="Open destination folder"
-                                  style={{
-                                    background: 'rgba(255, 255, 255, 0.08)',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 22,
-                                    height: 22,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: '#ffffff',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <FolderOpen size={11} />
-                                </motion.button>
-                              )}
-
-                              {caps.canDismiss && (op.status === "completed" || op.status === "failed" || op.status === "cancelled") && (
-                                <motion.button
-                                  whileHover={{ scale: 1.15 }}
-                                  whileTap={{ scale: 0.9 }}
-                                  onClick={() => handleProgressAction(op.id, "dismiss")}
-                                  title="Dismiss"
-                                  style={{
-                                    background: 'transparent',
-                                    border: 'none',
-                                    borderRadius: 6,
-                                    width: 20,
-                                    height: 20,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    color: 'rgba(255, 255, 255, 0.35)',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  <X size={11} />
-                                </motion.button>
-                              )}
-                            </div>
                           </div>
                         );
                       })
@@ -6357,6 +6865,7 @@ export default function Island() {
                 <AppLauncher
                   textColor={textColor}
                   accentColor="#38bdf8"
+                  isOpen={mode === "large"}
                   onClose={() => setMode("still")}
                 />
               </ErrorBoundary>
@@ -6369,9 +6878,13 @@ export default function Island() {
                   textColor={textColor}
                   accentColor="#10b981"
                   onTaskCreated={(task) => {
+                    const taskTitle = typeof task === "string" ? task : (task?.title || task?.text || task?.name || "Untitled Task");
                     setTasks(prev => {
-                      const updated = [task, ...prev];
-                      localStorage.setItem("tasks", JSON.stringify(updated));
+                      const list = Array.isArray(prev) ? prev : [];
+                      const updated = [taskTitle, ...list];
+                      try {
+                        localStorage.setItem("tasks", JSON.stringify(updated));
+                      } catch (_) {}
                       return updated;
                     });
                   }}
@@ -6379,246 +6892,432 @@ export default function Island() {
               </ErrorBoundary>
             )}
 
-            {/* Now Playing*/}
-            {currentTab === 3 && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                width: '100%',
-                height: '100%',
-                userSelect: 'none'
-              }}>
-                <AnimatePresence mode="wait">
-                  {spotifyTrack ? (
-                    <motion.div
-                      key={spotifyTrack.name + spotifyTrack.artist}
-                      initial={{ opacity: 0, filter: 'blur(10px)', scale: 0.95 }}
-                      animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
-                      exit={{ opacity: 0, filter: 'blur(10px)', scale: 0.95 }}
-                      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-                      style={{
-                        position: 'relative',
-                        width: '100%',
-                        height: '100%',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        justifyContent: 'space-between',
-                        padding: '14px 18px',
-                        boxSizing: 'border-box',
-                        overflow: 'hidden',
-                        borderRadius: 24
-                      }}
-                    >
-                      {/* Full-bleed background album art */}
-                      {spotifyTrack.artwork_url && (
+            {/* Shelf - Session File Stash */}
+            {currentTab === 16 && (
+              <ErrorBoundary tabName="Shelf" onGoHome={() => setTabState([2, -1])}>
+                <Shelf accentColor="#38bdf8" />
+              </ErrorBoundary>
+            )}
+
+            {/* Prayer - Islamic Prayer Times & Celestial Arc */}
+            {currentTab === 17 && (
+              <ErrorBoundary tabName="Prayer" onGoHome={() => setTabState([2, -1])}>
+                <Prayer
+                  accentColor="#38bdf8"
+                  locationName={localStorage.getItem("location") || weatherLocation || "Rangpur"}
+                />
+              </ErrorBoundary>
+            )}
+
+            {/* Now Playing (3D Beveled Album Art Housing + Sunken Waveform Trough & Tactile 3D Transport Orbs) */}
+            {currentTab === 3 && (() => {
+              const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
+              const appLabel = cleanAppName(spotifyTrack?.source);
+              const mediaAccent = appLabel === 'Spotify' ? '#1db954' : '#ff2d55';
+
+              return (
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  height: '100%',
+                  userSelect: 'none',
+                  fontFamily: iosFontStack
+                }}>
+                  <AnimatePresence mode="wait">
+                    {spotifyTrack ? (
+                      <motion.div
+                        key={spotifyTrack.name + spotifyTrack.artist}
+                        initial={{ opacity: 0, filter: 'blur(10px)', scale: 0.96 }}
+                        animate={{ opacity: 1, filter: 'blur(0px)', scale: 1 }}
+                        exit={{ opacity: 0, filter: 'blur(10px)', scale: 0.96 }}
+                        transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+                        style={{
+                          position: 'relative',
+                          width: '100%',
+                          height: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '10px 18px',
+                          boxSizing: 'border-box',
+                          overflow: 'hidden',
+                          borderRadius: 'inherit'
+                        }}
+                      >
+                        {/* Smoked Dark Ambient Album Art Backdrop */}
+                        {spotifyTrack.artwork_url && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              backgroundImage: `url("${spotifyTrack.artwork_url}")`,
+                              backgroundSize: 'cover',
+                              backgroundPosition: 'center',
+                              filter: 'blur(18px) brightness(0.32) saturate(1.4)',
+                              transform: 'scale(1.15)',
+                              zIndex: 0
+                            }}
+                          />
+                        )}
+
+                        {/* Deep 3D Recessed Dark Vignette */}
                         <div
                           style={{
                             position: 'absolute',
-                            top: 0,
-                            right: 0,
-                            bottom: 0,
-                            left: 0,
-                            backgroundImage: `url("${spotifyTrack.artwork_url}")`,
-                            backgroundSize: 'cover',
-                            backgroundPosition: 'center',
-                            filter: 'brightness(0.65)',
-                            borderRadius: 'inherit',
-                            zIndex: 0
+                            inset: 0,
+                            background: 'linear-gradient(135deg, rgba(8,8,12,0.88) 0%, rgba(12,12,18,0.72) 55%, rgba(8,8,12,0.92) 100%)',
+                            boxShadow: 'inset 0 4px 16px rgba(0,0,0,0.9)',
+                            zIndex: 1
                           }}
                         />
-                      )}
 
-                      {/* Vignette gradient dark overlay */}
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          background: 'linear-gradient(to right, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.45) 50%, rgba(0,0,0,0.25) 100%), linear-gradient(to top, rgba(0,0,0,0.8) 0%, transparent 70%)',
-                          borderRadius: 'inherit',
-                          zIndex: 1
-                        }}
-                      />
-
-                      {/* Content Layer */}
-                      <div style={{
-                        position: 'relative',
-                        zIndex: 2,
-                        display: 'flex',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        height: '100%',
-                        width: '100%',
-                        gap: 16,
-                        padding: '4px 8px',
-                        boxSizing: 'border-box'
-                      }}>
-                        {/* Left: Album Artwork Card Thumbnail */}
-                        {spotifyTrack.artwork_url && (
-                          <div style={{
-                            width: 80,
-                            height: 80,
-                            borderRadius: 14,
-                            overflow: 'hidden',
-                            flexShrink: 0,
-                            boxShadow: '0 4px 16px rgba(0,0,0,0.6)',
-                            position: 'relative'
-                          }}>
-                            <img
-                              src={spotifyTrack.artwork_url}
-                              alt=""
-                              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                            />
-                            {/* App badge at bottom-right corner */}
-                            <div style={{
-                              position: 'absolute',
-                              bottom: 4,
-                              right: 4,
-                              width: 20,
-                              height: 20,
-                              borderRadius: '50%',
-                              backgroundColor: 'rgba(0,0,0,0.7)',
-                              backdropFilter: 'blur(4px)',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center'
-                            }}>
-                              <Music size={11} color="#ffffff" />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Right: Metadata + Controls Column */}
+                        {/* Foreground 3D Media Deck */}
                         <div style={{
+                          position: 'relative',
+                          zIndex: 2,
                           display: 'flex',
-                          flexDirection: 'column',
-                          justifyContent: 'space-between',
-                          flex: 1,
-                          minWidth: 0,
-                          height: 80
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          height: '100%',
+                          width: '100%',
+                          gap: 16,
+                          boxSizing: 'border-box'
                         }}>
-                          {/* Title & Artist */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.6)' }}>
-                              <Music size={12} color="rgba(255,255,255,0.75)" />
-                              <span>{cleanAppName(spotifyTrack?.source)}</span>
-                            </div>
-                            <ScrollingTitle text={spotifyTrack.name || "Unknown Title"} fontSize={14} />
-                            <p
+                          {/* Left: 3D Metallic Beveled Album Artwork Housing */}
+                          <div
+                            style={{
+                              width: 108,
+                              height: 108,
+                              borderRadius: 22,
+                              padding: 5,
+                              boxSizing: 'border-box',
+                              flexShrink: 0,
+                              background: 'linear-gradient(145deg, #2e2e38 0%, #17171d 55%, #0a0a0e 100%)',
+                              boxShadow: `
+                                0 10px 24px rgba(0, 0, 0, 0.85),
+                                0 3px 8px rgba(0, 0, 0, 0.7),
+                                inset 0 1.5px 2px rgba(255, 255, 255, 0.22),
+                                inset 0 -2px 4px rgba(0, 0, 0, 0.9)
+                              `,
+                              position: 'relative'
+                            }}
+                          >
+                            <div
                               style={{
-                                margin: 0,
-                                fontSize: 12,
-                                fontWeight: 400,
-                                color: 'rgba(255,255,255,0.65)',
-                                whiteSpace: 'nowrap',
+                                width: '100%',
+                                height: '100%',
+                                borderRadius: 17,
                                 overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                maxWidth: '360px',
-                                fontFamily: 'OpenRunde, system-ui, sans-serif'
+                                position: 'relative',
+                                background: '#0b0b0f',
+                                boxShadow: 'inset 0 3px 8px rgba(0,0,0,0.9)'
                               }}
                             >
-                              {spotifyTrack.artist || "Unknown Artist"}
-                            </p>
-                          </div>
-
-                          {/* Row: Scrubber + Controls */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <WaveformScrubber
-                                position={mediaPosition}
-                                duration={spotifyTrack.duration || 0}
-                                isPlaying={spotifyTrack.state === 'playing'}
-                                onSeek={(sec) => {
-                                  setMediaPosition(sec);
-                                  if (window.electronAPI?.controlSystemMedia) {
-                                    window.electronAPI.controlSystemMedia('seek', sec);
-                                  }
+                              {spotifyTrack.artwork_url ? (
+                                <img
+                                  src={spotifyTrack.artwork_url}
+                                  alt=""
+                                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                                />
+                              ) : (
+                                <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Music size={30} color={mediaAccent} />
+                                </div>
+                              )}
+                              {/* Inner Specular Glint */}
+                              <div
+                                style={{
+                                  position: 'absolute',
+                                  inset: 0,
+                                  background: 'linear-gradient(135deg, rgba(255,255,255,0.12) 0%, rgba(255,255,255,0) 45%)',
+                                  pointerEvents: 'none'
                                 }}
                               />
                             </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-                              <button
-                                className="media-btn"
-                                onClick={() => {
-                                  lastMediaActionRef.current = Date.now();
-                                  if (window.electronAPI?.controlSystemMedia) {
-                                    window.electronAPI.controlSystemMedia('previous');
-                                  }
-                                }}
-                                style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                title="Previous Track"
-                                aria-label="Previous Track"
-                              >
-                                <SkipBackIcon size={18} color="#ffffff" fill="#ffffff" />
-                              </button>
-                              <button
-                                className="media-btn"
-                                onClick={() => {
-                                  lastMediaActionRef.current = Date.now();
-                                  setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
-                                  if (window.electronAPI?.controlSystemMedia) {
-                                    window.electronAPI.controlSystemMedia('playpause');
-                                  }
-                                }}
+                          </div>
+
+                          {/* Right: Metadata Header + Sunken Waveform Trough + Tactile 3D Transport Orbs */}
+                          <div style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            flex: 1,
+                            minWidth: 0,
+                            height: 108
+                          }}>
+                            {/* Top Track Info & Source Capsule */}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <div
+                                  onClick={() => openMusicPlayer(spotifyTrack?.source)}
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 5,
+                                    padding: '2px 8px',
+                                    borderRadius: 999,
+                                    background: 'rgba(0, 0, 0, 0.65)',
+                                    border: `1px solid ${mediaAccent}44`,
+                                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.85)',
+                                    fontSize: 9.5,
+                                    fontWeight: 700,
+                                    color: mediaAccent,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  <Music size={10} color={mediaAccent} />
+                                  <span>{appLabel}</span>
+                                </div>
+                                <span style={{ fontSize: 9.5, fontWeight: 600, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                                  {spotifyTrack.state === 'playing' ? 'Playing' : 'Paused'}
+                                </span>
+                              </div>
+                              <ScrollingTitle text={spotifyTrack.name || "Unknown Title"} fontSize={15} />
+                              <p
                                 style={{
-                                  background: 'rgba(255,255,255,0.2)',
-                                  backdropFilter: 'blur(8px)',
-                                  border: '1px solid rgba(255,255,255,0.25)',
-                                  borderRadius: '50%',
-                                  width: 32,
-                                  height: 32,
-                                  color: '#ffffff',
-                                  cursor: 'pointer',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  boxShadow: '0 2px 10px rgba(0,0,0,0.35)'
+                                  margin: 0,
+                                  fontSize: 11.5,
+                                  fontWeight: 500,
+                                  color: 'rgba(255,255,255,0.68)',
+                                  whiteSpace: 'nowrap',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis'
                                 }}
-                                title={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
-                                aria-label={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
                               >
-                                {spotifyTrack.state === 'playing' ? <Pause size={16} color="#ffffff" fill="#ffffff" /> : <Play size={16} color="#ffffff" fill="#ffffff" />}
-                              </button>
-                              <button
-                                className="media-btn"
-                                onClick={() => {
-                                  lastMediaActionRef.current = Date.now();
-                                  if (window.electronAPI?.controlSystemMedia) {
-                                    window.electronAPI.controlSystemMedia('next');
-                                  }
-                                }}
-                                style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', opacity: 0.9, padding: 4, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                                title="Next Track"
-                                aria-label="Next Track"
-                              >
-                                <SkipForwardIcon size={18} color="#ffffff" fill="#ffffff" />
-                              </button>
+                                {spotifyTrack.artist || "Unknown Artist"}
+                              </p>
+                            </div>
+
+                            {/* Bottom Row: Sunken Scrubber Trough + 3D Transport Orbs */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <WaveformScrubber
+                                  position={mediaPosition}
+                                  duration={spotifyTrack.duration || 0}
+                                  isPlaying={spotifyTrack.state === 'playing'}
+                                  accentColor={mediaAccent}
+                                  onSeek={(sec) => {
+                                    setMediaPosition(sec);
+                                    if (window.electronAPI?.controlSystemMedia) {
+                                      window.electronAPI.controlSystemMedia('seek', sec);
+                                    }
+                                  }}
+                                />
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+                                <motion.button
+                                  whileHover={{ scale: 1.08 }}
+                                  whileTap={{ scale: 0.92 }}
+                                  onClick={() => {
+                                    lastMediaActionRef.current = Date.now();
+                                    if (window.electronAPI?.controlSystemMedia) {
+                                      window.electronAPI.controlSystemMedia('previous');
+                                    }
+                                  }}
+                                  style={{
+                                    width: 30,
+                                    height: 30,
+                                    borderRadius: '50%',
+                                    background: 'linear-gradient(180deg, #23232c 0%, #14141a 100%)',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    boxShadow: '0 4px 10px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,255,255,0.16)',
+                                    color: '#ffffff',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  title="Previous Track"
+                                  aria-label="Previous Track"
+                                >
+                                  <SkipBackIcon size={14} color="#ffffff" fill="#ffffff" />
+                                </motion.button>
+
+                                <motion.button
+                                  whileHover={{ scale: 1.08 }}
+                                  whileTap={{ scale: 0.92 }}
+                                  onClick={() => {
+                                    lastMediaActionRef.current = Date.now();
+                                    setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
+                                    if (window.electronAPI?.controlSystemMedia) {
+                                      window.electronAPI.controlSystemMedia('playpause');
+                                    }
+                                  }}
+                                  style={{
+                                    width: 36,
+                                    height: 36,
+                                    borderRadius: '50%',
+                                    background: `linear-gradient(180deg, ${mediaAccent}38 0%, #191922 100%)`,
+                                    border: `1px solid ${mediaAccent}77`,
+                                    boxShadow: `0 6px 14px rgba(0,0,0,0.85), 0 0 12px ${mediaAccent}33, inset 0 1px 1px rgba(255,255,255,0.25)`,
+                                    color: '#ffffff',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  title={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
+                                  aria-label={spotifyTrack.state === 'playing' ? "Pause" : "Play"}
+                                >
+                                  {spotifyTrack.state === 'playing' ? <Pause size={16} color="#ffffff" fill="#ffffff" /> : <Play size={16} color="#ffffff" fill="#ffffff" style={{ marginLeft: 1.5 }} />}
+                                </motion.button>
+
+                                <motion.button
+                                  whileHover={{ scale: 1.08 }}
+                                  whileTap={{ scale: 0.92 }}
+                                  onClick={() => {
+                                    lastMediaActionRef.current = Date.now();
+                                    if (window.electronAPI?.controlSystemMedia) {
+                                      window.electronAPI.controlSystemMedia('next');
+                                    }
+                                  }}
+                                  style={{
+                                    width: 30,
+                                    height: 30,
+                                    borderRadius: '50%',
+                                    background: 'linear-gradient(180deg, #23232c 0%, #14141a 100%)',
+                                    border: '1px solid rgba(255,255,255,0.12)',
+                                    boxShadow: '0 4px 10px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,255,255,0.16)',
+                                    color: '#ffffff',
+                                    cursor: 'pointer',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center'
+                                  }}
+                                  title="Next Track"
+                                  aria-label="Next Track"
+                                >
+                                  <SkipForwardIcon size={14} color="#ffffff" fill="#ffffff" />
+                                </motion.button>
+                              </div>
                             </div>
                           </div>
                         </div>
-                      </div>
-                    </motion.div>
-                  ) : (
-                    <motion.div
-                      key="nothing"
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      style={{
-                        width: '100%',
-                        textAlign: 'center',
-                        color: textColor,
-                        fontFamily: theme === "win95" ? "w95" : "OpenRunde"
-                      }}
-                    >
-                      <h3 style={{ margin: 0, fontSize: 16 }}>Nothing Playing</h3>
-                      <p style={{ margin: '5px 0 0 0', opacity: 0.7, fontSize: 13 }}>Play music on Spotify or Apple Music</p>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </div>
-            )}
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="nothing"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          padding: '12px 20px',
+                          boxSizing: 'border-box',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 18
+                        }}
+                      >
+                        {/* Left 3D Idle Vinyl Dial Well */}
+                        <div
+                          style={{
+                            width: 108,
+                            height: 108,
+                            borderRadius: '50%',
+                            padding: 6,
+                            boxSizing: 'border-box',
+                            background: 'linear-gradient(145deg, #292932 0%, #15151b 55%, #0a0a0e 100%)',
+                            boxShadow: '0 10px 22px rgba(0,0,0,0.85), inset 0 1.5px 2px rgba(255,255,255,0.18)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: '100%',
+                              height: '100%',
+                              borderRadius: '50%',
+                              background: 'radial-gradient(circle at 50% 50%, #1c1c24 0%, #0d0d12 70%, #08080b 100%)',
+                              boxShadow: 'inset 0 4px 10px rgba(0,0,0,0.92)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <Music size={28} color="#ff2d55" style={{ filter: 'drop-shadow(0 0 8px rgba(255, 45, 85, 0.45))' }} />
+                          </div>
+                        </div>
 
-            {/* Calendar Tab */}
+                        {/* Right Sunken Idle Media Launcher Well */}
+                        <div
+                          style={{
+                            flex: 1,
+                            height: '100%',
+                            borderRadius: 16,
+                            padding: '12px 16px',
+                            boxSizing: 'border-box',
+                            background: 'linear-gradient(180deg, #0a0a0e 0%, #111118 100%)',
+                            border: '1px solid rgba(255, 255, 255, 0.07)',
+                            boxShadow: 'inset 0 4px 12px rgba(0,0,0,0.92)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between'
+                          }}
+                        >
+                          <div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: '#ffffff', letterSpacing: '-0.2px' }}>
+                              No Active Media Session
+                            </div>
+                            <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.52)', marginTop: 2 }}>
+                              Start playback in your favorite player to control it here
+                            </div>
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <motion.button
+                              whileHover={{ scale: 1.03 }}
+                              whileTap={{ scale: 0.96 }}
+                              onClick={() => openMusicPlayer("Spotify")}
+                              style={{
+                                height: 30,
+                                padding: '0 14px',
+                                borderRadius: 999,
+                                background: 'linear-gradient(180deg, #0f2e1c 0%, #091d11 100%)',
+                                border: '1px solid rgba(29, 185, 84, 0.4)',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,255,255,0.16)',
+                                color: '#1db954',
+                                fontSize: 11.5,
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Open Spotify
+                            </motion.button>
+                            <motion.button
+                              whileHover={{ scale: 1.03 }}
+                              whileTap={{ scale: 0.96 }}
+                              onClick={() => openMusicPlayer("Music")}
+                              style={{
+                                height: 30,
+                                padding: '0 14px',
+                                borderRadius: 999,
+                                background: 'linear-gradient(180deg, #36121b 0%, #210a10 100%)',
+                                border: '1px solid rgba(255, 45, 85, 0.4)',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,255,255,0.16)',
+                                color: '#ff2d55',
+                                fontSize: 11.5,
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Apple Music
+                            </motion.button>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            })()}
+
+            {/* Calendar Tab (3D Beveled Flip-Block + Sunken Month Matrix — Crimson Red Accent) */}
             {currentTab === 4 && (() => {
               const today = new Date();
               const selectedYear = calendarDate.getFullYear();
@@ -6626,6 +7325,7 @@ export default function Island() {
               const monthNameUpper = calendarDate.toLocaleDateString('en-US', { month: 'long' }).toUpperCase();
               const todayWeekdayFull = today.toLocaleDateString('en-US', { weekday: 'long' });
               const days = getCalendarDays(selectedYear, selectedMonth);
+              const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
 
               return (
                 <div
@@ -6636,106 +7336,178 @@ export default function Island() {
                     flexDirection: 'row',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '8px 16px',
+                    padding: '10px 16px',
                     boxSizing: 'border-box',
-                    gap: 16,
-                    userSelect: 'none'
+                    gap: 14,
+                    userSelect: 'none',
+                    fontFamily: iosFontStack
                   }}
                 >
-                  {/* Left Column: Hero Date Card */}
+                  {/* Left Column: 3D Beveled iOS Flip-Calendar Block */}
                   <div
                     style={{
-                      width: 105,
+                      width: 118,
                       height: '100%',
-                      background: '#1b1b1f',
-                      borderRadius: 14,
-                      border: '1.5px solid #2c2c34',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.6)',
-                      padding: '6px 8px',
+                      borderRadius: 18,
+                      padding: 5,
                       boxSizing: 'border-box',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      flexShrink: 0
+                      background: 'linear-gradient(145deg, #2d2426 0%, #181416 55%, #0c0a0b 100%)',
+                      boxShadow: `
+                        0 10px 22px rgba(0, 0, 0, 0.85),
+                        inset 0 1.5px 2px rgba(255, 255, 255, 0.18),
+                        inset 0 -2px 4px rgba(0, 0, 0, 0.9)
+                      `,
+                      flexShrink: 0,
+                      display: 'flex'
                     }}
                   >
-                    {/* Month & Year */}
-                    <div style={{ textAlign: 'center' }}>
+                    <div
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        borderRadius: 14,
+                        background: 'linear-gradient(180deg, #16151a 0%, #0d0c10 100%)',
+                        boxShadow: 'inset 0 4px 10px rgba(0,0,0,0.9)',
+                        padding: '6px 8px',
+                        boxSizing: 'border-box',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'space-between'
+                      }}
+                    >
+                      {/* Sunken Dark-Crimson Month Header Pill */}
                       <div
                         style={{
-                          fontSize: 11,
+                          width: '100%',
+                          padding: '3px 4px',
+                          borderRadius: 8,
+                          background: 'linear-gradient(180deg, #381110 0%, #240a09 100%)',
+                          border: '1px solid rgba(255, 69, 58, 0.35)',
+                          boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.15), 0 2px 6px rgba(0,0,0,0.7)',
+                          textAlign: 'center'
+                        }}
+                      >
+                        <div
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 800,
+                            color: '#ff453a',
+                            letterSpacing: '0.8px',
+                            textTransform: 'uppercase',
+                            lineHeight: 1.1
+                          }}
+                        >
+                          {monthNameUpper}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 8.5,
+                            fontWeight: 600,
+                            color: 'rgba(255, 255, 255, 0.55)',
+                            lineHeight: 1.1
+                          }}
+                        >
+                          {selectedYear}
+                        </div>
+                      </div>
+
+                      {/* Raised 3D Giant Day Number */}
+                      <div
+                        style={{
+                          fontSize: 40,
                           fontWeight: 800,
-                          color: '#ff3b30',
-                          letterSpacing: '1px',
-                          textTransform: 'uppercase',
-                          fontFamily: 'OpenRunde, system-ui, sans-serif'
+                          color: '#ffffff',
+                          letterSpacing: '-1.5px',
+                          lineHeight: 1,
+                          textShadow: '0 4px 10px rgba(0, 0, 0, 0.9), 0 0 12px rgba(255, 69, 58, 0.18)'
                         }}
                       >
-                        {monthNameUpper}
+                        {today.getDate()}
                       </div>
+
+                      {/* Sunken Weekday Badge */}
                       <div
                         style={{
-                          fontSize: 9.5,
+                          fontSize: 10,
                           fontWeight: 600,
-                          color: 'rgba(255,255,255,0.45)',
-                          marginTop: 1,
-                          fontFamily: 'OpenRunde, system-ui, sans-serif'
+                          color: 'rgba(255,255,255,0.75)',
+                          padding: '1.5px 8px',
+                          borderRadius: 999,
+                          background: 'rgba(0,0,0,0.55)',
+                          border: '1px solid rgba(255,255,255,0.07)'
                         }}
                       >
-                        {selectedYear}
+                        {todayWeekdayFull}
                       </div>
-                    </div>
-
-                    {/* Giant Day Number */}
-                    <div
-                      style={{
-                        fontSize: 38,
-                        fontWeight: 800,
-                        color: '#ffffff',
-                        fontFamily: 'OpenRunde, system-ui, sans-serif',
-                        letterSpacing: '-1.5px',
-                        lineHeight: 1
-                      }}
-                    >
-                      {today.getDate()}
-                    </div>
-
-                    {/* Full Weekday Name */}
-                    <div
-                      style={{
-                        fontSize: 10.5,
-                        fontWeight: 600,
-                        color: 'rgba(255,255,255,0.65)',
-                        fontFamily: 'OpenRunde, system-ui, sans-serif'
-                      }}
-                    >
-                      {todayWeekdayFull}
                     </div>
                   </div>
 
-                  {/* Right Column: Month Grid */}
-                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', height: '100%', minWidth: 0 }}>
-                    {/* Calendar Month Nav Controls (Compact) */}
+                  {/* Right Column: Sunken 3D Month Matrix Well */}
+                  <div
+                    style={{
+                      flex: 1,
+                      height: '100%',
+                      minWidth: 0,
+                      borderRadius: 16,
+                      padding: '7px 12px',
+                      boxSizing: 'border-box',
+                      background: 'linear-gradient(180deg, #0a0a0e 0%, #111117 100%)',
+                      border: '1px solid rgba(255, 69, 58, 0.18)',
+                      boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.94), 0 4px 12px rgba(0, 0, 0, 0.6)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    {/* Calendar Month Nav Controls */}
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 2px' }}>
-                      <button
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
                         onClick={() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 1 }}
+                        style={{
+                          width: 20,
+                          height: 18,
+                          borderRadius: 6,
+                          background: 'linear-gradient(180deg, #22222b 0%, #14141a 100%)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          color: 'rgba(255,255,255,0.8)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: 0
+                        }}
                       >
-                        <ChevronLeft size={13} />
-                      </button>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.85)', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                        <ChevronLeft size={12} />
+                      </motion.button>
+                      <span style={{ fontSize: 11.5, fontWeight: 700, color: '#ffffff', letterSpacing: '0.2px' }}>
                         {calendarDate.toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}
                       </span>
-                      <button
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
                         onClick={() => setCalendarDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                        style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.6)', cursor: 'pointer', padding: 1 }}
+                        style={{
+                          width: 20,
+                          height: 18,
+                          borderRadius: 6,
+                          background: 'linear-gradient(180deg, #22222b 0%, #14141a 100%)',
+                          border: '1px solid rgba(255,255,255,0.1)',
+                          color: 'rgba(255,255,255,0.8)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: 0
+                        }}
                       >
-                        <ChevronRight size={13} />
-                      </button>
+                        <ChevronRight size={12} />
+                      </motion.button>
                     </div>
 
-                    {/* Weekday Header (S M T W T F S) - Red for S & S */}
+                    {/* Weekday Header (S M T W T F S) */}
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 1, textAlign: 'center' }}>
                       {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, idx) => {
                         const isWeekend = idx === 0 || idx === 6;
@@ -6743,10 +7515,9 @@ export default function Island() {
                           <div
                             key={`cal-h-${idx}`}
                             style={{
-                              fontSize: 10,
+                              fontSize: 9.5,
                               fontWeight: 800,
-                              color: isWeekend ? '#ff3b30' : 'rgba(255,255,255,0.6)',
-                              fontFamily: 'OpenRunde, system-ui, sans-serif'
+                              color: isWeekend ? '#ff453a' : 'rgba(255,255,255,0.52)'
                             }}
                           >
                             {day}
@@ -6765,37 +7536,37 @@ export default function Island() {
                           selectedMonth === today.getMonth() &&
                           selectedYear === today.getFullYear();
 
-                        let dayCellColor = isWeekend ? '#ff3b30' : '#ffffff';
+                        let dayCellColor = isWeekend ? '#ff453a' : '#ffffff';
                         if (!item.isCurrentMonth) {
-                          dayCellColor = isWeekend ? 'rgba(255, 59, 48, 0.3)' : 'rgba(255, 255, 255, 0.25)';
+                          dayCellColor = isWeekend ? 'rgba(255, 69, 58, 0.26)' : 'rgba(255, 255, 255, 0.22)';
                         }
 
                         return (
                           <div
                             key={`cal-d-${idx}`}
                             style={{
-                              height: 13,
+                              height: 13.5,
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
                               fontSize: 9.5,
                               fontWeight: isToday ? 800 : 600,
-                              fontFamily: 'OpenRunde, system-ui, sans-serif',
                               color: isToday ? '#ffffff' : dayCellColor
                             }}
                           >
                             {isToday ? (
                               <div
                                 style={{
-                                  width: 15,
+                                  width: 16,
                                   height: 15,
-                                  borderRadius: '50%',
-                                  background: '#c42b27',
+                                  borderRadius: 6,
+                                  background: 'linear-gradient(180deg, #ff453a 0%, #c41e14 100%)',
+                                  border: '1px solid rgba(255, 140, 130, 0.5)',
                                   display: 'flex',
                                   alignItems: 'center',
                                   justifyContent: 'center',
                                   color: '#ffffff',
-                                  boxShadow: '0 2px 6px rgba(196, 43, 39, 0.6)',
+                                  boxShadow: '0 2px 7px rgba(255, 69, 58, 0.65)',
                                   fontSize: 9
                                 }}
                               >
@@ -6813,941 +7584,1199 @@ export default function Island() {
               );
             })()}
 
-            {/* Notifications Tab */}
-            {currentTab === 5 && (
-              <div className="notifications-container" style={{ position: 'relative' }}>
-                {/* Header Controls: Filters & Actions */}
-                <div className="smart-notifications-header">
-                  <div className="notification-filter-pills">
-                    <button
-                      type="button"
-                      className={`notification-filter-pill ${notificationFilter === 'all' ? 'active' : ''}`}
-                      onClick={() => setNotificationFilter('all')}
-                    >
-                      All <span className="notification-badge-count">{notificationSnapshot.stats.totalActive}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-pill ${notificationFilter === 'unread' ? 'active' : ''}`}
-                      onClick={() => setNotificationFilter('unread')}
-                    >
-                      Unread <span className="notification-badge-count">{notificationSnapshot.stats.unreviewedCount}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-pill ${notificationFilter === 'snoozed' ? 'active' : ''}`}
-                      onClick={() => setNotificationFilter('snoozed')}
-                    >
-                      Snoozed <span className="notification-badge-count">{notificationSnapshot.stats.snoozedCount}</span>
-                    </button>
-                    <button
-                      type="button"
-                      className={`notification-filter-pill ${notificationFilter === 'history' ? 'active' : ''}`}
-                      onClick={() => setNotificationFilter('history')}
-                    >
-                      History <span className="notification-badge-count">{notificationSnapshot.stats.historyCount}</span>
-                    </button>
-                  </div>
+            {/* Notifications Tab (Left 3D Filter Dock + Right Sunken Alert Well — Sky Blue & Amber Accents) */}
+            {currentTab === 5 && (() => {
+              const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
+              const filterItems = [
+                { id: 'all', label: 'All', count: notificationSnapshot.stats.totalActive, accent: '#38bdf8' },
+                { id: 'unread', label: 'Unread', count: notificationSnapshot.stats.unreviewedCount, accent: '#60a5fa' },
+                { id: 'snoozed', label: 'Snoozed', count: notificationSnapshot.stats.snoozedCount, accent: '#f59e0b' },
+                { id: 'history', label: 'History', count: notificationSnapshot.stats.historyCount, accent: '#a855f7' }
+              ];
 
-                  <div className="notification-header-actions">
-                    <button
-                      type="button"
-                      className="notification-header-btn"
-                      onClick={handleTogglePrivacy}
-                      title={notificationSnapshot.settings.hidePreviews ? "Previews are hidden. Click to show." : "Hide notification previews"}
-                    >
-                      {notificationSnapshot.settings.hidePreviews ? <EyeOff size={13} color="#f59e0b" /> : <Eye size={13} />}
-                    </button>
-
-                    {(notificationSnapshot.stats.hasUndo || undoToast) && (
-                      <button
-                        type="button"
-                        className="notification-header-btn"
-                        onClick={handleUndoDismiss}
-                        title="Undo dismissal"
-                      >
-                        <Undo size={12} /> Undo
-                      </button>
-                    )}
-
-                    {notificationFilter === 'history' ? (
-                      notificationSnapshot.history.length > 0 && (
-                        <button
-                          type="button"
-                          className="notification-header-btn"
-                          onClick={() => window.electronAPI?.notifications?.clearHistory?.()}
-                          title="Clear history"
-                        >
-                          <Trash2 size={12} /> Clear
-                        </button>
-                      )
-                    ) : (
-                      notificationSnapshot.stats.totalActive > 0 && (
-                        <button
-                          type="button"
-                          className="notification-header-btn"
-                          onClick={handleClearAll}
-                          title="Dismiss all active notifications"
-                        >
-                          <Trash2 size={12} /> Clear All
-                        </button>
-                      )
-                    )}
-                  </div>
-                </div>
-
-                {/* Undo Notification Toast */}
-                {undoToast && (
-                  <div className="notification-undo-toast">
-                    <span style={{ color: '#ffffff', opacity: 0.9 }}>{undoToast.message}</span>
-                    <button
-                      type="button"
-                      onClick={handleUndoDismiss}
+              return (
+                <div
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 16px',
+                    boxSizing: 'border-box',
+                    gap: 12,
+                    userSelect: 'none',
+                    fontFamily: iosFontStack
+                  }}
+                >
+                  {/* Left Column: 3D Vertical Filter & Action Dock */}
+                  <div
+                    style={{
+                      width: 138,
+                      height: '100%',
+                      flexShrink: 0,
+                      borderRadius: 16,
+                      padding: '7px 8px',
+                      boxSizing: 'border-box',
+                      background: 'linear-gradient(165deg, #1d202b 0%, #12141c 60%, #0b0c11 100%)',
+                      border: '1px solid rgba(56, 189, 248, 0.2)',
+                      boxShadow: `
+                        0 8px 18px rgba(0, 0, 0, 0.8),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.14),
+                        inset 0 -2px 4px rgba(0, 0, 0, 0.85)
+                      `,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    {/* 2x2 Tactile Filter Pills Grid */}
+                    <div
                       style={{
-                        background: 'rgba(255, 255, 255, 0.15)',
-                        border: 'none',
-                        borderRadius: 4,
-                        color: '#38bdf8',
-                        padding: '2px 8px',
-                        fontSize: 11,
-                        fontWeight: 600,
-                        cursor: 'pointer'
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, 1fr)',
+                        gap: 5
                       }}
                     >
-                      Undo
-                    </button>
-                  </div>
-                )}
-
-                {/* Incoming Call Card (if active and not on history/snooze) */}
-                {notificationSnapshot.incomingCall && notificationFilter !== 'snoozed' && notificationFilter !== 'history' && (
-                  <div className="notification-call-card">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                      <div className="notification-call-pulsing-icon">
-                        <PhoneIncoming size={15} />
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: 9.5, fontWeight: 700, color: '#25d366', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                          Incoming {notificationSnapshot.incomingCall.callType || 'Voice'} Call
-                        </span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>
-                          {notificationSnapshot.incomingCall.title || notificationSnapshot.incomingCall.applicationName}
-                        </span>
-                        <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.7)' }}>
-                          {notificationSnapshot.incomingCall.body}
-                        </span>
-                      </div>
+                      {filterItems.map((f) => {
+                        const isActive = notificationFilter === f.id;
+                        return (
+                          <button
+                            key={f.id}
+                            type="button"
+                            onClick={() => setNotificationFilter(f.id)}
+                            style={{
+                              height: 36,
+                              borderRadius: 9,
+                              padding: '3px 5px',
+                              boxSizing: 'border-box',
+                              background: isActive
+                                ? 'linear-gradient(180deg, #122c49 0%, #0b1b2e 100%)'
+                                : '#0a0b10',
+                              border: isActive
+                                ? `1px solid ${f.accent}66`
+                                : '1px solid rgba(255, 255, 255, 0.07)',
+                              boxShadow: isActive
+                                ? '0 3px 8px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.16)'
+                                : 'inset 0 2px 5px rgba(0,0,0,0.9)',
+                              color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.55)',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'flex-start',
+                              justifyContent: 'space-between',
+                              fontFamily: iosFontStack
+                            }}
+                          >
+                            <span style={{ fontSize: 9, fontWeight: 700, color: isActive ? f.accent : 'rgba(255,255,255,0.5)' }}>
+                              {f.label}
+                            </span>
+                            <span style={{ fontSize: 11.5, fontWeight: 800, color: '#ffffff', lineHeight: 1 }}>
+                              {f.count}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+
+                    {/* Bottom Action Capsules (Privacy + Undo / Clear) */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                       <button
                         type="button"
-                        onClick={() => handleExecuteAction(notificationSnapshot.incomingCall.id, 'open', { appId: notificationSnapshot.incomingCall.applicationId })}
+                        onClick={handleTogglePrivacy}
+                        title={notificationSnapshot.settings.hidePreviews ? "Previews hidden. Click to show." : "Hide notification previews"}
                         style={{
-                          background: '#25d366',
-                          border: 'none',
+                          height: 26,
+                          width: 30,
                           borderRadius: 8,
-                          color: '#ffffff',
-                          padding: '6px 12px',
-                          fontSize: 11,
-                          fontWeight: 700,
+                          background: notificationSnapshot.settings.hidePreviews
+                            ? 'linear-gradient(180deg, #35210c 0%, #221406 100%)'
+                            : 'linear-gradient(180deg, #21232d 0%, #14151c 100%)',
+                          border: notificationSnapshot.settings.hidePreviews
+                            ? '1px solid rgba(245, 158, 11, 0.45)'
+                            : '1px solid rgba(255, 255, 255, 0.1)',
+                          boxShadow: '0 3px 7px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.12)',
+                          color: notificationSnapshot.settings.hidePreviews ? '#f59e0b' : 'rgba(255,255,255,0.75)',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 4
+                          justifyContent: 'center',
+                          flexShrink: 0
                         }}
                       >
-                        <Phone size={11} /> Answer
+                        {notificationSnapshot.settings.hidePreviews ? <EyeOff size={12} color="#f59e0b" /> : <Eye size={12} />}
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleExecuteAction(notificationSnapshot.incomingCall.id, 'dismiss')}
-                        style={{
-                          background: 'rgba(255, 255, 255, 0.1)',
-                          border: 'none',
-                          borderRadius: 8,
-                          color: '#ffffff',
-                          padding: '6px 9px',
-                          fontSize: 12,
-                          cursor: 'pointer'
-                        }}
-                        title="Dismiss"
-                      >
-                        <X size={13} />
-                      </button>
-                    </div>
-                  </div>
-                )}
 
-                {/* Main Content Area based on Filter */}
-                {notificationFilter === 'snoozed' ? (
-                  notificationSnapshot.snoozed.length === 0 ? (
-                    <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 35, fontSize: 13 }}>
-                      <Clock size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
-                      <p style={{ margin: 0 }}>No snoozed notifications</p>
-                    </div>
-                  ) : (
-                    notificationSnapshot.snoozed.map((notif) => (
-                      <div key={notif.id} className="notification-card">
-                        {notif.applicationIcon ? (
-                          <img src={notif.applicationIcon} className="notification-icon" alt="" />
-                        ) : (
-                          <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Bell size={14} />
-                          </div>
-                        )}
-                        <div className="notification-content">
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span className="notification-app-name">{notif.applicationName}</span>
-                            <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600 }}>
-                              Snoozed until {notif.snoozedUntil ? new Date(notif.snoozedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'due'}
-                            </span>
-                          </div>
-                          <span className="notification-title">{notif.title}</span>
-                          <span className="notification-body">{notif.body}</span>
-                          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-                            <button
-                              type="button"
-                              className="notification-action-btn"
-                              onClick={() => handleCancelSnooze(notif.id)}
-                            >
-                              <BellRing size={11} /> Wake Now
-                            </button>
-                            <button
-                              type="button"
-                              className="notification-action-btn"
-                              onClick={() => handleExecuteAction(notif.id, 'dismiss')}
-                            >
-                              <X size={11} /> Dismiss
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    ))
-                  )
-                ) : notificationFilter === 'history' ? (
-                  notificationSnapshot.history.length === 0 ? (
-                    <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 35, fontSize: 13 }}>
-                      <List size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
-                      <p style={{ margin: 0 }}>No notification history</p>
-                    </div>
-                  ) : (
-                    notificationSnapshot.history.map((notif) => (
-                      <div key={notif.id} className="notification-card" style={{ opacity: 0.75 }}>
-                        {notif.applicationIcon ? (
-                          <img src={notif.applicationIcon} className="notification-icon" alt="" />
-                        ) : (
-                          <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Bell size={14} />
-                          </div>
-                        )}
-                        <div className="notification-content">
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                            <span className="notification-app-name">{notif.applicationName}</span>
-                            <span style={{ fontSize: 9, opacity: 0.5 }}>
-                              {notif.dismissedAt ? formatRelativeTime(notif.dismissedAt) : ''}
-                            </span>
-                          </div>
-                          <span className="notification-title">{notif.title}</span>
-                          <span className="notification-body">{notif.body}</span>
-                        </div>
-                        {notif.applicationId && (
-                          <button
-                            type="button"
-                            className="notification-action-btn"
-                            style={{ alignSelf: 'center' }}
-                            onClick={() => handleExecuteAction(notif.id, 'open', { appId: notif.applicationId })}
-                            title="Open App"
-                          >
-                            <ExternalLink size={12} />
-                          </button>
-                        )}
-                      </div>
-                    ))
-                  )
-                ) : (
-                  /* 'all' or 'unread' view */
-                  (() => {
-                    const rawItems = Array.isArray(notificationSnapshot.active) && notificationSnapshot.active.length > 0
-                      ? notificationSnapshot.active
-                      : [
-                          ...(notificationSnapshot.standalone || []),
-                          ...(notificationSnapshot.groups?.flatMap(g => g.items) || [])
-                        ];
-
-                    const validItems = rawItems.filter(item => {
-                      if (!item) return false;
-                      if (!item.title?.trim() && !item.body?.trim()) return false;
-                      if (notificationFilter === 'unread') return !item.localReviewed;
-                      return true;
-                    });
-
-                    if (validItems.length === 0 && !notificationSnapshot.incomingCall) {
-                      return (
-                        <div style={{ textAlign: 'center', opacity: 0.5, marginTop: 40, fontSize: 13 }}>
-                          <Bell size={24} style={{ marginBottom: 6, opacity: 0.7 }} />
-                          <p style={{ margin: 0 }}>{notificationFilter === 'unread' ? 'All notifications reviewed' : 'No new notifications'}</p>
-                        </div>
-                      );
-                    }
-
-                    const renderCardItem = (notif) => {
-                      if (!notif || (!notif.title?.trim() && !notif.body?.trim())) return null;
-                      const isMessaging = (notif.applicationName || "").toLowerCase().match(/whatsapp|telegram|slack|discord|signal|teams/);
-                      const hasReply = notif.capabilities?.some(c => c.type === 'reply' && c.supported);
-                      const currentActionStatus = actionStatuses[notif.id];
-                      const isSnoozeOpen = snoozeMenuOpenId === notif.id;
-
-                      return (
-                        <div
-                          key={notif.id}
-                          className="notification-card"
+                      {(notificationSnapshot.stats.hasUndo || undoToast) ? (
+                        <button
+                          type="button"
+                          onClick={handleUndoDismiss}
+                          title="Undo dismissal"
+                          style={{
+                            flex: 1,
+                            height: 26,
+                            borderRadius: 8,
+                            background: 'linear-gradient(180deg, #122c49 0%, #0b1b2e 100%)',
+                            border: '1px solid rgba(56, 189, 248, 0.4)',
+                            boxShadow: '0 3px 7px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.15)',
+                            color: '#38bdf8',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4
+                          }}
+                        >
+                          <Undo size={11} /> Undo
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
                           onClick={() => {
-                            if (notif.applicationId || notif.appId) {
-                              handleExecuteAction(notif.id, 'open', { appId: notif.applicationId || notif.appId });
-                            }
-                            if (!notif.localReviewed) {
-                              window.electronAPI?.notifications?.markReviewed?.(notif.id);
+                            if (notificationFilter === 'history') {
+                              window.electronAPI?.notifications?.clearHistory?.();
+                            } else {
+                              handleClearAll();
                             }
                           }}
-                          style={{ cursor: (notif.applicationId || notif.appId) ? 'pointer' : 'default' }}
+                          disabled={notificationFilter === 'history' ? notificationSnapshot.history.length === 0 : notificationSnapshot.stats.totalActive === 0}
+                          title="Clear notifications"
+                          style={{
+                            flex: 1,
+                            height: 26,
+                            borderRadius: 8,
+                            background: 'linear-gradient(180deg, #2b1316 0%, #1a0b0d 100%)',
+                            border: '1px solid rgba(248, 113, 113, 0.3)',
+                            boxShadow: '0 3px 7px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.12)',
+                            color: '#f87171',
+                            fontSize: 10,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            opacity: (notificationFilter === 'history' ? notificationSnapshot.history.length === 0 : notificationSnapshot.stats.totalActive === 0) ? 0.4 : 1,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4
+                          }}
                         >
-                          {/* Priority indicator dot */}
-                          <span className={`notification-priority-dot ${notif.priority || 'normal'}`} />
+                          <Trash2 size={11} /> Clear
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                          {/* Icon */}
-                          {notif.applicationIcon || notif.icon ? (
-                            <img src={notif.applicationIcon || notif.icon} className="notification-icon" alt="" />
-                          ) : (
-                            <div className="notification-icon" style={{ backgroundColor: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <Bell size={14} />
-                            </div>
-                          )}
+                  {/* Right Column: Sunken 3D Notification Alert Well */}
+                  <div
+                    className="notifications-container"
+                    style={{
+                      flex: 1,
+                      height: '100%',
+                      minWidth: 0,
+                      position: 'relative',
+                      padding: '7px 8px',
+                      borderRadius: 16,
+                      background: 'linear-gradient(180deg, #090a0f 0%, #0e1017 100%)',
+                      border: '1px solid rgba(255, 255, 255, 0.07)',
+                      boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.95)',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    {/* Undo Notification Toast */}
+                    {undoToast && (
+                      <div className="notification-undo-toast" style={{
+                        background: 'linear-gradient(180deg, #162436 0%, #0d1724 100%)',
+                        border: '1px solid rgba(56, 189, 248, 0.35)',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.75)'
+                      }}>
+                        <span style={{ color: '#ffffff', opacity: 0.9 }}>{undoToast.message}</span>
+                        <button
+                          type="button"
+                          onClick={handleUndoDismiss}
+                          style={{
+                            background: 'rgba(56, 189, 248, 0.18)',
+                            border: '1px solid rgba(56, 189, 248, 0.4)',
+                            borderRadius: 6,
+                            color: '#38bdf8',
+                            padding: '2px 8px',
+                            fontSize: 10.5,
+                            fontWeight: 700,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Undo
+                        </button>
+                      </div>
+                    )}
 
-                          {/* Content */}
-                          <div className="notification-content">
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span className="notification-app-name">{notif.applicationName || notif.appName}</span>
-                              <span style={{ fontSize: 9, opacity: 0.5 }}>
-                                {formatRelativeTime(notif.receivedAt || notif.timestamp)}
-                              </span>
-                            </div>
+                    {/* Incoming Call Card */}
+                    {notificationSnapshot.incomingCall && notificationFilter !== 'snoozed' && notificationFilter !== 'history' && (
+                      <div className="notification-call-card" style={{
+                        background: 'linear-gradient(180deg, #0f291c 0%, #091911 100%)',
+                        border: '1px solid rgba(37, 211, 102, 0.4)',
+                        boxShadow: '0 6px 16px rgba(0,0,0,0.8), inset 0 1px 1px rgba(255,255,255,0.15)'
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                          <div className="notification-call-pulsing-icon">
+                            <PhoneIncoming size={15} />
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span style={{ fontSize: 9.5, fontWeight: 700, color: '#25d366', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                              Incoming {notificationSnapshot.incomingCall.callType || 'Voice'} Call
+                            </span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff' }}>
+                              {notificationSnapshot.incomingCall.title || notificationSnapshot.incomingCall.applicationName}
+                            </span>
+                            <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.7)' }}>
+                              {notificationSnapshot.incomingCall.body}
+                            </span>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <button
+                            type="button"
+                            onClick={() => handleExecuteAction(notificationSnapshot.incomingCall.id, 'open', { appId: notificationSnapshot.incomingCall.applicationId })}
+                            style={{
+                              background: '#25d366',
+                              border: 'none',
+                              borderRadius: 8,
+                              color: '#ffffff',
+                              padding: '6px 12px',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}
+                          >
+                            <Phone size={11} /> Answer
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleExecuteAction(notificationSnapshot.incomingCall.id, 'dismiss')}
+                            style={{
+                              background: 'rgba(255, 255, 255, 0.1)',
+                              border: 'none',
+                              borderRadius: 8,
+                              color: '#ffffff',
+                              padding: '6px 9px',
+                              fontSize: 12,
+                              cursor: 'pointer'
+                            }}
+                            title="Dismiss"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    )}
 
-                            <span className="notification-title">{notif.title}</span>
-                            <span className="notification-body">{notif.body}</span>
-
-                            {/* Action Status feedback */}
-                            {currentActionStatus && (
-                              <div style={{
-                                fontSize: 10,
-                                fontWeight: 600,
-                                color: currentActionStatus.status === 'success' ? '#22c55e' : currentActionStatus.status === 'pending' ? '#38bdf8' : '#ef4444',
-                                marginTop: 4
-                              }}>
-                                {currentActionStatus.message}
+                    {/* Main Content Area based on Filter */}
+                    {notificationFilter === 'snoozed' ? (
+                      notificationSnapshot.snoozed.length === 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.55, fontSize: 12 }}>
+                          <Clock size={22} color="#f59e0b" style={{ marginBottom: 5, opacity: 0.8 }} />
+                          <p style={{ margin: 0, fontWeight: 600 }}>No snoozed notifications</p>
+                        </div>
+                      ) : (
+                        notificationSnapshot.snoozed.map((notif) => (
+                          <div key={notif.id} className="notification-card" style={{
+                            background: 'linear-gradient(180deg, #1b1d26 0%, #12131a 100%)',
+                            border: '1px solid rgba(245, 158, 11, 0.22)',
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.1)'
+                          }}>
+                            {notif.applicationIcon ? (
+                              <img src={notif.applicationIcon} className="notification-icon" alt="" />
+                            ) : (
+                              <div className="notification-icon" style={{ backgroundColor: '#090a0f', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Bell size={14} color="#f59e0b" />
                               </div>
                             )}
-
-                            {/* Inline Reply Row */}
-                            {(isMessaging || hasReply) && (
-                              <div
-                                className="notification-reply-container"
-                                onClick={(e) => e.stopPropagation()}
+                            <div className="notification-content">
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span className="notification-app-name">{notif.applicationName}</span>
+                                <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 600 }}>
+                                  Until {notif.snoozedUntil ? new Date(notif.snoozedUntil).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : 'due'}
+                                </span>
+                              </div>
+                              <span className="notification-title">{notif.title}</span>
+                              <span className="notification-body">{notif.body}</span>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                                <button
+                                  type="button"
+                                  className="notification-action-btn"
+                                  onClick={() => handleCancelSnooze(notif.id)}
+                                >
+                                  <BellRing size={11} /> Wake Now
+                                </button>
+                                <button
+                                  type="button"
+                                  className="notification-action-btn"
+                                  onClick={() => handleExecuteAction(notif.id, 'dismiss')}
+                                >
+                                  <X size={11} /> Dismiss
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )
+                    ) : notificationFilter === 'history' ? (
+                      notificationSnapshot.history.length === 0 ? (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.55, fontSize: 12 }}>
+                          <List size={22} color="#a855f7" style={{ marginBottom: 5, opacity: 0.8 }} />
+                          <p style={{ margin: 0, fontWeight: 600 }}>No notification history</p>
+                        </div>
+                      ) : (
+                        notificationSnapshot.history.map((notif) => (
+                          <div key={notif.id} className="notification-card" style={{
+                            opacity: 0.82,
+                            background: 'linear-gradient(180deg, #181922 0%, #101117 100%)',
+                            border: '1px solid rgba(255, 255, 255, 0.08)',
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.65), inset 0 1px 1px rgba(255,255,255,0.08)'
+                          }}>
+                            {notif.applicationIcon ? (
+                              <img src={notif.applicationIcon} className="notification-icon" alt="" />
+                            ) : (
+                              <div className="notification-icon" style={{ backgroundColor: '#090a0f', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                <Bell size={14} color="#a855f7" />
+                              </div>
+                            )}
+                            <div className="notification-content">
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <span className="notification-app-name">{notif.applicationName}</span>
+                                <span style={{ fontSize: 9, opacity: 0.5 }}>
+                                  {notif.dismissedAt ? formatRelativeTime(notif.dismissedAt) : ''}
+                                </span>
+                              </div>
+                              <span className="notification-title">{notif.title}</span>
+                              <span className="notification-body">{notif.body}</span>
+                            </div>
+                            {notif.applicationId && (
+                              <button
+                                type="button"
+                                className="notification-action-btn"
+                                style={{ alignSelf: 'center' }}
+                                onClick={() => handleExecuteAction(notif.id, 'open', { appId: notif.applicationId })}
+                                title="Open App"
                               >
-                                <input
-                                  type="text"
-                                  className="notification-reply-input"
-                                  placeholder={notif.senderName ? `Reply to ${notif.senderName}…` : "Type a reply…"}
-                                  value={replyInputs[notif.id] || ""}
-                                  onChange={(e) => setReplyInputs({ ...replyInputs, [notif.id]: e.target.value })}
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      handleSendReply(notif.id);
-                                    }
-                                  }}
-                                />
-                                <button
-                                  type="button"
-                                  className="notification-action-btn"
-                                  onClick={() => handleSendReply(notif.id)}
-                                  title="Send reply"
-                                  style={{ padding: '4px 8px' }}
-                                >
-                                  <Send size={11} />
-                                </button>
-                              </div>
+                                <ExternalLink size={12} />
+                              </button>
                             )}
+                          </div>
+                        ))
+                      )
+                    ) : (
+                      (() => {
+                        const rawItems = Array.isArray(notificationSnapshot.active) && notificationSnapshot.active.length > 0
+                          ? notificationSnapshot.active
+                          : [
+                              ...(notificationSnapshot.standalone || []),
+                              ...(notificationSnapshot.groups?.flatMap(g => g.items) || [])
+                            ];
 
-                            {/* Action Row */}
+                        const validItems = rawItems.filter(item => {
+                          if (!item) return false;
+                          if (!item.title?.trim() && !item.body?.trim()) return false;
+                          if (notificationFilter === 'unread') return !item.localReviewed;
+                          return true;
+                        });
+
+                        if (validItems.length === 0 && !notificationSnapshot.incomingCall) {
+                          return (
+                            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', opacity: 0.58, fontSize: 12 }}>
+                              <Bell size={22} color="#38bdf8" style={{ marginBottom: 5, opacity: 0.85 }} />
+                              <p style={{ margin: 0, fontWeight: 600 }}>{notificationFilter === 'unread' ? 'All notifications reviewed' : 'No new notifications'}</p>
+                            </div>
+                          );
+                        }
+
+                        const renderCardItem = (notif) => {
+                          if (!notif || (!notif.title?.trim() && !notif.body?.trim())) return null;
+                          const isMessaging = (notif.applicationName || "").toLowerCase().match(/whatsapp|telegram|slack|discord|signal|teams/);
+                          const hasReply = notif.capabilities?.some(c => c.type === 'reply' && c.supported);
+                          const currentActionStatus = actionStatuses[notif.id];
+                          const isSnoozeOpen = snoozeMenuOpenId === notif.id;
+
+                          return (
                             <div
-                              style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}
-                              onClick={(e) => e.stopPropagation()}
+                              key={notif.id}
+                              className="notification-card"
+                              onClick={() => {
+                                if (notif.applicationId || notif.appId) {
+                                  handleExecuteAction(notif.id, 'open', { appId: notif.applicationId || notif.appId });
+                                }
+                                if (!notif.localReviewed) {
+                                  window.electronAPI?.notifications?.markReviewed?.(notif.id);
+                                }
+                              }}
+                              style={{
+                                cursor: (notif.applicationId || notif.appId) ? 'pointer' : 'default',
+                                background: 'linear-gradient(180deg, #1b1d26 0%, #12131a 100%)',
+                                border: '1px solid rgba(255, 255, 255, 0.09)',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.12)'
+                              }}
                             >
-                              {(notif.applicationId || notif.appId) && (
-                                <button
-                                  type="button"
-                                  className="notification-action-btn"
-                                  onClick={() => handleExecuteAction(notif.id, 'open', { appId: notif.applicationId || notif.appId })}
-                                >
-                                  <ExternalLink size={10} /> Open
-                                </button>
+                              <span className={`notification-priority-dot ${notif.priority || 'normal'}`} />
+
+                              {notif.applicationIcon || notif.icon ? (
+                                <img src={notif.applicationIcon || notif.icon} className="notification-icon" alt="" />
+                              ) : (
+                                <div className="notification-icon" style={{ backgroundColor: '#090a0f', border: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                  <Bell size={14} color="#38bdf8" />
+                                </div>
                               )}
 
-                              {/* Snooze Presets */}
-                              <div style={{ position: 'relative' }}>
-                                <button
-                                  type="button"
-                                  className="notification-action-btn"
-                                  onClick={() => setSnoozeMenuOpenId(isSnoozeOpen ? null : notif.id)}
-                                >
-                                  <Clock size={10} /> Snooze <ChevronDown size={9} />
-                                </button>
-                                {isSnoozeOpen && (
+                              <div className="notification-content">
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <span className="notification-app-name">{notif.applicationName || notif.appName}</span>
+                                  <span style={{ fontSize: 9, opacity: 0.5 }}>
+                                    {formatRelativeTime(notif.receivedAt || notif.timestamp)}
+                                  </span>
+                                </div>
+
+                                <span className="notification-title">{notif.title}</span>
+                                <span className="notification-body">{notif.body}</span>
+
+                                {currentActionStatus && (
                                   <div style={{
-                                    position: 'absolute',
-                                    bottom: '100%',
-                                    left: 0,
-                                    marginBottom: 4,
-                                    background: 'rgba(23, 23, 26, 0.98)',
-                                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                                    borderRadius: 8,
-                                    padding: 4,
-                                    display: 'flex',
-                                    gap: 4,
-                                    zIndex: 999,
-                                    boxShadow: '0 4px 14px rgba(0,0,0,0.5)'
+                                    fontSize: 10,
+                                    fontWeight: 600,
+                                    color: currentActionStatus.status === 'success' ? '#22c55e' : currentActionStatus.status === 'pending' ? '#38bdf8' : '#ef4444',
+                                    marginTop: 4
                                   }}>
-                                    {[5, 15, 30, 60].map(mins => (
-                                      <button
-                                        type="button"
-                                        key={mins}
-                                        onClick={() => handleSnooze(notif.id, mins)}
-                                        style={{
-                                          background: 'rgba(255,255,255,0.08)',
-                                          border: 'none',
-                                          color: '#ffffff',
-                                          fontSize: 10,
-                                          fontWeight: 600,
-                                          padding: '3px 6px',
-                                          borderRadius: 4,
-                                          cursor: 'pointer'
-                                        }}
-                                      >
-                                        {mins < 60 ? `${mins}m` : '1h'}
-                                      </button>
+                                    {currentActionStatus.message}
+                                  </div>
+                                )}
+
+                                {(isMessaging || hasReply) && (
+                                  <div
+                                    className="notification-reply-container"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <input
+                                      type="text"
+                                      className="notification-reply-input"
+                                      placeholder={notif.senderName ? `Reply to ${notif.senderName}…` : "Type a reply…"}
+                                      value={replyInputs[notif.id] || ""}
+                                      onChange={(e) => setReplyInputs({ ...replyInputs, [notif.id]: e.target.value })}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          handleSendReply(notif.id);
+                                        }
+                                      }}
+                                      style={{
+                                        background: '#08090d',
+                                        border: '1px solid rgba(56, 189, 248, 0.25)',
+                                        boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.9)'
+                                      }}
+                                    />
+                                    <button
+                                      type="button"
+                                      className="notification-action-btn"
+                                      onClick={() => handleSendReply(notif.id)}
+                                      title="Send reply"
+                                      style={{ padding: '4px 8px' }}
+                                    >
+                                      <Send size={11} />
+                                    </button>
+                                  </div>
+                                )}
+
+                                <div
+                                  style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 8 }}
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  {(notif.applicationId || notif.appId) && (
+                                    <button
+                                      type="button"
+                                      className="notification-action-btn"
+                                      onClick={() => handleExecuteAction(notif.id, 'open', { appId: notif.applicationId || notif.appId })}
+                                    >
+                                      <ExternalLink size={10} /> Open
+                                    </button>
+                                  )}
+
+                                  <div style={{ position: 'relative' }}>
+                                    <button
+                                      type="button"
+                                      className="notification-action-btn"
+                                      onClick={() => setSnoozeMenuOpenId(isSnoozeOpen ? null : notif.id)}
+                                    >
+                                      <Clock size={10} /> Snooze <ChevronDown size={9} />
+                                    </button>
+                                    {isSnoozeOpen && (
+                                      <div style={{
+                                        position: 'absolute',
+                                        bottom: '100%',
+                                        left: 0,
+                                        marginBottom: 4,
+                                        background: '#0e0f15',
+                                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                                        borderRadius: 8,
+                                        padding: 4,
+                                        display: 'flex',
+                                        gap: 4,
+                                        zIndex: 999,
+                                        boxShadow: '0 6px 16px rgba(0,0,0,0.85)'
+                                      }}>
+                                        {[5, 15, 30, 60].map(mins => (
+                                          <button
+                                            type="button"
+                                            key={mins}
+                                            onClick={() => handleSnooze(notif.id, mins)}
+                                            style={{
+                                              background: 'rgba(255,255,255,0.08)',
+                                              border: 'none',
+                                              color: '#ffffff',
+                                              fontSize: 10,
+                                              fontWeight: 600,
+                                              padding: '3px 6px',
+                                              borderRadius: 4,
+                                              cursor: 'pointer'
+                                            }}
+                                          >
+                                            {mins < 60 ? `${mins}m` : '1h'}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <button
+                                type="button"
+                                className="notification-dismiss"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleExecuteAction(notif.id, 'dismiss');
+                                }}
+                                title="Dismiss notification"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          );
+                        };
+
+                        return (
+                          <>
+                            {notificationSnapshot.lowPrioritySummary?.count > 0 && notificationFilter === 'all' && (
+                              <div style={{
+                                marginBottom: 8,
+                                padding: '6px 10px',
+                                background: '#0e1017',
+                                border: '1px solid rgba(255, 255, 255, 0.08)',
+                                boxShadow: 'inset 0 2px 5px rgba(0,0,0,0.8)',
+                                borderRadius: 10,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                gap: 4
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <div
+                                    style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1 }}
+                                    onClick={() => setLowPriorityExpanded(prev => !prev)}
+                                  >
+                                    <SlidersHorizontal size={12} opacity={0.6} />
+                                    <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.8 }}>
+                                      {notificationSnapshot.lowPrioritySummary.count} low-priority {notificationSnapshot.lowPrioritySummary.count === 1 ? 'alert' : 'alerts'}
+                                    </span>
+                                    {lowPriorityExpanded ? <ChevronUp size={12} opacity={0.6} /> : <ChevronDown size={12} opacity={0.6} />}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    className="notification-header-btn"
+                                    onClick={() => {
+                                      notificationSnapshot.lowPrioritySummary.items.forEach(i => handleExecuteAction(i.id, 'dismiss'));
+                                    }}
+                                    title="Dismiss low-priority alerts"
+                                  >
+                                    Dismiss All
+                                  </button>
+                                </div>
+
+                                {lowPriorityExpanded && (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
+                                    {notificationSnapshot.lowPrioritySummary.items.map(item => (
+                                      <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px', background: 'rgba(255,255,255,0.03)', borderRadius: 6 }}>
+                                        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
+                                          <span style={{ fontSize: 10, fontWeight: 600 }}>{item.applicationName}: {item.title}</span>
+                                          <span style={{ fontSize: 9, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.body}</span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          className="notification-dismiss"
+                                          onClick={() => handleExecuteAction(item.id, 'dismiss')}
+                                        >
+                                          <X size={12} />
+                                        </button>
+                                      </div>
                                     ))}
                                   </div>
                                 )}
                               </div>
-                            </div>
-                          </div>
-
-                          {/* Dismiss Button */}
-                          <button
-                            type="button"
-                            className="notification-dismiss"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleExecuteAction(notif.id, 'dismiss');
-                            }}
-                            title="Dismiss notification"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                      );
-                    };
-
-                    return (
-                      <>
-                        {/* Low Priority Collapsible Summary */}
-                        {notificationSnapshot.lowPrioritySummary?.count > 0 && notificationFilter === 'all' && (
-                          <div style={{
-                            marginBottom: 8,
-                            padding: '6px 10px',
-                            background: 'rgba(255, 255, 255, 0.04)',
-                            border: '1px solid rgba(255, 255, 255, 0.06)',
-                            borderRadius: 10,
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: 4
-                          }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <div
-                                style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', flex: 1 }}
-                                onClick={() => setLowPriorityExpanded(prev => !prev)}
-                              >
-                                <SlidersHorizontal size={12} opacity={0.6} />
-                                <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.8 }}>
-                                  {notificationSnapshot.lowPrioritySummary.count} low-priority {notificationSnapshot.lowPrioritySummary.count === 1 ? 'alert' : 'alerts'}
-                                </span>
-                                {lowPriorityExpanded ? <ChevronUp size={12} opacity={0.6} /> : <ChevronDown size={12} opacity={0.6} />}
-                              </div>
-                              <button
-                                type="button"
-                                className="notification-header-btn"
-                                onClick={() => {
-                                  notificationSnapshot.lowPrioritySummary.items.forEach(i => handleExecuteAction(i.id, 'dismiss'));
-                                }}
-                                title="Dismiss low-priority alerts"
-                              >
-                                Dismiss All
-                              </button>
-                            </div>
-
-                            {lowPriorityExpanded && (
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 4 }}>
-                                {notificationSnapshot.lowPrioritySummary.items.map(item => (
-                                  <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 6px', background: 'rgba(255,255,255,0.03)', borderRadius: 6 }}>
-                                    <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1 }}>
-                                      <span style={{ fontSize: 10, fontWeight: 600 }}>{item.applicationName}: {item.title}</span>
-                                      <span style={{ fontSize: 9, opacity: 0.6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.body}</span>
-                                    </div>
-                                    <button
-                                      type="button"
-                                      className="notification-dismiss"
-                                      onClick={() => handleExecuteAction(item.id, 'dismiss')}
-                                    >
-                                      <X size={12} />
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
                             )}
-                          </div>
-                        )}
 
-                        {/* All Notification Cards */}
-                        {validItems.map(notif => renderCardItem(notif))}
-                      </>
-                    );
-                  })()
-                )}
-              </div>
-            )}
+                            {validItems.map(notif => renderCardItem(notif))}
+                          </>
+                        );
+                      })()
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
-            {/* Game / System Performance Overlay Tab */}
+            {/* Game / System Performance Overlay Tab (3 Circular 3D Instrument Dial Gauges) */}
             {currentTab === 6 && (
               <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 12,
+                display: 'flex',
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-around',
                 width: '100%',
                 height: '100%',
-                padding: '12px 18px',
+                padding: '10px 22px',
                 boxSizing: 'border-box',
                 userSelect: 'none'
               }}>
-                {/* CPU Card */}
-                <div style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.09)',
-                  borderRadius: 14,
-                  padding: '10px 12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.05em' }}>CPU LOAD</span>
-                    <Activity size={14} color="#0070f3" />
-                  </div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                    {systemStats.cpu}%
-                  </div>
-                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${systemStats.cpu}%`, height: '100%', background: '#0070f3', borderRadius: 3, transition: 'width 0.4s ease' }} />
-                  </div>
-                </div>
-
-                {/* Memory Card */}
-                <div style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.09)',
-                  borderRadius: 14,
-                  padding: '10px 12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.05em' }}>MEMORY</span>
-                    <Zap size={14} color="#a855f7" />
-                  </div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                    {systemStats.ram}%
-                  </div>
-                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${systemStats.ram}%`, height: '100%', background: '#a855f7', borderRadius: 3, transition: 'width 0.4s ease' }} />
-                  </div>
-                </div>
-
-                {/* Battery Card */}
-                <div style={{
-                  background: 'rgba(255,255,255,0.06)',
-                  border: '1px solid rgba(255,255,255,0.09)',
-                  borderRadius: 14,
-                  padding: '10px 12px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  justifyContent: 'space-between',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.25)'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.05em' }}>BATTERY</span>
-                    <Sun size={14} color={(percent || 0) <= 20 ? '#ff3b30' : '#34c759'} />
-                  </div>
-                  <div style={{ fontSize: 24, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                    {percent !== null ? `${percent}%` : 'N/A'}
-                  </div>
-                  <div style={{ width: '100%', height: 6, background: 'rgba(255,255,255,0.1)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ width: `${percent || 0}%`, height: '100%', background: (percent || 0) <= 20 ? '#ff3b30' : '#34c759', borderRadius: 3, transition: 'width 0.4s ease' }} />
-                  </div>
-                </div>
+                <ThreeDInstrumentDial
+                  label="CPU"
+                  sublabel="LOAD"
+                  value={systemStats.cpu}
+                  accentColor="#0a84ff"
+                  size={116}
+                />
+                <ThreeDInstrumentDial
+                  label="RAM"
+                  sublabel="MEMORY"
+                  value={systemStats.ram}
+                  accentColor="#a855f7"
+                  size={116}
+                />
+                <ThreeDInstrumentDial
+                  label="BAT"
+                  sublabel={charging ? "CHARGING" : "POWER"}
+                  value={percent !== null ? percent : 0}
+                  accentColor={(percent || 0) <= 20 ? '#ff453a' : '#30d158'}
+                  size={116}
+                />
               </div>
             )}
 
-            {/*Clipboard*/}
-            {currentTab === 7 && (
-              <div id="clipboard" style={{ animation: 'none' }}>
-                {clipboard.length > 0 && (
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, width: '100%' }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                      Clipboard History ({clipboard.length})
-                    </span>
-                    <button
-                      onClick={clearAllClipboard}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: textColor,
-                        opacity: 0.5,
-                        fontSize: 11,
-                        cursor: 'pointer',
-                        padding: 0
-                      }}
-                      onMouseEnter={e => e.currentTarget.style.opacity = '1'}
-                      onMouseLeave={e => e.currentTarget.style.opacity = '0.5'}
-                    >
-                      Clear All
-                    </button>
-                  </div>
-                )}
-                {clipboard.length === 0 ? (
-                  <p style={{ opacity: 0.5, textAlign: 'center', marginTop: 30, color: textColor }}>Clipboard is empty</p>
-                ) : (
-                  clipboard.map((item, index) => (
-                    <div className="clipboard-row" key={index}>
-                      <p className="clipboard-content" style={{ paddingRight: '55px', color: textColor }}>{item}</p>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          copyToClipboard(item);
-                          const btn = e.currentTarget;
-                          btn.innerText = "Copied!";
-                          btn.style.backgroundColor = 'rgba(52, 199, 89, 0.4)';
-                          setTimeout(() => {
-                            btn.innerText = "Copy";
-                            btn.style.backgroundColor = `color-mix(in srgb, ${textColor}, transparent 85%)`;
-                          }, 1500);
-                        }}
-                        style={{
-                          position: 'absolute',
-                          top: '10px',
-                          right: '10px',
-                          zIndex: 10,
-                          backgroundColor: `color-mix(in srgb, ${textColor}, transparent 85%)`,
-                          border: `1px solid color-mix(in srgb, ${textColor}, transparent 75%)`,
-                          borderRadius: '6px',
-                          color: textColor,
-                          fontSize: '11px',
-                          fontWeight: 600,
-                          padding: '4px 9px',
-                          cursor: 'pointer',
-                          backdropFilter: 'blur(4px)'
-                        }}
-                      >
-                        Copy
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-
-            {/* Minimalist Apple Reminders Horizontal Tasks UI */}
-            {currentTab === 8 && (
-              <div
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 16px',
-                  boxSizing: 'border-box',
-                  gap: 16,
-                  userSelect: 'none'
-                }}
-              >
-                {/* Left Column: List Header + Quick Add Input Card */}
+            {/* Clipboard Tab (Left 3D Vault Summary Pod + Right Sunken Clip Cards — Indigo Accent) */}
+            {currentTab === 7 && (() => {
+              const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
+              return (
                 <div
                   style={{
-                    width: 165,
+                    width: '100%',
                     height: '100%',
                     display: 'flex',
-                    flexDirection: 'column',
+                    flexDirection: 'row',
+                    alignItems: 'center',
                     justifyContent: 'space-between',
-                    flexShrink: 0
+                    padding: '10px 16px',
+                    boxSizing: 'border-box',
+                    gap: 14,
+                    userSelect: 'none',
+                    fontFamily: iosFontStack
                   }}
                 >
-                  {/* Top Header Card */}
-                  <div style={{
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: 12,
-                    padding: '8px 10px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 3
-                  }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <div style={{
-                          width: 20,
-                          height: 20,
-                          borderRadius: 6,
-                          background: '#ff9500',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: '#ffffff'
-                        }}>
-                          <Check size={13} strokeWidth={2.5} />
-                        </div>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: textColor, fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                          Reminders
-                        </span>
-                      </div>
-                      <span style={{
-                        fontSize: 10,
-                        fontWeight: 700,
-                        padding: '1px 6px',
-                        borderRadius: 10,
-                        background: tasks.length > 0 ? 'rgba(255, 149, 0, 0.2)' : 'rgba(52, 199, 89, 0.2)',
-                        color: tasks.length > 0 ? '#ff9500' : '#34c759'
-                      }}>
-                        {tasks.length}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.5)', marginTop: 2 }}>
-                      {tasks.length === 0 ? "All tasks completed" : `${tasks.length} task${tasks.length === 1 ? '' : 's'} remaining`}
-                    </span>
-                  </div>
-
-                  {/* Bottom Quick Add Capsule */}
+                  {/* Left Column: 3D Vault Summary Pod */}
                   <div
                     style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      flexWrap: 'nowrap',
-                      alignItems: 'center',
-                      gap: 6,
-                      width: '100%',
-                      background: 'rgba(255, 255, 255, 0.08)',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      borderRadius: 10,
-                      padding: '2px 3px 2px 8px',
+                      width: 152,
+                      height: '100%',
+                      flexShrink: 0,
+                      borderRadius: 16,
+                      padding: '9px 11px',
                       boxSizing: 'border-box',
-                      minWidth: 0
+                      background: 'linear-gradient(165deg, #1d1d2c 0%, #12121d 60%, #0b0b12 100%)',
+                      border: '1px solid rgba(129, 140, 248, 0.24)',
+                      boxShadow: `
+                        0 8px 18px rgba(0, 0, 0, 0.8),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.14),
+                        inset 0 -2px 4px rgba(0, 0, 0, 0.85)
+                      `,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
                     }}
                   >
-                    <input
-                      type="text"
-                      placeholder="New task..."
-                      value={taskText}
-                      onChange={(e) => setTaskText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") addTask();
-                      }}
-                      style={{
-                        flex: 1,
-                        width: '100%',
-                        minWidth: 0,
-                        height: 28,
-                        background: 'none',
-                        color: textColor,
-                        border: 'none',
-                        fontSize: 11.5,
-                        fontWeight: 400,
-                        outline: 'none',
-                        boxSizing: 'border-box',
-                        fontFamily: 'OpenRunde, system-ui, sans-serif'
-                      }}
-                    />
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div
+                            style={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: 6,
+                              background: 'linear-gradient(180deg, #27245d 0%, #161438 100%)',
+                              border: '1px solid rgba(129, 140, 248, 0.45)',
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.7)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center'
+                            }}
+                          >
+                            <List size={11} color="#818cf8" />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>
+                            Clip Vault
+                          </span>
+                        </div>
+                        <span
+                          style={{
+                            fontSize: 9.5,
+                            fontWeight: 800,
+                            padding: '1px 6px',
+                            borderRadius: 999,
+                            background: '#09090f',
+                            border: '1px solid rgba(129, 140, 248, 0.35)',
+                            boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.9)',
+                            color: '#818cf8'
+                          }}
+                        >
+                          {clipboard.length}
+                        </span>
+                      </div>
+
+                      <div
+                        style={{
+                          fontSize: 9.5,
+                          color: 'rgba(255, 255, 255, 0.5)',
+                          marginTop: 6,
+                          lineHeight: 1.3
+                        }}
+                      >
+                        {clipboard.length === 0
+                          ? "Copy any text to capture it here."
+                          : `${clipboard.length} snippet${clipboard.length === 1 ? '' : 's'} stored in memory`}
+                      </div>
+                    </div>
 
                     <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => addTask()}
+                      whileHover={{ scale: 1.03, filter: 'brightness(1.1)' }}
+                      whileTap={{ scale: 0.96 }}
+                      onClick={clearAllClipboard}
+                      disabled={clipboard.length === 0}
                       style={{
-                        height: 24,
-                        padding: '0 8px',
-                        background: '#ff9500',
-                        color: '#ffffff',
-                        border: 'none',
-                        borderRadius: 7,
+                        width: '100%',
+                        height: 30,
+                        borderRadius: 999,
+                        background: 'linear-gradient(180deg, #231f4e 0%, #141130 100%)',
+                        border: '1px solid rgba(129, 140, 248, 0.36)',
+                        boxShadow: `
+                          0 4px 10px rgba(0, 0, 0, 0.75),
+                          inset 0 1px 1px rgba(255, 255, 255, 0.16),
+                          inset 0 -1px 2px rgba(0, 0, 0, 0.85)
+                        `,
+                        color: '#818cf8',
                         fontSize: 11,
                         fontWeight: 700,
-                        fontFamily: 'OpenRunde, system-ui, sans-serif',
-                        cursor: 'pointer',
+                        fontFamily: iosFontStack,
+                        cursor: clipboard.length === 0 ? 'not-allowed' : 'pointer',
+                        opacity: clipboard.length === 0 ? 0.45 : 1,
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        flexShrink: 0,
-                        whiteSpace: 'nowrap'
+                        gap: 5
                       }}
                     >
-                      Add
+                      <Trash2 size={11} /> Clear Vault
                     </motion.button>
                   </div>
-                </div>
 
-                {/* Right Column: Scrollable Task List or Clean Empty State */}
-                <div
-                  id="task-list"
-                  className="task-list-scrollable"
-                  style={{
-                    flex: 1,
+                  {/* Right Column: Sunken 3D Clip Cards List */}
+                  <div
+                    id="clipboard"
+                    style={{
+                      flex: 1,
+                      height: '100%',
+                      minWidth: 0,
+                      padding: '6px 8px',
+                      borderRadius: 16,
+                      background: 'linear-gradient(180deg, #09090e 0%, #0f0f17 100%)',
+                      border: '1px solid rgba(255, 255, 255, 0.07)',
+                      boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.95)',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      boxSizing: 'border-box',
+                      animation: 'none'
+                    }}
+                  >
+                    {clipboard.length === 0 ? (
+                      <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', opacity: 0.55 }}>
+                        <List size={22} color="#818cf8" style={{ marginBottom: 4 }} />
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>Clipboard Vault Empty</span>
+                      </div>
+                    ) : (
+                      clipboard.map((item, index) => (
+                        <div
+                          className="clipboard-row"
+                          key={index}
+                          style={{
+                            background: 'linear-gradient(180deg, #1b1b26 0%, #12121a 100%)',
+                            border: '1px solid rgba(255, 255, 255, 0.09)',
+                            borderRadius: 11,
+                            padding: '7px 10px',
+                            marginBottom: 6,
+                            boxShadow: '0 4px 10px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.12)'
+                          }}
+                        >
+                          <p className="clipboard-content" style={{ paddingRight: '62px', color: '#ffffff', fontSize: 12, fontFamily: iosFontStack }}>{item}</p>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              copyToClipboard(item);
+                              const btn = e.currentTarget;
+                              btn.innerText = "Copied!";
+                              btn.style.color = '#34d399';
+                              btn.style.borderColor = 'rgba(52, 211, 153, 0.5)';
+                              setTimeout(() => {
+                                btn.innerText = "Copy";
+                                btn.style.color = '#818cf8';
+                                btn.style.borderColor = 'rgba(129, 140, 248, 0.38)';
+                              }, 1500);
+                            }}
+                            style={{
+                              position: 'absolute',
+                              top: '7px',
+                              right: '8px',
+                              zIndex: 10,
+                              background: 'linear-gradient(180deg, #231f4e 0%, #141130 100%)',
+                              border: '1px solid rgba(129, 140, 248, 0.38)',
+                              boxShadow: '0 2px 6px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,255,255,0.16)',
+                              borderRadius: '999px',
+                              color: '#818cf8',
+                              fontSize: '10.5px',
+                              fontWeight: 700,
+                              padding: '3px 10px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Copy
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Tasks / Reminders Tab (Left 3D Console & Input Trough + Right Sunken Task Well — Amber & Emerald Accents) */}
+            {currentTab === 8 && (
+              <ErrorBoundary tabName="Tasks" onGoHome={() => setTabState([2, -1])}>
+                {(() => {
+                  const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
+                  return (
+                    <div
+                      style={{
+                    width: '100%',
                     height: '100%',
-                    overflowY: 'auto',
-                    overflowX: 'hidden',
                     display: 'flex',
-                    flexDirection: 'column',
-                    gap: 5,
-                    minWidth: 0,
-                    margin: 0,
-                    paddingRight: 4,
-                    boxSizing: 'border-box'
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 16px',
+                    boxSizing: 'border-box',
+                    gap: 14,
+                    userSelect: 'none',
+                    fontFamily: iosFontStack
                   }}
                 >
-                  <AnimatePresence mode="popLayout">
-                    {tasks.length === 0 ? (
-                      <motion.div
-                        key="empty-tasks"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        style={{
-                          height: '100%',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          color: textColor,
-                          userSelect: 'none'
-                        }}
-                      >
-                        <CheckCircle2 size={26} color="#34c759" style={{ opacity: 0.85, marginBottom: 4 }} />
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>No pending tasks</span>
-                        <span style={{ fontSize: 10.5, color: 'rgba(255, 255, 255, 0.45)', marginTop: 2 }}>You're all caught up!</span>
-                      </motion.div>
-                    ) : (
-                      tasks.map((task, index) => (
-                        <motion.div
-                          key={`task-${task}-${index}`}
-                          initial={{ opacity: 0, y: 3 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, x: 10, height: 0, marginBottom: 0, padding: 0 }}
-                          transition={{ duration: 0.15 }}
-                          style={{
+                  {/* Left Column: 3D Reminders Console + Sunken Quick-Add Trough */}
+                  <div
+                    style={{
+                      width: 170,
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between',
+                      flexShrink: 0,
+                      gap: 7
+                    }}
+                  >
+                    {/* Top 3D Beveled Reminders Header Card */}
+                    <div style={{
+                      flex: 1,
+                      background: 'linear-gradient(165deg, #261e16 0%, #15120e 60%, #0c0a08 100%)',
+                      border: '1px solid rgba(255, 159, 10, 0.24)',
+                      borderRadius: 15,
+                      padding: '8px 10px',
+                      boxShadow: `
+                        0 8px 18px rgba(0, 0, 0, 0.8),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.14),
+                        inset 0 -2px 4px rgba(0, 0, 0, 0.85)
+                      `,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      justifyContent: 'space-between'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <div style={{
+                            width: 20,
+                            height: 20,
+                            borderRadius: 6,
+                            background: 'linear-gradient(180deg, #ff9f0a 0%, #d97706 100%)',
+                            boxShadow: '0 2px 6px rgba(255, 159, 10, 0.45)',
                             display: 'flex',
                             alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: 8,
-                            padding: '6px 10px',
-                            borderRadius: 10,
-                            background: 'rgba(255, 255, 255, 0.05)',
-                            border: '1px solid rgba(255, 255, 255, 0.07)',
-                            boxSizing: 'border-box',
-                            flexShrink: 0,
+                            justifyContent: 'center',
+                            color: '#ffffff'
+                          }}>
+                            <Check size={12} strokeWidth={3} />
+                          </div>
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#ffffff' }}>
+                            Reminders
+                          </span>
+                        </div>
+                        <span style={{
+                          fontSize: 10,
+                          fontWeight: 800,
+                          padding: '1px 7px',
+                          borderRadius: 999,
+                          background: '#090807',
+                          border: `1px solid ${tasks.length > 0 ? 'rgba(255, 159, 10, 0.4)' : 'rgba(52, 199, 89, 0.4)'}`,
+                          boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.9)',
+                          color: tasks.length > 0 ? '#ff9f0a' : '#34c759'
+                        }}>
+                          {tasks.length}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.55)' }}>
+                        {tasks.length === 0 ? "All tasks completed" : `${tasks.length} active reminder${tasks.length === 1 ? '' : 's'}`}
+                      </span>
+                    </div>
+
+                    {/* Bottom Sunken 3D Quick-Add Input Trough */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'row',
+                        flexWrap: 'nowrap',
+                        alignItems: 'center',
+                        gap: 5,
+                        width: '100%',
+                        height: 34,
+                        background: '#09080b',
+                        border: '1px solid rgba(255, 159, 10, 0.24)',
+                        boxShadow: 'inset 0 3px 8px rgba(0, 0, 0, 0.94), 0 3px 8px rgba(0, 0, 0, 0.6)',
+                        borderRadius: 11,
+                        padding: '0 4px 0 9px',
+                        boxSizing: 'border-box',
+                        minWidth: 0
+                      }}
+                    >
+                      <input
+                        type="text"
+                        placeholder="New task..."
+                        value={taskText}
+                        onChange={(e) => setTaskText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") addTask();
+                        }}
+                        style={{
+                          flex: 1,
+                          width: '100%',
+                          minWidth: 0,
+                          height: 26,
+                          background: 'none',
+                          color: '#ffffff',
+                          border: 'none',
+                          fontSize: 11.5,
+                          fontWeight: 500,
+                          outline: 'none',
+                          boxSizing: 'border-box',
+                          fontFamily: iosFontStack
+                        }}
+                      />
+
+                      <motion.button
+                        whileHover={{ scale: 1.04 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => addTask()}
+                        style={{
+                          height: 25,
+                          padding: '0 10px',
+                          background: 'linear-gradient(180deg, #35210d 0%, #221407 100%)',
+                          border: '1px solid rgba(255, 159, 10, 0.38)',
+                          boxShadow: '0 3px 7px rgba(0,0,0,0.75), inset 0 1px 1px rgba(255,195,100,0.22)',
+                          color: '#FF9F0A',
+                          borderRadius: 8,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          fontFamily: iosFontStack,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0,
+                          whiteSpace: 'nowrap'
+                        }}
+                      >
+                        Add
+                      </motion.button>
+                    </div>
+                  </div>
+
+                  {/* Right Column: Sunken 3D Task Well */}
+                  <div
+                    id="task-list"
+                    className="task-list-scrollable"
+                    style={{
+                      flex: 1,
+                      height: '100%',
+                      overflowY: 'auto',
+                      overflowX: 'hidden',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 5,
+                      minWidth: 0,
+                      margin: 0,
+                      padding: '6px 8px',
+                      borderRadius: 16,
+                      background: 'linear-gradient(180deg, #09090d 0%, #0e0e14 100%)',
+                      border: '1px solid rgba(255, 255, 255, 0.07)',
+                      boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.95)',
+                      boxSizing: 'border-box'
+                    }}
+                  >
+                    <AnimatePresence mode="popLayout">
+                      {tasks.length === 0 ? (
+                        <motion.div
+                          key="empty-tasks"
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          style={{
+                            height: '100%',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#ffffff',
                             userSelect: 'none'
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                            {/* Minimal Circular Check Button */}
-                            <motion.button
-                              whileTap={{ scale: 0.85 }}
-                              onClick={() => removeTask(index)}
-                              style={{
-                                width: 16,
-                                height: 16,
-                                borderRadius: '50%',
-                                border: '1.5px solid rgba(255, 255, 255, 0.35)',
-                                background: 'none',
-                                cursor: 'pointer',
-                                padding: 0,
-                                flexShrink: 0,
-                                transition: 'all 0.15s ease'
-                              }}
-                              onMouseEnter={(e) => {
-                                e.currentTarget.style.borderColor = '#34c759';
-                                e.currentTarget.style.background = 'rgba(52, 199, 89, 0.2)';
-                              }}
-                              onMouseLeave={(e) => {
-                                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.35)';
-                                e.currentTarget.style.background = 'none';
-                              }}
-                              title="Mark as completed"
-                            />
+                          <CheckCircle2 size={24} color="#34c759" style={{ opacity: 0.9, marginBottom: 4, filter: 'drop-shadow(0 0 8px rgba(52,199,89,0.4))' }} />
+                          <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff' }}>No pending tasks</span>
+                          <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.45)', marginTop: 2 }}>You're all caught up!</span>
+                        </motion.div>
+                      ) : (
+                        tasks.map((task, index) => {
+                          const taskTitle = typeof task === "string" ? task : (task?.title || task?.text || task?.name || "Untitled Task");
+                          const taskKey = typeof task === "object" && task?.id ? task.id : `task-${taskTitle}-${index}`;
 
-                            <span
+                          return (
+                            <motion.div
+                              key={taskKey}
+                              initial={{ opacity: 0, y: 3 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              exit={{ opacity: 0, x: 10, height: 0, marginBottom: 0, padding: 0 }}
+                              transition={{ duration: 0.15 }}
                               style={{
-                                fontSize: 12,
-                                fontWeight: 500,
-                                color: textColor,
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                fontFamily: 'OpenRunde, system-ui, sans-serif'
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                gap: 8,
+                                padding: '6px 10px',
+                                borderRadius: 11,
+                                background: 'linear-gradient(180deg, #1b1b23 0%, #121218 100%)',
+                                border: '1px solid rgba(255, 255, 255, 0.09)',
+                                boxShadow: '0 4px 10px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.12)',
+                                boxSizing: 'border-box',
+                                flexShrink: 0,
+                                userSelect: 'none'
                               }}
                             >
-                              {task}
-                            </span>
-                          </div>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+                                {/* Recessed 3D Circular Check Well */}
+                                <motion.button
+                                  whileTap={{ scale: 0.85 }}
+                                  onClick={() => removeTask(index)}
+                                  style={{
+                                    width: 17,
+                                    height: 17,
+                                    borderRadius: '50%',
+                                    border: '1.5px solid rgba(255, 159, 10, 0.5)',
+                                    background: '#08080b',
+                                    boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.9)',
+                                    cursor: 'pointer',
+                                    padding: 0,
+                                    flexShrink: 0,
+                                    transition: 'all 0.15s ease'
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.currentTarget.style.borderColor = '#34c759';
+                                    e.currentTarget.style.background = 'rgba(52, 199, 89, 0.25)';
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.currentTarget.style.borderColor = 'rgba(255, 159, 10, 0.5)';
+                                    e.currentTarget.style.background = '#08080b';
+                                  }}
+                                  title="Mark as completed"
+                                />
 
-                          <motion.button
-                            whileHover={{ opacity: 1 }}
-                            whileTap={{ scale: 0.9 }}
-                            onClick={() => removeTask(index)}
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              color: textColor,
-                              opacity: 0.3,
-                              cursor: 'pointer',
-                              padding: 2,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              borderRadius: 4
-                            }}
-                            title="Delete task"
-                          >
-                            <Trash2 size={13} color={textColor} />
-                          </motion.button>
-                        </motion.div>
-                      ))
-                    )}
-                  </AnimatePresence>
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 500,
+                                    color: '#ffffff',
+                                    whiteSpace: 'nowrap',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    fontFamily: iosFontStack
+                                  }}
+                                >
+                                  {taskTitle}
+                                </span>
+                              </div>
+
+                              <motion.button
+                                whileHover={{ opacity: 1 }}
+                                whileTap={{ scale: 0.9 }}
+                                onClick={() => removeTask(index)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  color: '#f87171',
+                                  opacity: 0.45,
+                                  cursor: 'pointer',
+                                  padding: 2,
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  borderRadius: 4
+                                }}
+                                title="Delete task"
+                              >
+                                <Trash2 size={13} />
+                              </motion.button>
+                            </motion.div>
+                          );
+                        })
+                      )}
+                    </AnimatePresence>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
+          </ErrorBoundary>
+        )}
 
-            {/* Timer Tab (Stopwatch Removed, Modern States & Dynamic Island Styling) */}
+            {/* Timer Tab (State 1: img1 3D Horizontal Tick-Ruler + Right Presets | State 2: 3D Dark Active Countdown) */}
             {currentTab === 10 && (
               <div style={{
                 width: '100%',
@@ -7756,209 +8785,158 @@ export default function Island() {
                 flexDirection: 'column',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                padding: '8px 18px',
+                padding: '9px 16px',
                 boxSizing: 'border-box',
                 userSelect: 'none'
               }}>
                 {!isTimerRunning && timerSeconds === 0 ? (
-                  /* STATE 1: Select Timer Setup Screen (Image 2) */
-                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    {/* Title Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 0 }}>
-                      <AlarmClock size={14} color="#ffffff" />
-                      <span style={{ fontSize: 13, fontWeight: 700, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                        Select Timer
-                      </span>
-                    </div>
-
-                    {/* Preset Chips Row: 15m, 30m, 60m, 100m */}
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, width: '100%' }}>
-                      {[
-                        { label: '15m', sec: 900 },
-                        { label: '30m', sec: 1800 },
-                        { label: '60m', sec: 3600 },
-                        { label: '100m', sec: 6000 }
-                      ].map((preset) => (
-                        <motion.button
-                          key={preset.label}
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          onClick={() => {
-                            setTimerTotalDuration(preset.sec);
-                            startTimer(preset.sec);
-                          }}
-                          style={{
-                            background: '#222227',
-                            border: '1px solid rgba(255,255,255,0.08)',
-                            borderRadius: 10,
-                            height: 32,
-                            color: '#ffffff',
-                            fontSize: 12,
-                            fontWeight: 700,
-                            fontFamily: 'OpenRunde, system-ui, sans-serif',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-                          }}
-                        >
-                          {preset.label}
-                        </motion.button>
-                      ))}
-                    </div>
-
-                    {/* Bottom Row: Custom Time Picker (-) 05:00 (+) & Vibrant Orange START Button */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, width: '100%', marginBottom: 0 }}>
-                      {/* Left: Custom Time Picker Pill */}
-                      <div style={{
-                        background: '#222227',
-                        border: '1px solid rgba(255,255,255,0.08)',
-                        borderRadius: 10,
-                        height: 34,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        padding: '0 12px',
-                        boxSizing: 'border-box',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
-                      }}>
-                        <button
-                          onClick={() => setCustomTimerSetup(prev => Math.max(60, prev - 60))}
-                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: 700, cursor: 'pointer', padding: '0 2px' }}
-                        >
-                          -
-                        </button>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
-                          {formatTimerMMSS(customTimerSetup)}
-                        </span>
-                        <button
-                          onClick={() => setCustomTimerSetup(prev => prev + 60)}
-                          style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.7)', fontSize: 18, fontWeight: 700, cursor: 'pointer', padding: '0 2px' }}
-                        >
-                          +
-                        </button>
-                      </div>
-
-                      {/* Right: Big Orange START Button */}
-                      <motion.button
-                        whileHover={{ scale: 1.03 }}
-                        whileTap={{ scale: 0.97 }}
-                        onClick={() => {
-                          setTimerTotalDuration(customTimerSetup);
-                          startTimer(customTimerSetup);
-                        }}
-                        style={{
-                          background: '#ff9500',
-                          border: 'none',
-                          borderRadius: 10,
-                          height: 34,
-                          color: '#ffffff',
-                          fontSize: 12,
-                          fontWeight: 800,
-                          letterSpacing: '1px',
-                          fontFamily: 'OpenRunde, system-ui, sans-serif',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 16px rgba(255, 149, 0, 0.45)',
-                          textTransform: 'uppercase'
-                        }}
-                      >
-                        START
-                      </motion.button>
-                    </div>
-                  </div>
+                  <TimerTickRulerSelector
+                    customTimerSetup={customTimerSetup}
+                    setCustomTimerSetup={setCustomTimerSetup}
+                    onStartCustom={(secs) => {
+                      setTimerTotalDuration(secs);
+                      startTimer(secs);
+                    }}
+                    onStartPreset={(secs) => {
+                      setTimerTotalDuration(secs);
+                      startTimer(secs);
+                    }}
+                  />
                 ) : (
-                  /* STATE 2: Active / Running / Paused Timer Screen (Image 4) */
-                  <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between', padding: '2px 0' }}>
-                    {/* Top Center: Bell / Total Duration Header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.6 }}>
-                      <BellOff size={12} color="#ffffff" />
-                      <span style={{ fontSize: 11, fontWeight: 600, color: '#ffffff', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
+                  /* STATE 2: Active / Running / Paused Timer Screen with 3D Dark Depth */
+                  <div
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      borderRadius: 18,
+                      padding: '8px 20px',
+                      boxSizing: 'border-box',
+                      background: 'linear-gradient(180deg, #131216 0%, #0a0a0d 100%)',
+                      border: '1px solid rgba(255, 159, 10, 0.2)',
+                      boxShadow: `
+                        0 8px 20px rgba(0, 0, 0, 0.8),
+                        inset 0 4px 12px rgba(0, 0, 0, 0.94),
+                        inset 0 1px 1px rgba(255, 255, 255, 0.06)
+                      `,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'space-between'
+                    }}
+                  >
+                    {/* Top Center: Sunken Bell / Total Duration Pill */}
+                    <div
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        padding: '2px 10px',
+                        borderRadius: 999,
+                        background: '#08080b',
+                        border: '1px solid rgba(255, 159, 10, 0.25)',
+                        boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.9)'
+                      }}
+                    >
+                      <BellOff size={11} color="#FF9F0A" />
+                      <span style={{ fontSize: 10.5, fontWeight: 700, color: 'rgba(255, 255, 255, 0.78)', fontFamily: 'OpenRunde, system-ui, sans-serif' }}>
                         {formatTimerMMSS(timerTotalDuration)}
                       </span>
                     </div>
 
-                    {/* Center Section: Left Pause/Play | Center Giant Time | Right Cancel */}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 8px' }}>
-                      {/* Left: Glass Circle Pause/Play Button */}
+                    {/* Center Section: Left 3D Pause/Play | Center Giant Time | Right 3D Cancel */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '0 6px' }}>
+                      {/* Left: Tactile 3D Dark-Amber Pause/Play Button */}
                       <motion.button
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
+                        whileHover={{ scale: 1.07 }}
+                        whileTap={{ scale: 0.93 }}
                         onClick={toggleTimer}
                         style={{
-                          width: 44,
-                          height: 44,
+                          width: 48,
+                          height: 48,
                           borderRadius: '50%',
-                          background: 'rgba(255, 255, 255, 0.15)',
-                          border: '1px solid rgba(255, 255, 255, 0.25)',
+                          background: 'linear-gradient(180deg, #35210d 0%, #221407 100%)',
+                          border: '1px solid rgba(255, 159, 10, 0.45)',
+                          boxShadow: `
+                            0 6px 16px rgba(0, 0, 0, 0.85),
+                            0 0 12px rgba(255, 159, 10, 0.2),
+                            inset 0 1.5px 2px rgba(255, 195, 100, 0.25),
+                            inset 0 -2px 4px rgba(0, 0, 0, 0.9)
+                          `,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 14px rgba(0,0,0,0.3)'
+                          cursor: 'pointer'
                         }}
                       >
                         {isTimerRunning ? (
-                          <Pause size={18} color="#ffffff" fill="#ffffff" />
+                          <Pause size={19} color="#FF9F0A" fill="#FF9F0A" />
                         ) : (
-                          <Play size={18} color="#ffffff" fill="#ffffff" style={{ marginLeft: 2 }} />
+                          <Play size={19} color="#FF9F0A" fill="#FF9F0A" style={{ marginLeft: 2 }} />
                         )}
                       </motion.button>
 
-                      {/* Center: Giant Countdown Display & Subtitle */}
+                      {/* Center: Giant 3D Countdown Display & Subtitle */}
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
                         <div style={{
-                          fontSize: 32,
-                          fontWeight: 800,
-                          color: '#ffffff',
-                          fontFamily: 'OpenRunde, system-ui, sans-serif',
-                          letterSpacing: '-1px',
-                          lineHeight: 1
+                          fontSize: 38,
+                          fontWeight: 700,
+                          color: '#FF9F0A',
+                          fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "OpenRunde", system-ui, sans-serif',
+                          letterSpacing: '-1.2px',
+                          lineHeight: 1,
+                          fontVariantNumeric: 'tabular-nums',
+                          textShadow: '0 3px 12px rgba(255, 159, 10, 0.35), 0 3px 6px rgba(0, 0, 0, 0.9)'
                         }}>
                           {formatTimerMMSS(timerSeconds)}
                         </div>
                         <div style={{
                           fontSize: 10,
-                          fontWeight: 600,
-                          color: 'rgba(255,255,255,0.5)',
-                          fontFamily: 'OpenRunde, system-ui, sans-serif',
-                          marginTop: 2
+                          fontWeight: 700,
+                          color: 'rgba(255, 255, 255, 0.48)',
+                          letterSpacing: '0.6px',
+                          textTransform: 'uppercase',
+                          marginTop: 3
                         }}>
-                          Timer
+                          {isTimerRunning ? 'Counting Down' : 'Paused'}
                         </div>
                       </div>
 
-                      {/* Right: Red Circle Cancel/Reset Button */}
+                      {/* Right: Tactile 3D Dark-Crimson Cancel/Reset Button */}
                       <motion.button
-                        whileHover={{ scale: 1.08 }}
-                        whileTap={{ scale: 0.92 }}
+                        whileHover={{ scale: 1.07 }}
+                        whileTap={{ scale: 0.93 }}
                         onClick={resetTimer}
                         style={{
-                          width: 44,
-                          height: 44,
+                          width: 48,
+                          height: 48,
                           borderRadius: '50%',
-                          background: 'rgba(255, 59, 48, 0.25)',
-                          border: '1px solid rgba(255, 59, 48, 0.5)',
+                          background: 'linear-gradient(180deg, #381210 0%, #220a09 100%)',
+                          border: '1px solid rgba(255, 69, 58, 0.48)',
+                          boxShadow: `
+                            0 6px 16px rgba(0, 0, 0, 0.85),
+                            0 0 12px rgba(255, 69, 58, 0.2),
+                            inset 0 1.5px 2px rgba(255, 130, 120, 0.25),
+                            inset 0 -2px 4px rgba(0, 0, 0, 0.9)
+                          `,
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          cursor: 'pointer',
-                          boxShadow: '0 4px 14px rgba(255, 59, 48, 0.25)'
+                          cursor: 'pointer'
                         }}
                       >
-                        <X size={18} color="#ff3b30" />
+                        <X size={20} color="#ff453a" />
                       </motion.button>
                     </div>
 
-                    {/* Bottom Spacer */}
                     <div style={{ height: 2 }} />
                   </div>
                 )}
               </div>
             )}
 
-            {/* Settings Overhaul - Apple macOS System Settings Architecture */}
+            {/* Settings Overhaul - Apple macOS System Settings Architecture (3D Dark Beveled Wells) */}
             {currentTab === 9 && (() => {
+              const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
               const categories = [
                 { id: 'general', label: 'General', icon: SlidersHorizontal },
                 { id: 'appearance', label: 'Appearance', icon: Palette },
@@ -7971,8 +8949,9 @@ export default function Island() {
               ];
 
               const appleSelectStyle = {
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.14)',
+                background: '#090a0f',
+                border: '1px solid rgba(10, 132, 255, 0.28)',
+                boxShadow: 'inset 0 2px 6px rgba(0, 0, 0, 0.92), 0 1px 1px rgba(255, 255, 255, 0.06)',
                 borderRadius: 8,
                 padding: '4px 8px',
                 color: '#ffffff',
@@ -7980,7 +8959,31 @@ export default function Island() {
                 fontWeight: 600,
                 outline: 'none',
                 cursor: 'pointer',
-                fontFamily: 'OpenRunde, system-ui, sans-serif'
+                fontFamily: iosFontStack
+              };
+
+              const settingsGroupCardStyle = {
+                background: 'linear-gradient(180deg, #161822 0%, #0e1017 100%)',
+                border: '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: 12,
+                boxShadow: `
+                  0 6px 14px rgba(0, 0, 0, 0.78),
+                  inset 0 1px 1px rgba(255, 255, 255, 0.12),
+                  inset 0 -1.5px 3px rgba(0, 0, 0, 0.9)
+                `,
+                overflow: 'hidden'
+              };
+
+              const settingsInputTroughStyle = {
+                padding: '3px 8px',
+                fontSize: 11,
+                background: '#08090d',
+                borderRadius: 7,
+                color: textColor,
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                boxShadow: 'inset 0 2px 6px rgba(0, 0, 0, 0.92)',
+                outline: 'none',
+                fontFamily: iosFontStack
               };
 
               return (
@@ -7992,24 +8995,28 @@ export default function Island() {
                     flexDirection: 'row',
                     width: '100%',
                     height: '100%',
-                    padding: 0,
+                    padding: '8px 12px',
+                    gap: 10,
                     margin: 0,
                     boxSizing: 'border-box',
                     overflow: 'hidden',
-                    userSelect: 'none'
+                    userSelect: 'none',
+                    fontFamily: iosFontStack
                   }}
                 >
-                  {/* Left Sidebar: Apple-style Category Navigation */}
+                  {/* Left Sidebar: Sunken 3D Category Navigation Well */}
                   <div
                     id="settings-sidebar"
                     className="settings-sidebar settings-sidebar-scrollable"
                     data-scrollable="true"
                     style={{
-                      width: 130,
+                      width: 128,
                       height: '100%',
-                      borderRight: '1px solid rgba(255, 255, 255, 0.08)',
-                      background: 'rgba(0, 0, 0, 0.22)',
-                      padding: '8px 6px',
+                      borderRadius: 14,
+                      border: '1px solid rgba(10, 132, 255, 0.18)',
+                      background: 'linear-gradient(180deg, #090a0f 0%, #10121a 100%)',
+                      boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.94), 0 4px 12px rgba(0, 0, 0, 0.6)',
+                      padding: '6px',
                       boxSizing: 'border-box',
                       display: 'flex',
                       flexDirection: 'column',
@@ -8035,23 +9042,30 @@ export default function Island() {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 8,
-                            padding: '6px 8px',
-                            borderRadius: 8,
-                            background: isActive ? 'rgba(255, 255, 255, 0.14)' : 'transparent',
-                            border: 'none',
-                            color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.65)',
-                            fontSize: 12,
-                            fontWeight: isActive ? 700 : 500,
+                            gap: 7,
+                            padding: '5.5px 8px',
+                            borderRadius: 9,
+                            background: isActive
+                              ? 'linear-gradient(180deg, #132a4a 0%, #0b182b 100%)'
+                              : 'transparent',
+                            border: isActive
+                              ? '1px solid rgba(10, 132, 255, 0.42)'
+                              : '1px solid transparent',
+                            boxShadow: isActive
+                              ? '0 3px 8px rgba(0, 0, 0, 0.75), inset 0 1px 1px rgba(255, 255, 255, 0.16)'
+                              : 'none',
+                            color: isActive ? '#ffffff' : 'rgba(255, 255, 255, 0.62)',
+                            fontSize: 11.5,
+                            fontWeight: isActive ? 700 : 600,
                             cursor: 'pointer',
                             textAlign: 'left',
                             width: '100%',
                             flexShrink: 0,
                             transition: 'all 0.15s ease',
-                            fontFamily: 'OpenRunde, system-ui, sans-serif'
+                            fontFamily: iosFontStack
                           }}
                         >
-                          <IconComp size={13} color={isActive ? '#0070f3' : 'currentColor'} />
+                          <IconComp size={13} color={isActive ? '#38bdf8' : 'currentColor'} />
                           <span style={{ flex: 1 }}>{cat.label}</span>
                           {cat.hasBadge && (
                             <span style={{
@@ -8067,7 +9081,7 @@ export default function Island() {
                     })}
                   </div>
 
-                  {/* Right Content Area: Inset Grouped Settings Panel */}
+                  {/* Right Content Area: Sunken 3D Grouped Settings Well */}
                   <div
                     id="settings-content"
                     className="settings-content settings-content-scrollable"
@@ -8075,13 +9089,17 @@ export default function Island() {
                     style={{
                       flex: 1,
                       height: '100%',
+                      borderRadius: 14,
+                      background: 'linear-gradient(180deg, #090a0f 0%, #101219 100%)',
+                      border: '1px solid rgba(255, 255, 255, 0.07)',
+                      boxShadow: 'inset 0 4px 12px rgba(0, 0, 0, 0.94), 0 4px 12px rgba(0, 0, 0, 0.6)',
                       overflowY: 'auto',
                       overflowX: 'hidden',
-                      padding: '10px 16px',
+                      padding: '8px 12px',
                       boxSizing: 'border-box',
                       display: 'flex',
                       flexDirection: 'column',
-                      gap: 10,
+                      gap: 8,
                       scrollbarWidth: 'thin',
                       scrollbarColor: 'color-mix(in srgb, var(--island-text-color), transparent 80%) transparent'
                     }}
@@ -8089,15 +9107,10 @@ export default function Island() {
                     {/* CATEGORY: GENERAL */}
                     {settingsTab === 'general' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#60a5fa', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                           General Preferences
                         </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden'
-                        }}>
+                        <div style={settingsGroupCardStyle}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>12/24 Hour Format</span>
                             <AppleSegmented
@@ -8122,7 +9135,7 @@ export default function Island() {
                                 style={appleSelectStyle}
                               >
                                 {displays.map(d => (
-                                  <option key={d.id} value={d.id} style={{ background: '#1c1c1e', color: '#fff' }}>{d.label}</option>
+                                  <option key={d.id} value={d.id} style={{ background: '#11131a', color: '#fff' }}>{d.label}</option>
                                 ))}
                               </select>
                             </div>
@@ -8134,15 +9147,10 @@ export default function Island() {
                     {/* CATEGORY: APPEARANCE */}
                     {settingsTab === 'appearance' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#60a5fa', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                           Appearance & Theme
                         </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden'
-                        }}>
+                        <div style={settingsGroupCardStyle}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Theme</span>
                             <select
@@ -8150,9 +9158,9 @@ export default function Island() {
                               onChange={(e) => setTheme(e.target.value)}
                               style={appleSelectStyle}
                             >
-                              <option value="none" style={{ background: '#1c1c1e', color: '#fff' }}>Default</option>
-                              <option value="sleek-black" style={{ background: '#1c1c1e', color: '#fff' }}>Sleek Black</option>
-                              <option value="win95" style={{ background: '#1c1c1e', color: '#fff' }}>Windows 95</option>
+                              <option value="none" style={{ background: '#11131a', color: '#fff' }}>Default</option>
+                              <option value="sleek-black" style={{ background: '#11131a', color: '#fff' }}>Sleek Black</option>
+                              <option value="win95" style={{ background: '#11131a', color: '#fff' }}>Windows 95</option>
                             </select>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -8181,12 +9189,12 @@ export default function Island() {
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <div style={{ width: 13, height: 13, borderRadius: '50%', background: bgColor, border: '1px solid rgba(255,255,255,0.2)' }} />
+                              <div style={{ width: 13, height: 13, borderRadius: '50%', background: bgColor, border: '1px solid rgba(255,255,255,0.2)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.8)' }} />
                               <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Island Color</span>
                             </div>
                             <input
                               className="select-input"
-                              style={{ width: 85, padding: '3px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
+                              style={{ ...settingsInputTroughStyle, width: 85 }}
                               placeholder="#000000"
                               value={bgColor}
                               onChange={handleBgColorChange}
@@ -8194,12 +9202,12 @@ export default function Island() {
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                              <div style={{ width: 13, height: 13, borderRadius: '50%', background: textColor, border: '1px solid rgba(255,255,255,0.2)' }} />
+                              <div style={{ width: 13, height: 13, borderRadius: '50%', background: textColor, border: '1px solid rgba(255,255,255,0.2)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.8)' }} />
                               <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Text Color</span>
                             </div>
                             <input
                               className="select-input"
-                              style={{ width: 85, padding: '3px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
+                              style={{ ...settingsInputTroughStyle, width: 85 }}
                               placeholder="#FAFAFA"
                               value={textColor}
                               onChange={handleTextColorChange}
@@ -8209,7 +9217,7 @@ export default function Island() {
                             <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Background Image URL</span>
                             <input
                               className="select-input"
-                              style={{ width: '100%', padding: '4px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
+                              style={{ ...settingsInputTroughStyle, width: '100%' }}
                               placeholder="https://..."
                               value={bgImage}
                               onChange={handleBgImageChange}
@@ -8222,13 +9230,11 @@ export default function Island() {
                     {/* CATEGORY: POSITION */}
                     {settingsTab === 'position' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#60a5fa', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                           Position & Placement
                         </div>
                         <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
+                          ...settingsGroupCardStyle,
                           padding: '8px 10px',
                           display: 'flex',
                           flexDirection: 'column',
@@ -8254,12 +9260,19 @@ export default function Island() {
                                   }}
                                   style={{
                                     padding: '5px 6px',
-                                    borderRadius: 7,
-                                    background: isSel ? 'rgba(0, 112, 243, 0.35)' : 'rgba(255, 255, 255, 0.06)',
-                                    border: isSel ? '1px solid rgba(0, 112, 243, 0.7)' : '1px solid rgba(255, 255, 255, 0.08)',
-                                    color: isSel ? '#ffffff' : 'rgba(255, 255, 255, 0.75)',
+                                    borderRadius: 8,
+                                    background: isSel
+                                      ? 'linear-gradient(180deg, #14325c 0%, #0b1b33 100%)'
+                                      : 'linear-gradient(180deg, #1c1f2b 0%, #12141c 100%)',
+                                    border: isSel
+                                      ? '1px solid rgba(10, 132, 255, 0.55)'
+                                      : '1px solid rgba(255, 255, 255, 0.08)',
+                                    boxShadow: isSel
+                                      ? '0 3px 8px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.2)'
+                                      : '0 2px 5px rgba(0, 0, 0, 0.6), inset 0 1px 1px rgba(255, 255, 255, 0.08)',
+                                    color: isSel ? '#60a5fa' : 'rgba(255, 255, 255, 0.72)',
                                     fontSize: 10.5,
-                                    fontWeight: isSel ? 700 : 500,
+                                    fontWeight: isSel ? 700 : 600,
                                     cursor: 'pointer',
                                     transition: 'all 0.15s ease'
                                   }}
@@ -8305,7 +9318,7 @@ export default function Island() {
                                     handleDragEndChecks(e);
                                     e.target.blur();
                                   }}
-                                  style={{ flex: 1, accentColor: '#0070f3' }}
+                                  style={{ flex: 1, accentColor: '#0a84ff' }}
                                 />
                               </div>
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -8326,7 +9339,7 @@ export default function Island() {
                                     handleDragEndChecks(e);
                                     e.target.blur();
                                   }}
-                                  style={{ flex: 1, accentColor: '#0070f3' }}
+                                  style={{ flex: 1, accentColor: '#0a84ff' }}
                                 />
                               </div>
                             </div>
@@ -8339,16 +9352,13 @@ export default function Island() {
                     {settingsTab === 'tabs' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: '#60a5fa', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                             Tab Management
                           </span>
                           <span style={{ fontSize: 9.5, opacity: 0.5 }}>Drag or use arrows</span>
                         </div>
                         <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden',
+                          ...settingsGroupCardStyle,
                           display: 'flex',
                           flexDirection: 'column'
                         }}>
@@ -8447,7 +9457,7 @@ export default function Island() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <div>
-                            <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                            <div style={{ fontSize: 11, fontWeight: 800, color: '#60a5fa', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                               Tab Shortcuts
                             </div>
                             <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>
@@ -8462,17 +9472,16 @@ export default function Island() {
                               alignItems: 'center',
                               gap: 4,
                               padding: '4px 8px',
-                              background: 'rgba(255, 255, 255, 0.08)',
-                              border: '1px solid rgba(255, 255, 255, 0.12)',
-                              borderRadius: 6,
-                              color: 'rgba(255, 255, 255, 0.8)',
+                              background: 'linear-gradient(180deg, #1e212e 0%, #13151e 100%)',
+                              border: '1px solid rgba(255, 255, 255, 0.14)',
+                              boxShadow: '0 3px 8px rgba(0, 0, 0, 0.7), inset 0 1px 1px rgba(255, 255, 255, 0.14)',
+                              borderRadius: 7,
+                              color: 'rgba(255, 255, 255, 0.85)',
                               fontSize: 10.5,
                               fontWeight: 600,
                               cursor: 'pointer',
                               transition: 'all 0.15s ease'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)'}
-                            onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)'}
                             title="Reset all tab shortcuts to defaults"
                           >
                             <RotateCcw size={11} />
@@ -8499,10 +9508,7 @@ export default function Island() {
                         )}
 
                         <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden',
+                          ...settingsGroupCardStyle,
                           display: 'flex',
                           flexDirection: 'column'
                         }}>
@@ -8520,7 +9526,7 @@ export default function Island() {
                                   justifyContent: 'space-between',
                                   padding: '6px 12px',
                                   borderBottom: i < TABS.length - 1 ? '1px solid rgba(255,255,255,0.06)' : 'none',
-                                  background: isRecording ? 'rgba(0, 112, 243, 0.12)' : 'transparent',
+                                  background: isRecording ? 'rgba(10, 132, 255, 0.14)' : 'transparent',
                                   transition: 'background 0.15s ease'
                                 }}
                               >
@@ -8529,14 +9535,16 @@ export default function Island() {
                                   <div style={{
                                     width: 24,
                                     height: 24,
-                                    borderRadius: 6,
-                                    background: 'rgba(255, 255, 255, 0.06)',
+                                    borderRadius: 7,
+                                    background: '#090a0f',
+                                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                                    boxShadow: 'inset 0 2px 5px rgba(0, 0, 0, 0.9)',
                                     display: 'flex',
                                     alignItems: 'center',
                                     justifyContent: 'center',
                                     flexShrink: 0
                                   }}>
-                                    {tab.icon("#0070f3")}
+                                    {tab.icon("#38bdf8")}
                                   </div>
                                   <span style={{
                                     fontSize: 12,
@@ -8560,8 +9568,8 @@ export default function Island() {
                                         fontSize: 10.5,
                                         fontWeight: 700,
                                         color: '#ffffff',
-                                        background: '#0070f3',
-                                        boxShadow: '0 0 10px rgba(0, 112, 243, 0.5)',
+                                        background: '#0a84ff',
+                                        boxShadow: '0 0 10px rgba(10, 132, 255, 0.5)',
                                         letterSpacing: '0.02em'
                                       }}>
                                         Press letter...
@@ -8598,14 +9606,13 @@ export default function Island() {
                                         alignItems: 'center',
                                         gap: 4,
                                         padding: '3px 7px',
-                                        background: currentShortcut ? 'rgba(255, 255, 255, 0.07)' : 'rgba(255, 255, 255, 0.03)',
+                                        background: '#090a0f',
                                         border: '1px solid rgba(255, 255, 255, 0.12)',
+                                        boxShadow: 'inset 0 2px 5px rgba(0, 0, 0, 0.9)',
                                         borderRadius: 6,
                                         cursor: 'pointer',
                                         transition: 'all 0.15s ease'
                                       }}
-                                      onMouseEnter={(e) => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.25)'}
-                                      onMouseLeave={(e) => e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.12)'}
                                       title="Click to customize shortcut"
                                     >
                                       {parts.length > 0 ? (
@@ -8618,7 +9625,7 @@ export default function Island() {
                                                 fontWeight: 700,
                                                 padding: '1px 5px',
                                                 borderRadius: 4,
-                                                background: p === 'Alt' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 112, 243, 0.25)',
+                                                background: p === 'Alt' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(10, 132, 255, 0.25)',
                                                 color: p === 'Alt' ? 'rgba(255, 255, 255, 0.85)' : '#60a5fa',
                                                 fontFamily: 'monospace',
                                                 letterSpacing: '0.04em'
@@ -8646,15 +9653,10 @@ export default function Island() {
                     {/* CATEGORY: FEATURES */}
                     {settingsTab === 'features' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#60a5fa', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                           Features & Alerts
                         </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden'
-                        }}>
+                        <div style={settingsGroupCardStyle}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Low Battery Alerts</span>
                             <AppleSwitch
@@ -8697,20 +9699,15 @@ export default function Island() {
                     {/* CATEGORY: WEATHER */}
                     {settingsTab === 'weather' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#60a5fa', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                           Weather Preferences
                         </div>
-                        <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden'
-                        }}>
+                        <div style={settingsGroupCardStyle}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
                             <span style={{ fontSize: 12, fontWeight: 500, color: textColor }}>Location</span>
                             <input
                               className="select-input"
-                              style={{ width: 140, padding: '3px 8px', fontSize: 11, background: 'rgba(255,255,255,0.08)', borderRadius: 6, color: textColor, border: '1px solid rgba(255,255,255,0.12)' }}
+                              style={{ ...settingsInputTroughStyle, width: 140 }}
                               placeholder="City, ST, Country"
                               value={weatherLocation}
                               onChange={(e) => {
@@ -8734,10 +9731,10 @@ export default function Island() {
                     {/* CATEGORY: UPDATES */}
                     {settingsTab === 'updates' && (
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 12, fontWeight: 700, color: '#ffffff', letterSpacing: '0.04em', textTransform: 'uppercase', opacity: 0.75 }}>
+                        <div style={{ fontSize: 11, fontWeight: 800, color: '#60a5fa', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
                           Software Updates
                         </div>
-                        <div className="settings-update-card" style={{ padding: '8px 10px', borderRadius: 12 }}>
+                        <div className="settings-update-card" style={{ ...settingsGroupCardStyle, padding: '8px 10px' }}>
                           <div className="settings-update-header">
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <span style={{ fontSize: 11.5, fontWeight: 600, color: textColor }}>Quick Pill v{appVersion}</span>
@@ -8848,10 +9845,7 @@ export default function Island() {
                         </div>
 
                         <div style={{
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                          borderRadius: 12,
-                          overflow: 'hidden',
+                          ...settingsGroupCardStyle,
                           display: 'flex',
                           flexDirection: 'column'
                         }}>

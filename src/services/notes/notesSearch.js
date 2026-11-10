@@ -352,6 +352,9 @@ function filterInbox(notes = [], options = {}) {
     case "pinned":
       candidates = candidates.filter((n) => !n.isArchived && Boolean(n.isPinned));
       break;
+    case "everything":
+    case "unfiltered":
+      break;
     case "recent":
     case "all":
     default:

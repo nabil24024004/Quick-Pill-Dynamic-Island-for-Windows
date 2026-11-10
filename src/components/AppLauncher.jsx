@@ -39,6 +39,7 @@ let _memoryWorkspacesCache = null;
 
 export default function AppLauncher({
   onClose,
+  isOpen = true,
   accentColor = "#0070f3",
   textColor = "#ffffff"
 }) {
@@ -140,6 +141,18 @@ export default function AppLauncher({
     }, 50);
   }, [loadData]);
 
+  // When launcher is opened or closed via Island mode
+  useEffect(() => {
+    if (isOpen) {
+      setTimeout(() => {
+        searchInputRef.current?.focus();
+      }, 50);
+    } else {
+      searchInputRef.current?.blur();
+      setQuery("");
+    }
+  }, [isOpen]);
+
   // Periodic refresh for running windows
   useEffect(() => {
     if (filter === "windows" && window.electronAPI?.launcher?.getRunningWindows) {
@@ -219,6 +232,9 @@ export default function AppLauncher({
     if (!app) return;
     try {
       showStatus(`Launching ${app.name}...`);
+      searchInputRef.current?.blur();
+      setQuery("");
+      if (onClose) onClose();
       if (window.electronAPI?.launcher?.launchApp) {
         const res = await window.electronAPI.launcher.launchApp(app.target || app.launch || app.name);
         if (res?.success) {
@@ -230,13 +246,16 @@ export default function AppLauncher({
     } catch (err) {
       showStatus(`Error launching: ${err.message}`, 4000);
     }
-  }, [showStatus]);
+  }, [showStatus, onClose]);
 
   // Activate running window
   const handleActivateWindow = useCallback(async (win) => {
     if (!win?.hWnd) return;
     try {
       showStatus(`Switching to ${win.title || win.processName}...`);
+      searchInputRef.current?.blur();
+      setQuery("");
+      if (onClose) onClose();
       if (window.electronAPI?.launcher?.activateWindow) {
         const res = await window.electronAPI.launcher.activateWindow(win.hWnd);
         if (res?.success) {
@@ -248,7 +267,7 @@ export default function AppLauncher({
     } catch (err) {
       showStatus(`Window activation error: ${err.message}`, 4500);
     }
-  }, [showStatus]);
+  }, [showStatus, onClose]);
 
   // Toggle favorite
   const handleToggleFavorite = useCallback(async (e, app) => {
@@ -421,6 +440,9 @@ export default function AppLauncher({
     const ws = launchPreviewModal;
     setLaunchPreviewModal(null);
     showStatus(`Launching profile for ${ws.name}...`);
+    searchInputRef.current?.blur();
+    setQuery("");
+    if (onClose) onClose();
 
     try {
       if (window.electronAPI?.workspaces?.launchWorkspace) {
@@ -434,7 +456,7 @@ export default function AppLauncher({
     } catch (err) {
       showStatus(`Launch profile error: ${err.message}`, 4000);
     }
-  }, [launchPreviewModal, showStatus]);
+  }, [launchPreviewModal, showStatus, onClose]);
 
   // Reindex catalog
   const handleReindex = useCallback(async () => {
@@ -479,6 +501,8 @@ export default function AppLauncher({
         } else {
           handleLaunchApp(item);
         }
+      } else if (query.trim()) {
+        handleLaunchApp({ name: query.trim(), target: query.trim() });
       }
     } else if (e.key === "Escape") {
       e.preventDefault();
@@ -502,6 +526,8 @@ export default function AppLauncher({
   const safeWorkspaces = Array.isArray(workspaces) ? workspaces : [];
   const activeWorkspace = safeWorkspaces.find(w => w?.id === activeWorkspaceId) || safeWorkspaces[0] || null;
 
+  const iosFontStack = '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Rounded", "OpenRunde", system-ui, sans-serif';
+
   return (
     <div
       style={{
@@ -513,173 +539,214 @@ export default function AppLauncher({
         justifyContent: "space-between",
         padding: "10px 16px",
         boxSizing: "border-box",
-        gap: 14,
+        gap: 12,
         userSelect: "none",
-        position: "relative"
+        position: "relative",
+        fontFamily: iosFontStack
       }}
       onKeyDown={handleKeyDown}
       onClick={() => setQuickAddMenu(null)}
     >
-      {/* LEFT COLUMN: Sidebar summary, active workspace & filter tabs */}
+      {/* LEFT COLUMN: 3D Beveled Launcher Console Pod & Filter Tabs */}
       <div
         className="launcher-scrollable"
         style={{
-          width: 195,
+          width: 192,
           height: "100%",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "flex-start",
-          gap: 6,
+          borderRadius: 16,
+          padding: 4,
+          background: "linear-gradient(145deg, #1d2734 0%, #10161e 55%, #080b10 100%)",
+          boxShadow: `
+            0 10px 22px rgba(0, 0, 0, 0.85),
+            inset 0 1.5px 2px rgba(255, 255, 255, 0.16),
+            inset 0 -2px 4px rgba(0, 0, 0, 0.9)
+          `,
           flexShrink: 0,
-          overflowY: "auto",
-          overflowX: "hidden",
-          paddingRight: 4,
-          boxSizing: "border-box"
+          boxSizing: "border-box",
+          display: "flex"
         }}
       >
-        {/* Top Header Card */}
         <div
+          className="launcher-scrollable"
+          data-scrollable="true"
           style={{
-            background: "rgba(255, 255, 255, 0.05)",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-            borderRadius: 12,
-            padding: "6px 8px",
+            width: "100%",
+            height: "100%",
+            borderRadius: 13,
+            background: "linear-gradient(180deg, #0d1118 0%, #080a0f 100%)",
+            boxShadow: "inset 0 4px 10px rgba(0, 0, 0, 0.92)",
+            padding: "6px 7px",
             display: "flex",
             flexDirection: "column",
-            gap: 4,
-            flexShrink: 0
+            justifyContent: "flex-start",
+            gap: 5,
+            overflowY: "auto",
+            overflowX: "hidden",
+            boxSizing: "border-box"
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <Compass size={14} color="#38bdf8" />
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#ffffff", letterSpacing: "0.4px", textTransform: "uppercase" }}>
-                Launcher
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleReindex}
-              disabled={isReindexing}
-              title="Re-index installed applications"
-              style={{
-                background: "transparent",
-                border: "none",
-                cursor: "pointer",
-                padding: "2px",
-                display: "flex",
-                alignItems: "center",
-                color: isReindexing ? "#38bdf8" : "rgba(255, 255, 255, 0.45)"
-              }}
-            >
-              <RefreshCw size={12} className={isReindexing ? "spin-anim" : ""} />
-            </button>
-          </div>
-
-          {/* Active Workspace Pill */}
-          {activeWorkspace && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                background: "rgba(0, 0, 0, 0.25)",
-                padding: "3px 6px",
-                borderRadius: 6,
-                fontSize: 10,
-                color: "rgba(255, 255, 255, 0.8)"
-              }}
-            >
-              <span
-                style={{
-                  width: 6,
-                  height: 6,
-                  borderRadius: "50%",
-                  background: activeWorkspace.color || "#38bdf8"
-                }}
-              />
-              <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {activeWorkspace.name}
-              </span>
-            </div>
-          )}
-
-          {/* Catalog & Window Counts */}
-          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9.5, color: "rgba(255, 255, 255, 0.45)", marginTop: 2 }}>
-            <span>{Array.isArray(catalog) ? catalog.length : 0} apps</span>
-            <span>{Array.isArray(runningWindows) ? runningWindows.length : 0} windows</span>
-          </div>
-        </div>
-
-        {/* Filter Navigation Buttons */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 3, flexShrink: 0 }}>
-          {[
-            { id: "all", label: "All Apps", count: Array.isArray(catalog) ? catalog.length : 0 },
-            { id: "favorites", label: "Favorites", count: Array.isArray(favorites) ? favorites.length : 0 },
-            { id: "windows", label: "Windows", count: Array.isArray(runningWindows) ? runningWindows.length : 0 },
-            { id: "workspaces", label: "Workspaces", count: Array.isArray(workspaces) ? workspaces.length : 0 }
-          ].map(btn => {
-            const isActive = filter === btn.id;
-            return (
+          {/* Top Header Card */}
+          <div
+            style={{
+              background: "linear-gradient(180deg, #151c27 0%, #0d121a 100%)",
+              border: "1px solid rgba(56, 189, 248, 0.22)",
+              boxShadow: "0 3px 8px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.12)",
+              borderRadius: 10,
+              padding: "5px 8px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 3,
+              flexShrink: 0
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <Compass size={13} color="#38bdf8" style={{ filter: "drop-shadow(0 0 6px rgba(56,189,248,0.45))" }} />
+                <span style={{ fontSize: 10.5, fontWeight: 800, color: "#38bdf8", letterSpacing: "0.5px", textTransform: "uppercase" }}>
+                  Launcher
+                </span>
+              </div>
               <button
-                key={btn.id}
                 type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setFilter(btn.id);
-                  setSelectedIndex(0);
-                  searchInputRef.current?.focus();
+                onClick={handleReindex}
+                disabled={isReindexing}
+                title="Re-index installed applications"
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  cursor: "pointer",
+                  padding: "2px",
+                  display: "flex",
+                  alignItems: "center",
+                  color: isReindexing ? "#38bdf8" : "rgba(255, 255, 255, 0.45)"
                 }}
+              >
+                <RefreshCw size={11} className={isReindexing ? "spin-anim" : ""} />
+              </button>
+            </div>
+
+            {/* Active Workspace Pill */}
+            {activeWorkspace && (
+              <div
                 style={{
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "4px 8px",
-                  borderRadius: 8,
-                  background: isActive ? "rgba(56, 189, 248, 0.16)" : "transparent",
-                  border: isActive ? "1px solid rgba(56, 189, 248, 0.3)" : "1px solid transparent",
-                  color: isActive ? "#38bdf8" : "rgba(255, 255, 255, 0.65)",
-                  fontSize: 11,
-                  fontWeight: isActive ? 700 : 500,
-                  cursor: "pointer",
-                  textAlign: "left",
-                  transition: "all 0.15s ease",
-                  fontFamily: "OpenRunde, system-ui, sans-serif"
+                  gap: 5,
+                  background: "#07090d",
+                  border: "1px solid rgba(255, 255, 255, 0.07)",
+                  boxShadow: "inset 0 2px 5px rgba(0, 0, 0, 0.9)",
+                  padding: "2.5px 6px",
+                  borderRadius: 6,
+                  fontSize: 9.5,
+                  color: "rgba(255, 255, 255, 0.85)"
                 }}
               >
-                <span>{btn.label}</span>
-                <span style={{ fontSize: 9.5, opacity: 0.6 }}>{btn.count}</span>
-              </button>
-            );
-          })}
+                <span
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: "50%",
+                    background: activeWorkspace.color || "#38bdf8",
+                    boxShadow: `0 0 6px ${activeWorkspace.color || "#38bdf8"}`
+                  }}
+                />
+                <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {activeWorkspace.name}
+                </span>
+              </div>
+            )}
+
+            {/* Catalog & Window Counts */}
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 9, color: "rgba(255, 255, 255, 0.48)" }}>
+              <span>{Array.isArray(catalog) ? catalog.length : 0} apps</span>
+              <span>{Array.isArray(runningWindows) ? runningWindows.length : 0} windows</span>
+            </div>
+          </div>
+
+          {/* Filter Navigation Buttons */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 2.5, flexShrink: 0 }}>
+            {[
+              { id: "all", label: "All Apps", count: Array.isArray(catalog) ? catalog.length : 0 },
+              { id: "favorites", label: "Favorites", count: Array.isArray(favorites) ? favorites.length : 0 },
+              { id: "windows", label: "Windows", count: Array.isArray(runningWindows) ? runningWindows.length : 0 },
+              { id: "workspaces", label: "Workspaces", count: Array.isArray(workspaces) ? workspaces.length : 0 }
+            ].map(btn => {
+              const isActive = filter === btn.id;
+              return (
+                <button
+                  key={btn.id}
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFilter(btn.id);
+                    setSelectedIndex(0);
+                    searchInputRef.current?.focus();
+                  }}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "4px 8px",
+                    borderRadius: 8,
+                    background: isActive
+                      ? "linear-gradient(180deg, #112d42 0%, #091824 100%)"
+                      : "transparent",
+                    border: isActive
+                      ? "1px solid rgba(56, 189, 248, 0.42)"
+                      : "1px solid transparent",
+                    boxShadow: isActive
+                      ? "0 3px 8px rgba(0, 0, 0, 0.75), inset 0 1px 1px rgba(255, 255, 255, 0.16)"
+                      : "none",
+                    color: isActive ? "#38bdf8" : "rgba(255, 255, 255, 0.62)",
+                    fontSize: 10.5,
+                    fontWeight: isActive ? 700 : 600,
+                    cursor: "pointer",
+                    textAlign: "left",
+                    transition: "all 0.15s ease",
+                    fontFamily: iosFontStack
+                  }}
+                >
+                  <span>{btn.label}</span>
+                  <span style={{ fontSize: 9, opacity: 0.7 }}>{btn.count}</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {/* RIGHT COLUMN: Search Header + Scrollable Results */}
+      {/* RIGHT COLUMN: Sunken Search Trough + Sunken Results Well */}
       <div
         style={{
           flex: 1,
           height: "100%",
+          borderRadius: 16,
+          padding: "7px 10px",
+          boxSizing: "border-box",
+          background: "linear-gradient(180deg, #090a0f 0%, #101219 100%)",
+          border: "1px solid rgba(56, 189, 248, 0.18)",
+          boxShadow: "inset 0 4px 12px rgba(0, 0, 0, 0.94), 0 4px 12px rgba(0, 0, 0, 0.6)",
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: 6,
           overflow: "hidden"
         }}
       >
-        {/* Search Header Bar */}
+        {/* Sunken Search Header Trough */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
             gap: 8,
-            background: "rgba(255, 255, 255, 0.06)",
-            border: "1px solid rgba(255, 255, 255, 0.12)",
+            background: "#06070b",
+            border: "1px solid rgba(56, 189, 248, 0.25)",
+            boxShadow: "inset 0 3px 8px rgba(0, 0, 0, 0.94), 0 1px 1px rgba(255, 255, 255, 0.05)",
             borderRadius: 10,
-            padding: "5px 10px",
+            padding: "4.5px 10px",
             boxSizing: "border-box"
           }}
         >
-          <Search size={14} color="rgba(255, 255, 255, 0.5)" />
+          <Search size={13} color="#38bdf8" />
           <input
             ref={searchInputRef}
             type="text"
@@ -698,15 +765,16 @@ export default function AppLauncher({
               border: "none",
               outline: "none",
               color: "#ffffff",
-              fontSize: 12,
-              fontFamily: "OpenRunde, system-ui, sans-serif"
+              fontSize: 11.5,
+              fontWeight: 500,
+              fontFamily: iosFontStack
             }}
           />
           {query && (
             <button
               type="button"
               onClick={() => { setQuery(""); searchInputRef.current?.focus(); }}
-              style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.4)", cursor: "pointer", padding: 0 }}
+              style={{ background: "transparent", border: "none", color: "rgba(255, 255, 255, 0.45)", cursor: "pointer", padding: 0 }}
             >
               <X size={13} />
             </button>
@@ -717,12 +785,13 @@ export default function AppLauncher({
               onClick={handleOpenCreateWorkspace}
               title="Create new workspace"
               style={{
-                background: "rgba(56, 189, 248, 0.2)",
-                border: "1px solid rgba(56, 189, 248, 0.4)",
-                borderRadius: 6,
+                background: "linear-gradient(180deg, #11324a 0%, #091b29 100%)",
+                border: "1px solid rgba(56, 189, 248, 0.45)",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.16)",
+                borderRadius: 7,
                 padding: "3px 8px",
                 color: "#38bdf8",
-                fontSize: 10.5,
+                fontSize: 10,
                 fontWeight: 700,
                 cursor: "pointer",
                 display: "flex",
@@ -741,13 +810,14 @@ export default function AppLauncher({
         <div
           ref={listContainerRef}
           className="launcher-scrollable"
+          data-scrollable="true"
           style={{
             flex: 1,
             overflowY: "auto",
             display: "flex",
             flexDirection: "column",
             gap: 4,
-            paddingRight: 4
+            paddingRight: 2
           }}
         >
           {displayedItems.length === 0 ? (
@@ -759,11 +829,11 @@ export default function AppLauncher({
                 alignItems: "center",
                 justifyContent: "center",
                 gap: 6,
-                color: "rgba(255, 255, 255, 0.4)",
+                color: "rgba(255, 255, 255, 0.42)",
                 fontSize: 11
               }}
             >
-              <Sparkles size={18} opacity={0.4} />
+              <Sparkles size={18} color="#38bdf8" opacity={0.45} />
               <span>
                 {query ? `No results for "${query}"` : filter === "favorites" ? "No pinned favorites yet" : "No items found"}
               </span>
@@ -790,22 +860,31 @@ export default function AppLauncher({
                     alignItems: "center",
                     justifyContent: "space-between",
                     padding: "5px 8px",
-                    borderRadius: 8,
-                    background: isSelected ? "rgba(255, 255, 255, 0.12)" : "rgba(255, 255, 255, 0.03)",
-                    border: isSelected ? "1px solid rgba(56, 189, 248, 0.35)" : "1px solid rgba(255, 255, 255, 0.05)",
+                    borderRadius: 10,
+                    background: isSelected
+                      ? "linear-gradient(180deg, #13283d 0%, #0b1826 100%)"
+                      : "linear-gradient(180deg, #161822 0%, #0e1017 100%)",
+                    border: isSelected
+                      ? "1px solid rgba(56, 189, 248, 0.45)"
+                      : "1px solid rgba(255, 255, 255, 0.07)",
+                    boxShadow: isSelected
+                      ? "0 4px 12px rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.16)"
+                      : "0 3px 8px rgba(0, 0, 0, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.08)",
                     cursor: "pointer",
                     transition: "all 0.12s ease"
                   }}
                 >
                   {/* Left: Icon + Titles */}
                   <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0, flex: 1 }}>
-                    {/* App or Window Icon */}
+                    {/* Sunken App or Window Icon Well */}
                     <div
                       style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 6,
-                        background: "rgba(0, 0, 0, 0.35)",
+                        width: 25,
+                        height: 25,
+                        borderRadius: 7,
+                        background: "#07090d",
+                        border: "1px solid rgba(255, 255, 255, 0.08)",
+                        boxShadow: "inset 0 2px 5px rgba(0, 0, 0, 0.9)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -821,11 +900,11 @@ export default function AppLauncher({
                           onError={(e) => { e.currentTarget.style.display = "none"; }}
                         />
                       ) : isWindowItem ? (
-                        <Monitor size={14} color="#38bdf8" />
+                        <Monitor size={13} color="#38bdf8" />
                       ) : isWorkspaceItem ? (
-                        <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color || "#38bdf8" }} />
+                        <span style={{ width: 10, height: 10, borderRadius: "50%", background: item.color || "#38bdf8", boxShadow: `0 0 6px ${item.color || "#38bdf8"}` }} />
                       ) : (
-                        <Compass size={14} color="rgba(255, 255, 255, 0.6)" />
+                        <Compass size={13} color="rgba(255, 255, 255, 0.6)" />
                       )}
                     </div>
 
@@ -846,7 +925,7 @@ export default function AppLauncher({
                       <span
                         style={{
                           fontSize: 9.5,
-                          color: "rgba(255, 255, 255, 0.4)",
+                          color: "rgba(255, 255, 255, 0.42)",
                           whiteSpace: "nowrap",
                           overflow: "hidden",
                           textOverflow: "ellipsis"
@@ -867,11 +946,12 @@ export default function AppLauncher({
                       <span
                         style={{
                           fontSize: 9.5,
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          background: "rgba(56, 189, 248, 0.2)",
+                          padding: "2px 7px",
+                          borderRadius: 6,
+                          background: "linear-gradient(180deg, #112d42 0%, #091824 100%)",
+                          border: "1px solid rgba(56, 189, 248, 0.38)",
                           color: "#38bdf8",
-                          fontWeight: 600
+                          fontWeight: 700
                         }}
                       >
                         Switch
@@ -883,8 +963,9 @@ export default function AppLauncher({
                             style={{
                               fontSize: 9,
                               padding: "2px 5px",
-                              borderRadius: 4,
-                              background: "rgba(56, 189, 248, 0.2)",
+                              borderRadius: 5,
+                              background: "rgba(56, 189, 248, 0.18)",
+                              border: "1px solid rgba(56, 189, 248, 0.35)",
                               color: "#38bdf8",
                               fontWeight: 700
                             }}
@@ -897,10 +978,11 @@ export default function AppLauncher({
                           onClick={(e) => handlePromptLaunchWorkspace(e, item)}
                           title="Launch all apps in this workspace"
                           style={{
-                            background: "rgba(56, 189, 248, 0.2)",
-                            border: "none",
-                            borderRadius: 4,
-                            padding: "2px 6px",
+                            background: "linear-gradient(180deg, #112d42 0%, #091824 100%)",
+                            border: "1px solid rgba(56, 189, 248, 0.4)",
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.7), inset 0 1px 1px rgba(255,255,255,0.14)",
+                            borderRadius: 6,
+                            padding: "2.5px 7px",
                             color: "#38bdf8",
                             fontSize: 9.5,
                             fontWeight: 700,
@@ -919,8 +1001,8 @@ export default function AppLauncher({
                           title="Configure / Edit workspace"
                           style={{
                             background: "rgba(255, 255, 255, 0.08)",
-                            border: "none",
-                            borderRadius: 4,
+                            border: "1px solid rgba(255, 255, 255, 0.1)",
+                            borderRadius: 5,
                             padding: "3px 5px",
                             color: "rgba(255, 255, 255, 0.7)",
                             cursor: "pointer",
@@ -943,7 +1025,7 @@ export default function AppLauncher({
                               border: "none",
                               borderRadius: 4,
                               padding: "3px 4px",
-                              color: "rgba(239, 68, 68, 0.6)",
+                              color: "rgba(239, 68, 68, 0.65)",
                               cursor: "pointer",
                               display: "flex",
                               alignItems: "center"
@@ -981,8 +1063,8 @@ export default function AppLauncher({
                               position: "absolute",
                               top: 24,
                               right: 0,
-                              background: "#0f172a",
-                              border: "1px solid rgba(255, 255, 255, 0.15)",
+                              background: "#0d111a",
+                              border: "1px solid rgba(56, 189, 248, 0.25)",
                               borderRadius: 8,
                               padding: 4,
                               display: "flex",
@@ -990,10 +1072,10 @@ export default function AppLauncher({
                               gap: 2,
                               minWidth: 140,
                               zIndex: 50,
-                              boxShadow: "0 8px 20px rgba(0,0,0,0.7)"
+                              boxShadow: "0 8px 20px rgba(0,0,0,0.85)"
                             }}
                           >
-                            <span style={{ fontSize: 9, color: "rgba(255, 255, 255, 0.4)", padding: "3px 6px", fontWeight: 700, textTransform: "uppercase" }}>
+                            <span style={{ fontSize: 9, color: "rgba(255, 255, 255, 0.45)", padding: "3px 6px", fontWeight: 700, textTransform: "uppercase" }}>
                               Add to Workspace
                             </span>
                             {workspaces.map(ws => (
@@ -1034,7 +1116,7 @@ export default function AppLauncher({
                             padding: "3px",
                             display: "flex",
                             alignItems: "center",
-                            color: isFav ? "#eab308" : "rgba(255, 255, 255, 0.25)"
+                            color: isFav ? "#eab308" : "rgba(255, 255, 255, 0.28)"
                           }}
                         >
                           <Star size={13} fill={isFav ? "#eab308" : "none"} />

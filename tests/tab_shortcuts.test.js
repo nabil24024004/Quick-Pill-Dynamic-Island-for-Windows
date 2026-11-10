@@ -8,9 +8,7 @@ const DEFAULT_TAB_SHORTCUTS = {
   0: "Alt+B",   // Browser Search
   1: "Alt+W",   // Weather
   2: "Alt+O",   // Overview
-  11: "Alt+H",  // Battery Hub
   12: "Alt+A",  // Audio Mixer
-  13: "Alt+P",  // Progress Island
   14: "Alt+L",  // App Launcher
   15: "Alt+Q",  // Quick Notes
   3: "Alt+M",   // Now Playing
@@ -20,6 +18,8 @@ const DEFAULT_TAB_SHORTCUTS = {
   7: "Alt+V",   // Clipboard
   8: "Alt+T",   // Tasks
   10: "Alt+R",  // Timer
+  16: "Alt+F",  // Shelf
+  17: "Alt+P",  // Prayer
   9: "Alt+S"    // Settings
 };
 
@@ -43,7 +43,7 @@ function sanitizeShortcuts(newShortcuts) {
 }
 
 test("Tab Shortcuts - Default Definition contains all 16 Quick Pill tabs", () => {
-  const expectedTabIds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+  const expectedTabIds = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 15, 16, 17];
   assert.equal(Object.keys(DEFAULT_TAB_SHORTCUTS).length, 16);
   for (const id of expectedTabIds) {
     assert.ok(
@@ -93,9 +93,7 @@ test("Tab Shortcuts - First-letter mnemonic verification", () => {
   assert.equal(DEFAULT_TAB_SHORTCUTS[0], "Alt+B");  // Browser Search
   assert.equal(DEFAULT_TAB_SHORTCUTS[1], "Alt+W");  // Weather
   assert.equal(DEFAULT_TAB_SHORTCUTS[2], "Alt+O");  // Overview
-  assert.equal(DEFAULT_TAB_SHORTCUTS[11], "Alt+H"); // Battery Hub
   assert.equal(DEFAULT_TAB_SHORTCUTS[12], "Alt+A"); // Audio Mixer
-  assert.equal(DEFAULT_TAB_SHORTCUTS[13], "Alt+P"); // Progress Island
   assert.equal(DEFAULT_TAB_SHORTCUTS[14], "Alt+L"); // App Launcher
   assert.equal(DEFAULT_TAB_SHORTCUTS[15], "Alt+Q"); // Quick Notes
   assert.equal(DEFAULT_TAB_SHORTCUTS[3], "Alt+M");  // Music / Now Playing
@@ -105,6 +103,8 @@ test("Tab Shortcuts - First-letter mnemonic verification", () => {
   assert.equal(DEFAULT_TAB_SHORTCUTS[7], "Alt+V");  // Clipboard (Paste mnemonic)
   assert.equal(DEFAULT_TAB_SHORTCUTS[8], "Alt+T");  // Tasks
   assert.equal(DEFAULT_TAB_SHORTCUTS[10], "Alt+R"); // Timer / Reminders
+  assert.equal(DEFAULT_TAB_SHORTCUTS[16], "Alt+F"); // Shelf / Files
+  assert.equal(DEFAULT_TAB_SHORTCUTS[17], "Alt+P"); // Prayer
   assert.equal(DEFAULT_TAB_SHORTCUTS[9], "Alt+S");  // Settings
 });
 
