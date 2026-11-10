@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 350 96" width="350" height="96" fill="none">
+  <defs>
+    <linearGradient id="btnGradient" x1="0" y1="0" x2="0" y2="96" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0082ea"/>
+      <stop offset="100%" stop-color="#0067c2"/>
+    </linearGradient>
+    <filter id="btnShadow" x="-10" y="-8" width="370" height="116" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#0078d4" flood-opacity="0.32"/>
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-color="#000000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- Button Pill Shape -->
+  <rect x="4" y="4" width="342" height="88" rx="26" fill="url(#btnGradient)" filter="url(#btnShadow)"/>
+  <rect x="4.5" y="4.5" width="341" height="87" rx="25.5" stroke="#ffffff" stroke-opacity="0.25" stroke-width="1.2"/>
+
+  <!-- Windows Logo Icon -->
+  <g transform="translate(32, 31)">
+    <!-- Top Left Tile -->
+    <rect x="0" y="0" width="15.5" height="15.5" rx="1.5" fill="#ffffff"/>
+    <!-- Top Right Tile -->
+    <rect x="18.5" y="0" width="15.5" height="15.5" rx="1.5" fill="#ffffff"/>
+    <!-- Bottom Left Tile -->
+    <rect x="0" y="18.5" width="15.5" height="18.5" rx="1.5" fill="#ffffff"/>
+    <!-- Bottom Right Tile -->
+    <rect x="18.5" y="18.5" width="15.5" height="18.5" rx="1.5" fill="#ffffff"/>
+  </g>
+
+  <!-- Typography -->
+  <g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif">
+    <!-- Subtitle: DOWNLOAD FOR -->
+    <text x="82" y="41" fill="#d2e8ff" font-size="11.5" font-weight="700" letter-spacing="1.4">DOWNLOAD FOR</text>
+    <!-- Main Title: Desktop Setup (v5.6.0) -->
+    <text x="82" y="68" fill="#ffffff" font-size="20.5" font-weight="800" letter-spacing="-0.3">Desktop Setup (v5.6.0)</text>
+  </g>
+</svg>

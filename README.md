@@ -1,154 +1,211 @@
-# Quick Pill
-
-**Dynamic Island, but for everyone**
-
-Quick Pill is a desktop application that recreates Apple's Dynamic Island experience on Windows. It's a notification hub, widget system, and smart assistant that stays out of your way until you need it.
-
 <div align="center">
 
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-5.6.0-blue)](package.json)
+  <img src="assets/logo.png" alt="Quick Pill Logo" width="88" height="88" style="border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.4);" />
 
-https://github.com/user-attachments/assets/bd057d18-f65e-4cf4-bf66-a5d107f18658
+  # Quick Pill
+  ### The Next-Generation Dynamic Island for Windows 10 & 11
 
+  <p align="center">
+    <strong>A fluid, context-aware notch engineered for power users, creators, and multitaskers.</strong><br />
+    Seamless notifications, audio mixer, persistent file shelf, prayer times, instant search, and smart widgets — always at your fingertips, never in your way.
+  </p>
 
+  <!-- Primary Download CTA Button (Image 1 Style) -->
+  <p align="center">
+    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.0-Setup.exe">
+      <img src="assets/download-button.svg" alt="Download for Desktop Setup (v5.6.0)" width="280" />
+    </a>
+  </p>
+
+  <p align="center">
+    <a href="https://quickpill.neosparkx.com/"><strong>🌐 Official Website</strong></a> • 
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><strong>📦 GitHub Releases</strong></a> • 
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/issues"><strong>🐛 Report Bug</strong></a>
+  </p>
+
+  <!-- Status & Action Badges (Image 2 Style - for-the-badge) -->
+  <p align="center">
+    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.0-Setup.exe"><img src="https://img.shields.io/badge/DESKTOP_APP-DOWNLOAD_NOW-0078D7?style=for-the-badge&logo=windows&logoColor=white" alt="Desktop App Download Now" /></a>
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><img src="https://img.shields.io/badge/RELEASE-V5.6.0-0078D7?style=for-the-badge&logo=github&logoColor=white" alt="Release v5.6.0" /></a>
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/pulls"><img src="https://img.shields.io/badge/PRS-WELCOME-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="PRs Welcome" /></a>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-f08236?style=for-the-badge" alt="MIT License" /></a>
+  </p>
+
+  <!-- Tech Stack Badges (Image 2 Style - for-the-badge) -->
+  <p align="center">
+    <a href="https://electronjs.org"><img src="https://img.shields.io/badge/Desktop-Electron_38_+_React_19-2B2E3A?style=for-the-badge&logo=electron&logoColor=9FEAF9" alt="Electron + React 19" /></a>
+    <a href="https://www.framer.com/motion/"><img src="https://img.shields.io/badge/Motion-Framer_Motion_12-7928CA?style=for-the-badge&logo=framer&logoColor=white" alt="Framer Motion 12" /></a>
+    <a href="https://learn.microsoft.com/en-us/windows/win32/coreaudio/wasapi"><img src="https://img.shields.io/badge/Audio-Win32_WASAPI_+_C%23-22c55e?style=for-the-badge&logo=windows&logoColor=white" alt="WASAPI Audio" /></a>
+    <img src="https://img.shields.io/badge/Platform-Windows_10_%2F_11-00A4EF?style=for-the-badge&logo=windows&logoColor=white" alt="Windows 10 / 11" />
+    <img src="https://img.shields.io/badge/Arch-x64-475569?style=for-the-badge" alt="x64 Architecture" />
+  </p>
+
+  <!-- Product Preview Video -->
+  https://github.com/user-attachments/assets/bd057d18-f65e-4cf4-bf66-a5d107f18658
 
 </div>
 
 ---
 
-## Features
+## 🌟 What's New in v5.6.0
 
-### Core Functionality
-- **Persistent Always-On-Top** — Elevated screen-saver priority that retains focus across multi-window switching and full-screen apps
-- **Multi-Monitor & Desktop Support** — Island syncs seamlessly across all desktops and monitors
-- **Dynamic Stadium Pill Physics** — Smooth Framer Motion spring morphing (`stiffness: 340, damping: 28`) between Still (semicircular 20px pill) and Large modes (32px pill) with boundary-confined page transitions
-- **Media Controls & Clean Titles** — Now playing preview with clean app naming (Spotify/Apple Music) and un-cropped marquee titles
-- **Quick App Launcher & Workspace Switcher (Tab 14)** — Search and launch installed Windows applications with real icons, switch running application windows with native Win32 window restoration, pin favorites, and switch contextual productivity workspaces with launch profiles and preview safety
-- **Quick Notes & Contextual Capture (Tab 15)** — Instant quick-capture composer with debounced autosave and crash recovery, searchable notes inbox with tags and filters, contextual clipboard capture with large-content guard, and non-destructive note-to-task conversion
-- **Per-App Audio Mixer (Tab 12)** — Native Windows Core Audio WASAPI mixer to control individual application volume levels, mute/unmute apps, inspect real-time peak audio indicators, and select active audio endpoints
-- **Universal Progress Island (Tab 13)** — Intelligent background operations consolidation layer tracking file copying/hashing, download tasks, and app update progress directly in the Dynamic Island
-- **Customizable Themes** — Multiple themes including Win95, SleekBlack, and custom RGB colors
-- **Quick Apps** — One-click access to 4 apps of your choice
-- **Keyboard Shortcuts** — Quick navigation with `Ctrl + [Number]` shortcuts
-
-### Information & Alerts
-- **Smart Notification Actions (Tab 5)** — Real app icons, WhatsApp/VoIP call cards with answer/dismiss actions, inline replies, local snooze presets (5m, 15m, 30m, 1h), grouped multi-message stacks, low-priority collapsing, privacy preview masking, and dismissal undo buffer
-- **Apple Battery Hub (Tab 11)** — Dynamic Island battery dashboard with 60 FPS right-to-left fluid liquid wave canvas engine, buoyant micro-bubbles, discharge drain metrics, and duration estimation
-- **Weather Display (Tab 1)** — Real-time weather information & forecasts
-- **Battery Alerts** — Charging status and low battery notifications
-- **Hardware & System Alerts** — Real-time CPU/RAM stats, USB connection alerts, Bluetooth, and Keyboard lock (Caps/Num/Scroll) indicators
-
-### Smart Features & Productivity
-- **Lock-Screen & Background Timers (Tab 10)** — Wall-clock synchronized countdown timers that continue without pausing when Windows locks or goes to sleep
-- **Silent Background Updates** — Automatically detects, downloads, and silently installs updates via NSIS with configurable settings
-- **Minimalist Tasks Manager (Tab 8)** — Apple / Things 3 style task list with circular check buttons, smooth scrolling, and single-capsule input bar
-- **Timer & Presets (Tab 10)** — Quick preset timer chips (15m, 30m, 60m, 100m) and custom time picker
-- **Browser Search (Tab 0)** — Instant web search integration
-- **Clipboard Manager (Tab 7)** — Access and manage your copied text snippets
-- **Compact Calendar (Tab 4)** — Monthly interactive calendar with zero-margin height optimization
+<table>
+  <tr>
+    <td width="50%">
+      <h3>📁 Drop Shelf (Tab 16 • <code>Alt+F</code>)</h3>
+      <p>A persistent session staging stash at the top of your screen. Drop any files or folders from Windows Explorer straight into the notch. Items remain accessible until system restart — drag them out to copy anywhere or click to launch instantly.</p>
+    </td>
+    <td width="50%">
+      <h3>🕌 Prayer Times & Celestial Arc (Tab 17 • <code>Alt+P</code>)</h3>
+      <p>Location-synchronized Islamic prayer schedules with offline astronomical calculation fallback. Features a live celestial sun arc, next-prayer hero countdown, and a tranquil collapsed azan notification banner with custom chime.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <h3>⛅ Weather Pod Redesign (Tab 1 • <code>Alt+W</code>)</h3>
+      <p>Refined 3D glassmorphic weather cards with dynamic <strong>Day (#FFD801)</strong> and <strong>Night (#061E40)</strong> accent colorways, 7-day extended forecasts, humidity, wind, and sunrise/sunset metrics.</p>
+    </td>
+    <td width="50%">
+      <h3>🔍 Search Command Bar (Tab 0 • <code>Alt+B</code>)</h3>
+      <p>Supercharged universal search with Google Red accents, instant query completion, and one-click quick switches for <strong>Google, YouTube, GitHub, ChatGPT, and Claude</strong>.</p>
+    </td>
+  </tr>
+</table>
 
 ---
 
-## Quick Start
+## ⚡ Core Highlights
 
-### Installation
+### 🎛️ Per-App Audio Mixer (Tab 12 • `Alt+A`)
+Control audio volume per application directly from the Dynamic Island. Built on native Windows Core Audio (WASAPI) with live audio peak indicators, device selectors, and instant mute toggles.
 
-Download the latest release for your platform:
-- **Windows**: `.exe` installer
+### 🚀 App Launcher & Workspace Hub (Tab 14 • `Alt+L`)
+Search and launch installed Windows applications with authentic system icons. Switch running application windows seamlessly, pin favorites, and trigger multi-app workspace launch profiles with automatic smart-collapse when you're done.
 
-**[Download Latest Release](https://quickpill.neosparkx.com/)**
+### 📝 Quick Notes & Contextual Capture (Tab 15 • `Alt+Q`)
+Floating instant-scratchpad with debounced autosave, crash recovery, tags, and search. Convert any note into a prioritized task with a single click.
 
-### First Run
-1. Install and launch Quick Pill
-2. The Island will appear on your screen
-3. **Click** the Island to open Large Mode
-4. **Hover** over it to see Quick Mode
-5. Visit **Settings** (last tab) to customize everything
+### 🔔 Smart Notification Center (Tab 5 • `Alt+N`)
+Rich notification hub featuring VoIP incoming call cards (WhatsApp/Slack/Teams), inline quick-replies, smart snooze presets (5m, 15m, 30m, 1h), grouped multi-message stacks, and privacy preview masking.
 
----
+### 🔋 Apple Liquid Battery Hub (Tab 11)
+Dynamic battery telemetry rendered by a 60 FPS fluid liquid wave canvas engine with discharge rate metrics, buoyant micro-bubbles, and remaining endurance estimation.
 
-## How to Use
-
-### The Three Modes
-
-**Still Mode** — The default idle state
-- Compact display
-- Minimal visual footprint
-- Ready to expand on interaction
-
-**Quick Mode** — Hover over the Island
-- See current time, weather, and battery status
-- If music is playing, view now-playing info
-- Hover playback controls for music
-
-**Large Mode** — Click the Island
-- Full interface with all tabs
-- Switch tabs with arrow keys or mouse scroll
-- Access all features and settings
-- Default view for focused work
-
-### Using Tabs
-- **Arrow Keys** — Navigate between tabs
-- **Mouse Wheel** — Scroll horizontally between tabs
-- **Ctrl + Number** — Jump to a specific tab
-
+### 🛡️ Screen-Saver Priority & Ctrl Click-Through
+Quick Pill runs at Windows `screen-saver` topmost priority (`setAlwaysOnTop(true, 'screen-saver')`), ensuring it stays visible above full-screen games and apps. Need to click something behind it? **Simply hold `Ctrl`** while hovering to pass mouse clicks directly through the Island!
 
 ---
 
-## Build & Development
+## 🕹️ The Three Interaction Modes
+
+```mermaid
+flowchart LR
+    A["🟢 Still Mode\n(Idle 20px Top Pill)"] -->|Hover| B["🟡 Quick Mode\n(Glanceable HUD)"]
+    A -->|Click or Alt+Key| C["🔵 Large Mode\n(Full Workspace)"]
+    B -->|Click| C
+    C -->|Click Outside / Blur| A
+```
+
+- **🟢 Still Mode** — Minimal semicircular notch resting flush at the screen bezel with near-zero resource consumption.
+- **🟡 Quick Mode** — Hover over the notch to view glanceable time, weather, active music track info, or battery status.
+- **🔵 Large Mode** — Click or use `Alt + Key` to expand into the full stadium dashboard with tab carousel, detailed metrics, and interactive controls.
+
+---
+
+## ⌨️ Instant Tab Shortcuts (`Alt + <Key>`)
+
+Quick Pill features zero-latency global keyboard navigation. All shortcuts use `Alt + <Key>` to preserve `Ctrl` exclusively for the instant click-through engine.
+
+| Tab | Name | Default Shortcut | Action & Description |
+|:---:|:---|:---:|:---|
+| **0** | **Browser Search** | `Alt + B` | Quick web search with Google, Claude, ChatGPT, GitHub & YouTube |
+| **1** | **Weather Pod** | `Alt + W` | Real-time weather, 7-day forecast & dynamic day/night themes |
+| **2** | **Overview** | `Alt + O` | System dashboard with time, date, weather & daily quote |
+| **3** | **Now Playing** | `Alt + M` | Live music controls with marquee titles & album art |
+| **4** | **Calendar** | `Alt + C` | Interactive monthly calendar with today highlight |
+| **5** | **Notifications** | `Alt + N` | Notification center with VoIP cards, snooze & inline replies |
+| **6** | **System Stats** | `Alt + G` | Real-time CPU, RAM & system resource telemetry |
+| **7** | **Clipboard** | `Alt + V` | Copied text history with one-click copy & deletion |
+| **8** | **Tasks** | `Alt + T` | Minimalist Things-style to-do list with circular checkboxes |
+| **9** | **Settings** | `Alt + S` | Personalization, tab ordering, themes & update preferences |
+| **10** | **Timer** | `Alt + R` | Lock-screen & sleep-persistent countdown timers with sound alarm |
+| **12** | **Audio Mixer** | `Alt + A` | WASAPI per-app volume sliders, mute toggles & device selector |
+| **14** | **App Launcher** | `Alt + L` | Quick app launcher, window switcher & workspace presets |
+| **15** | **Quick Notes** | `Alt + Q` | Markdown notes scratchpad with note-to-task conversion |
+| **16** | **Drop Shelf** | `Alt + F` | Persistent drag-and-drop file staging area until PC restart |
+| **17** | **Prayer Times** | `Alt + P` | City-synced prayer timings, celestial sun arc & azan chime |
+
+> **Tip:** You can customize or re-record any shortcut in **Settings → Shortcuts**.
+
+---
+
+## 📥 Installation
+
+### Option 1: Automatic Installer (Recommended)
+1. Download **[QuickPill-Windows-v5.6.0-Setup.exe](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.0-Setup.exe)**.
+2. Run the installer. Quick Pill installs silently and automatically launches.
+3. Silent auto-updates will keep your installation fresh with zero disruption.
+
+### Option 2: Portable / Manual
+Download the unpacked zip or setup from the **[GitHub Releases](https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases)** page.
+
+---
+
+## 🛠️ Technology Stack
+
+```
+Frontend:     React 19 • Framer Motion 12 • Lucide React • Vite 6
+Desktop:      Electron 38 • Node.js 22 • Win32 Shell API
+Native Audio: Windows Core Audio (WASAPI) • C# PowerShell Bridge
+Packaging:    Electron Forge • Electron Builder • NSIS Installer
+Platform:     Windows 10 & 11 (x64)
+```
+
+---
+
+## 💻 Local Development
 
 ### Prerequisites
-- **Node.js** 16+ and npm
-- Platform-specific build tools:
-  - **Windows**: Visual Studio Build Tools
+- [Node.js](https://nodejs.org/) (v18.0 or newer)
+- npm (v9.0 or newer)
+- Windows 10 or 11 with PowerShell 5.1+
 
-### Development Setup
+### Clone & Run
 
 ```bash
 # Clone the repository
-git clone https://github.com/Abrar Nabil/Quick-Pill.git
-cd Quick-Pill
+git clone https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows.git
+cd Quick-Pill-Dynamic-Island-for-Windows
 
 # Install dependencies
 npm install
 
-# Start development server
+# Start Vite dev server + Electron with hot-reload
 npm start
 ```
 
-The development server will launch Quick Pill with hot reload enabled. Press `Ctrl+R` to refresh the app.
+### Production Build
 
-#### Build for Current OS
 ```bash
-npm run make
-```
+# Run test suite
+npm test
 
-#### Build for Specific Platforms
-
-**Windows (x64)**
-```bash
-npm run make -- --platform=win32 --arch=x64
+# Build Vite renderer, pack services, and generate NSIS installer
+npm run build
 ```
 
 ---
 
-## Contributing
+## 👥 Authors & Team
 
-We welcome contributions!:
-- Bug reports and fixes
-- New features and improvements
-- Documentation updates
-- Theme designs
-- Ideas and suggestions
+Quick Pill is designed and actively developed by **Sheikh Azwad Abrar Nabil ("Abrar")** and the **[NeosparkX](https://github.com/nabil24024004)** team in Bangladesh.
 
-Please check [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+- **Founder & Lead Developer:** [Sheikh Azwad Abrar Nabil](https://github.com/nabil24024004)
+- **Agency:** NeosparkX — AI applications, full-stack desktop & web, and intuitive UI/UX design.
 
 ---
 
-## License
+## 📄 License
 
-Quick Pill is open source and available under the [MIT License](LICENSE).
-
----
-
+Quick Pill is open-source software licensed under the **[MIT License](LICENSE)**.
+Feel free to star ⭐ the repository and join us in shaping the desktop experience!
