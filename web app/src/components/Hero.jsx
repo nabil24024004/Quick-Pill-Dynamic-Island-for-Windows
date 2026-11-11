@@ -65,12 +65,12 @@ export default function Hero({ onDownloadClick }) {
 
         <h1 className="hero-headline" ref={headlineRef}>
           <span className="hero-line">
-            {'Your Desktop,'.split(' ').map((w, i) => (
+            {'Your Desktop'.split(' ').map((w, i) => (
               <span key={i} className="word">{w}&nbsp;</span>
             ))}
           </span>
           <span className="hero-line hero-line--italic">
-            {'Reimagined.'.split(' ').map((w, i) => (
+            {'Reimagined'.split(' ').map((w, i) => (
               <span key={i} className="word">{w}</span>
             ))}
           </span>
