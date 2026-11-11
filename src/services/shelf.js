@@ -104,6 +104,8 @@ function createShelfEngine(options = {}) {
   const app = options.app || null;
   const shell = options.shell || null;
   const nativeImage = options.nativeImage || null;
+  const renderPdfThumbnail = options.renderPdfThumbnail || null;
+  const onItemsChange = options.onItemsChange || null;
   const tempDir = options.tempDir || path.join(os.tmpdir(), "quick-pill-shelf");
 
   // Ensure staging directory exists
@@ -193,6 +195,28 @@ function createShelfEngine(options = {}) {
           } catch (_) {}
         }
 
+        // Generate rich visual preview thumbnails for images
+        let thumbnailDataUrl = null;
+        const imageExtensions = ["png", "jpg", "jpeg", "webp", "gif", "bmp", "ico", "avif"];
+        if (imageExtensions.includes(ext) && !isFolder) {
+          if (nativeImage && typeof nativeImage.createFromPath === "function") {
+            try {
+              const img = nativeImage.createFromPath(stagedPath);
+              if (img && typeof img.isEmpty === "function" && !img.isEmpty()) {
+                const thumb = img.resize({ width: 120, height: 120, quality: "good" });
+                thumbnailDataUrl = thumb.toDataURL();
+              }
+            } catch (_) {}
+          }
+        } else if (ext === "svg" && !isFolder) {
+          try {
+            const svgContent = fs.readFileSync(stagedPath, "utf8");
+            if (svgContent && svgContent.includes("<svg")) {
+              thumbnailDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svgContent)}`;
+            }
+          } catch (_) {}
+        }
+
         const newItem = {
           id: uniqueId,
           name: baseName,
@@ -203,11 +227,27 @@ function createShelfEngine(options = {}) {
           ext,
           isFolder,
           iconDataUrl,
+          thumbnailDataUrl,
           addedAt: Date.now()
         };
 
         // Add to front of shelf (most recent first)
         items.unshift(newItem);
+
+        // For PDFs, asynchronously generate document cover thumbnail via Chromium
+        if (ext === "pdf" && !isFolder && typeof renderPdfThumbnail === "function") {
+          renderPdfThumbnail(stagedPath).then((pdfThumbUrl) => {
+            if (pdfThumbUrl) {
+              const targetItem = items.find((it) => it.id === uniqueId);
+              if (targetItem) {
+                targetItem.thumbnailDataUrl = pdfThumbUrl;
+                if (typeof onItemsChange === "function") {
+                  onItemsChange(getItems());
+                }
+              }
+            }
+          }).catch(() => {});
+        }
       } catch (err) {
         console.error(`[ShelfEngine] Failed to add file "${rawPath}":`, err);
       }
@@ -309,12 +349,13 @@ function createShelfEngine(options = {}) {
 
     let dragIcon = null;
 
-    // 1. Prefer cached iconDataUrl synchronously so startDrag runs on the same tick
-    if (found && found.iconDataUrl && nativeImage && typeof nativeImage.createFromDataURL === "function") {
+    // 1. Prefer cached thumbnailDataUrl or iconDataUrl synchronously so startDrag runs on the same tick
+    const iconSource = (found && (found.thumbnailDataUrl || found.iconDataUrl)) || null;
+    if (iconSource && nativeImage && typeof nativeImage.createFromDataURL === "function") {
       try {
-        const cachedImg = nativeImage.createFromDataURL(found.iconDataUrl);
+        const cachedImg = nativeImage.createFromDataURL(iconSource);
         if (cachedImg && (typeof cachedImg.isEmpty !== "function" || !cachedImg.isEmpty())) {
-          dragIcon = cachedImg;
+          dragIcon = cachedImg.resize ? cachedImg.resize({ width: 48, height: 48, quality: "good" }) : cachedImg;
         }
       } catch (_) {}
     }

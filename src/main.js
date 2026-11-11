@@ -907,13 +907,74 @@ ipcMain.handle("notes:convert-to-task", async (event, noteOrId) => {
 // ==========================================
 // Quick Pill Drop Shelf Engine & IPC Handlers
 // ==========================================
+async function renderPdfThumbnail(pdfPath) {
+  if (!pdfPath || !fs.existsSync(pdfPath)) return null;
+  return new Promise((resolve) => {
+    let win = null;
+    let finished = false;
+
+    const cleanup = (val) => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      if (win && !win.isDestroyed()) {
+        try { win.destroy(); } catch (_) {}
+      }
+      resolve(val);
+    };
+
+    const timer = setTimeout(() => cleanup(null), 4500);
+
+    try {
+      win = new BrowserWindow({
+        show: false,
+        width: 200,
+        height: 260,
+        frame: false,
+        transparent: true,
+        webPreferences: {
+          offscreen: false,
+          plugins: true,
+          nodeIntegration: false,
+          contextIsolation: true
+        }
+      });
+
+      win.webContents.on("did-finish-load", () => {
+        setTimeout(async () => {
+          if (finished || !win || win.isDestroyed()) return;
+          try {
+            const img = await win.webContents.capturePage();
+            if (img && !img.isEmpty()) {
+              const resized = img.resize({ width: 120, height: 150, quality: "good" });
+              return cleanup(resized.toDataURL());
+            }
+          } catch (_) {}
+          cleanup(null);
+        }, 400);
+      });
+
+      win.webContents.on("did-fail-load", () => cleanup(null));
+      win.loadFile(pdfPath).catch(() => cleanup(null));
+    } catch (_) {
+      cleanup(null);
+    }
+  });
+}
+
 let shelfEngineInstance = null;
 function getShelfEngine() {
   if (!shelfEngineInstance) {
     shelfEngineInstance = createShelfEngine({
       app,
       shell,
-      nativeImage
+      nativeImage,
+      renderPdfThumbnail,
+      onItemsChange: (items) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send("shelf:update", items);
+        }
+      }
     });
   }
   return shelfEngineInstance;

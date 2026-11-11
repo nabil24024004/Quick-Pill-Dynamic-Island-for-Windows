@@ -3180,6 +3180,19 @@ export default function Island() {
   const handleWheelSwipe = (e) => {
     if (wheelLockout.current || isDragging) return;
 
+    // Check if pointer is inside a horizontally scrollable container (e.g. .shelf-scrollable)
+    const hScrollable = e.target?.closest?.(".shelf-scrollable, [data-horizontal-scrollable='true']");
+    if (hScrollable) {
+      const canScrollH = hScrollable.scrollWidth > hScrollable.clientWidth + 2;
+      if (canScrollH) {
+        const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+        if (Math.abs(delta) > 0) {
+          hScrollable.scrollLeft += delta * 0.9;
+        }
+        return; // Absorb wheel event and prevent tab switching
+      }
+    }
+
     // Check if the gesture is a HORIZONTAL swipe (deltaX dominates deltaY)
     const isHorizontalSwipe = Math.abs(e.deltaX) > Math.abs(e.deltaY) && Math.abs(e.deltaX) >= 3;
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Inbox, 
@@ -10,7 +10,9 @@ import {
   Video, 
   Code, 
   Archive, 
-  File
+  File,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 
 /**
@@ -42,9 +44,82 @@ export function extractFilePathsFromDataTransfer(dataTransfer) {
 }
 
 /**
- * Returns a styled 3D badge icon for file types, matching the sleek dark Dynamic Island aesthetic.
+ * Returns a styled 3D badge icon or rich thumbnail preview for files and folders,
+ * with full visual preview rendering for images and PDFs.
  */
-function getFileTypeIcon(ext, isFolder, iconDataUrl) {
+function renderFileVisual(itemOrExt, isFolderParam, iconDataUrlParam, thumbnailDataUrlParam) {
+  let ext = "";
+  let isFolder = false;
+  let iconDataUrl = null;
+  let thumbnailDataUrl = null;
+
+  if (itemOrExt && typeof itemOrExt === "object") {
+    ext = itemOrExt.ext || "";
+    isFolder = Boolean(itemOrExt.isFolder);
+    iconDataUrl = itemOrExt.iconDataUrl || null;
+    thumbnailDataUrl = itemOrExt.thumbnailDataUrl || null;
+  } else {
+    ext = itemOrExt || "";
+    isFolder = Boolean(isFolderParam);
+    iconDataUrl = iconDataUrlParam || null;
+    thumbnailDataUrl = thumbnailDataUrlParam || null;
+  }
+
+  const cleanExt = (ext || "").toLowerCase();
+
+  // 1. Direct Visual Preview for Images and PDFs with thumbnailDataUrl
+  if (thumbnailDataUrl) {
+    const isPdf = cleanExt === "pdf";
+    return (
+      <div style={{
+        width: 46,
+        height: 46,
+        borderRadius: 12,
+        background: isPdf ? "#ffffff" : "#14151b",
+        border: isPdf ? "1.5px solid rgba(239, 68, 68, 0.4)" : "1.5px solid rgba(255, 255, 255, 0.16)",
+        boxShadow: isPdf ? "0 4px 12px rgba(239, 68, 68, 0.25)" : "0 4px 12px rgba(0,0,0,0.5)",
+        position: "relative",
+        overflow: "hidden",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0
+      }}>
+        <img 
+          src={thumbnailDataUrl} 
+          alt="" 
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: isPdf ? "contain" : "cover",
+            display: "block"
+          }} 
+          draggable={false} 
+        />
+        {/* Subtle pill badge in corner showing extension */}
+        <span style={{
+          position: "absolute",
+          bottom: 2,
+          right: 2,
+          background: isPdf ? "rgba(220, 38, 38, 0.95)" : "rgba(10, 14, 23, 0.85)",
+          backdropFilter: "blur(4px)",
+          color: "#ffffff",
+          fontSize: 7.5,
+          fontWeight: 800,
+          padding: "1px 3.5px",
+          borderRadius: 4,
+          border: isPdf ? "0.5px solid rgba(255,255,255,0.4)" : "0.5px solid rgba(56, 189, 248, 0.35)",
+          lineHeight: 1,
+          letterSpacing: "0.2px",
+          textTransform: "uppercase"
+        }}>
+          {isPdf ? "PDF" : cleanExt.slice(0, 4)}
+        </span>
+      </div>
+    );
+  }
+
+  // 2. Folder visual
   if (isFolder) {
     return (
       <div style={{
@@ -62,8 +137,40 @@ function getFileTypeIcon(ext, isFolder, iconDataUrl) {
     );
   }
 
-  const cleanExt = (ext || "").toLowerCase();
-  
+  // 3. Dedicated PDF card when thumbnail is still loading or unavailable
+  if (cleanExt === "pdf") {
+    return (
+      <div style={{
+        width: 44,
+        height: 44,
+        borderRadius: 12,
+        background: "linear-gradient(135deg, #ef4444 0%, #991b1b 100%)",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 4px 12px rgba(239, 68, 68, 0.4), inset 0 1px 1px rgba(255,255,255,0.4)",
+        position: "relative"
+      }}>
+        <FileText size={20} color="#fff" />
+        <span style={{
+          position: "absolute",
+          bottom: 2,
+          background: "rgba(0, 0, 0, 0.6)",
+          color: "#ffffff",
+          fontSize: 7.5,
+          fontWeight: 800,
+          padding: "0.5px 3.5px",
+          borderRadius: 3,
+          lineHeight: 1
+        }}>
+          PDF
+        </span>
+      </div>
+    );
+  }
+
+  // 4. Image card (fallback if thumbnail not yet ready)
   if (["png", "jpg", "jpeg", "webp", "gif", "svg", "bmp", "ico", "avif"].includes(cleanExt)) {
     return (
       <div style={{
@@ -72,15 +179,32 @@ function getFileTypeIcon(ext, isFolder, iconDataUrl) {
         borderRadius: 12,
         background: "linear-gradient(135deg, #38bdf8 0%, #0284c7 100%)",
         display: "flex",
+        flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: "0 4px 12px rgba(56, 189, 248, 0.35), inset 0 1px 1px rgba(255,255,255,0.4)"
+        boxShadow: "0 4px 12px rgba(56, 189, 248, 0.35), inset 0 1px 1px rgba(255,255,255,0.4)",
+        position: "relative"
       }}>
-        <ImageIcon size={22} color="#fff" />
+        <ImageIcon size={20} color="#fff" />
+        <span style={{
+          position: "absolute",
+          bottom: 2,
+          background: "rgba(0, 0, 0, 0.6)",
+          color: "#38bdf8",
+          fontSize: 7.5,
+          fontWeight: 800,
+          padding: "0.5px 3.5px",
+          borderRadius: 3,
+          lineHeight: 1,
+          textTransform: "uppercase"
+        }}>
+          {cleanExt.slice(0, 4)}
+        </span>
       </div>
     );
   }
 
+  // 5. Audio files
   if (["mp3", "wav", "flac", "aac", "ogg", "m4a"].includes(cleanExt)) {
     return (
       <div style={{
@@ -98,6 +222,7 @@ function getFileTypeIcon(ext, isFolder, iconDataUrl) {
     );
   }
 
+  // 6. Video files
   if (["mp4", "mkv", "mov", "avi", "webm"].includes(cleanExt)) {
     return (
       <div style={{
@@ -115,6 +240,7 @@ function getFileTypeIcon(ext, isFolder, iconDataUrl) {
     );
   }
 
+  // 7. Code files
   if (["js", "jsx", "ts", "tsx", "html", "css", "py", "rs", "go", "json", "c", "cpp", "cs", "java"].includes(cleanExt)) {
     return (
       <div style={{
@@ -132,6 +258,7 @@ function getFileTypeIcon(ext, isFolder, iconDataUrl) {
     );
   }
 
+  // 8. Archive files
   if (["zip", "rar", "7z", "tar", "gz"].includes(cleanExt)) {
     return (
       <div style={{
@@ -149,7 +276,8 @@ function getFileTypeIcon(ext, isFolder, iconDataUrl) {
     );
   }
 
-  if (["pdf", "doc", "docx", "txt", "md", "rtf", "xls", "xlsx", "ppt", "pptx"].includes(cleanExt)) {
+  // 9. Document files
+  if (["doc", "docx", "txt", "md", "rtf", "xls", "xlsx", "ppt", "pptx"].includes(cleanExt)) {
     return (
       <div style={{
         width: 44,
@@ -166,6 +294,7 @@ function getFileTypeIcon(ext, isFolder, iconDataUrl) {
     );
   }
 
+  // 10. Native OS Icon
   if (iconDataUrl) {
     return (
       <img 
@@ -193,15 +322,44 @@ function getFileTypeIcon(ext, isFolder, iconDataUrl) {
   );
 }
 
+const getFileTypeIcon = renderFileVisual;
+
 export default function Shelf({ accentColor = "#38bdf8" }) {
   const [items, setItems] = useState([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [hoveredItemId, setHoveredItemId] = useState(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
   const scrollRef = useRef(null);
   const isSelfDraggingRef = useRef(false);
   const dragOverResetTimerRef = useRef(null);
   const dragPressRef = useRef(null);
   const wasDraggedRef = useRef(false);
+
+  const checkScrollability = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const { scrollLeft, scrollWidth, clientWidth } = el;
+    setCanScrollLeft(scrollLeft > 4);
+    setCanScrollRight(scrollLeft + clientWidth < scrollWidth - 4);
+  }, []);
+
+  const scrollByAmount = (offset) => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollBy({ left: offset, behavior: "smooth" });
+    }
+  };
+
+  const handleWheel = (e) => {
+    const el = scrollRef.current;
+    if (!el) return;
+    if (el.scrollWidth > el.clientWidth) {
+      e.stopPropagation();
+      const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      el.scrollLeft += delta;
+      checkScrollability();
+    }
+  };
 
   const triggerNativeDragOut = (item) => {
     if (!item || isSelfDraggingRef.current) return;
@@ -310,6 +468,19 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
       window.removeEventListener("quick-pill-file-drag-end", handleGlobalFileDragEnd);
     };
   }, []);
+
+  // Update scrollability indicators on item changes or viewport adjustments
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    checkScrollability();
+    el.addEventListener("scroll", checkScrollability, { passive: true });
+    window.addEventListener("resize", checkScrollability);
+    return () => {
+      el.removeEventListener("scroll", checkScrollability);
+      window.removeEventListener("resize", checkScrollability);
+    };
+  }, [items, checkScrollability]);
 
   const activateDragOver = (e) => {
     e.preventDefault();
@@ -543,12 +714,92 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
         position: "relative",
         minHeight: 0
       }}>
+        {/* Left Scroll Navigation Button */}
+        {hasItems && canScrollLeft && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); scrollByAmount(-180); }}
+            title="Scroll left"
+            style={{
+              position: "absolute",
+              left: 4,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              background: "rgba(15, 23, 42, 0.88)",
+              border: "1px solid rgba(255, 255, 255, 0.22)",
+              backdropFilter: "blur(8px)",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 15,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.6)",
+              transition: "all 0.15s ease"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(56, 189, 248, 0.35)";
+              e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.6)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(15, 23, 42, 0.88)";
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.22)";
+            }}
+          >
+            <ChevronLeft size={16} strokeWidth={2.5} />
+          </button>
+        )}
+
+        {/* Right Scroll Navigation Button */}
+        {hasItems && canScrollRight && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); scrollByAmount(180); }}
+            title="Scroll right"
+            style={{
+              position: "absolute",
+              right: 4,
+              top: "50%",
+              transform: "translateY(-50%)",
+              width: 28,
+              height: 28,
+              borderRadius: "50%",
+              background: "rgba(15, 23, 42, 0.88)",
+              border: "1px solid rgba(255, 255, 255, 0.22)",
+              backdropFilter: "blur(8px)",
+              color: "#ffffff",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              zIndex: 15,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.6)",
+              transition: "all 0.15s ease"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(56, 189, 248, 0.35)";
+              e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.6)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(15, 23, 42, 0.88)";
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.22)";
+            }}
+          >
+            <ChevronRight size={16} strokeWidth={2.5} />
+          </button>
+        )}
+
         {/* Populated File Carousel (remains mounted underneath when dragging over) */}
         {hasItems && (
           <div
             ref={scrollRef}
             className="shelf-scrollable"
             data-scrollable="true"
+            data-horizontal-scrollable="true"
+            onWheel={handleWheel}
             style={{
               width: "100%",
               height: "100%",
@@ -557,11 +808,9 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
               gap: 12,
               overflowX: "auto",
               overflowY: "hidden",
-              padding: "4px 8px",
+              padding: "4px 8px 6px 8px",
               boxSizing: "border-box",
               scrollBehavior: "smooth",
-              scrollbarWidth: "none",
-              msOverflowStyle: "none",
               opacity: isDragOver ? 0.35 : 1,
               transition: "opacity 0.15s ease"
             }}
@@ -583,20 +832,20 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
                   title={`${item.name} (${item.sizeFormatted})\nClick to open · Drag out to copy · Right-click to reveal`}
                   style={{
                     flexShrink: 0,
-                    width: 78,
-                    height: 86,
+                    width: 82,
+                    height: 92,
                     borderRadius: 14,
                     background: isHovered 
-                      ? "linear-gradient(180deg, rgba(255,255,255,0.09) 0%, rgba(255,255,255,0.03) 100%)" 
+                      ? "linear-gradient(180deg, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.03) 100%)" 
                       : "transparent",
-                    border: isHovered ? "1px solid rgba(255, 255, 255, 0.14)" : "1px solid transparent",
+                    border: isHovered ? "1px solid rgba(255, 255, 255, 0.16)" : "1px solid transparent",
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
                     cursor: "grab",
                     position: "relative",
-                    padding: "4px 2px",
+                    padding: "4px 3px 2px 3px",
                     boxSizing: "border-box",
                     transition: "background 0.15s ease, border-color 0.15s ease, transform 0.15s ease",
                     transform: isHovered ? "translateY(-1px)" : "none",
@@ -637,21 +886,25 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
                     )}
                   </AnimatePresence>
 
-                  {/* File Icon */}
+                  {/* File Visual (Image thumbnail, PDF cover, OS icon, or 3D badge) */}
                   <div style={{ marginBottom: 4, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
-                    {getFileTypeIcon(item.ext, item.isFolder, item.iconDataUrl)}
+                    {renderFileVisual(item)}
                   </div>
 
-                  {/* File Name */}
+                  {/* File Name (2-line clamp with word break for easy distinction) */}
                   <span style={{
-                    fontSize: 11,
+                    fontSize: 10.5,
                     fontWeight: 600,
                     color: "#f3f4f6",
                     textAlign: "center",
-                    maxWidth: 72,
+                    width: "100%",
+                    maxHeight: 26,
                     overflow: "hidden",
                     textOverflow: "ellipsis",
-                    whiteSpace: "nowrap",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    wordBreak: "break-all",
                     lineHeight: 1.2,
                     pointerEvents: "none"
                   }}>
@@ -660,11 +913,11 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
 
                   {/* File Size / Type */}
                   <span style={{
-                    fontSize: 9.5,
+                    fontSize: 9,
                     color: "#9ca3af",
                     textAlign: "center",
                     lineHeight: 1.1,
-                    marginTop: 1,
+                    marginTop: 2,
                     pointerEvents: "none"
                   }}>
                     {item.sizeFormatted}

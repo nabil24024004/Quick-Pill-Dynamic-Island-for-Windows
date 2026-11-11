@@ -1,7 +1,7 @@
 {
   "version": "5.6.0",
   "name": "Quick Pill 5.6.0",
-  "releaseDate": "2026-11-10",
+  "releaseDate": "2026-11-11",
   "mandatory": false,
   "minSupportedVersion": "4.0.0",
   "changelog": [
@@ -17,8 +17,8 @@
   "platforms": {
     "win32-x64": {
       "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.0-Setup.exe",
-      "sha256": "d94727749da4d7499c296bf62df12587b52f557a0f8c02977bd72c747ac8d81e",
-      "size": 135165124,
+      "sha256": "c48bc0eecad5b709bfbe01e0034f38af40cae5b08c1ae40d5ca68a0771412e90",
+      "size": 135202073,
       "installerType": "nsis"
     }
   }

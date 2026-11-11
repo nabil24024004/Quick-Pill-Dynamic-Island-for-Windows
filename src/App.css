@@ -23,6 +23,34 @@ body {
   display: none;
 }
 
+/* Modern Horizontal Scrollbar for Shelf */
+.shelf-scrollable {
+  scrollbar-width: thin !important;
+  scrollbar-color: rgba(255, 255, 255, 0.45) rgba(255, 255, 255, 0.08) !important;
+}
+
+.shelf-scrollable::-webkit-scrollbar {
+  display: block !important;
+  height: 5px !important;
+}
+
+.shelf-scrollable::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-radius: 999px !important;
+  margin: 0 16px !important;
+}
+
+.shelf-scrollable::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.45) !important;
+  border-radius: 999px !important;
+  transition: all 0.2s ease !important;
+}
+
+.shelf-scrollable::-webkit-scrollbar-thumb:hover {
+  background: rgba(56, 189, 248, 0.95) !important;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.65) !important;
+}
+
 @keyframes marquee {
   0% { transform: translateX(0%); }
   100% { transform: translateX(-50%); }

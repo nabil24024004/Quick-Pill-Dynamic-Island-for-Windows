@@ -133,3 +133,57 @@ test("ShelfEngine - startDrag and openFile interfaces", async () => {
   // Clean up
   fs.rmSync(testTempDir, { recursive: true, force: true });
 });
+
+test("ShelfEngine - image and PDF thumbnail generation", async () => {
+  const testTempDir = path.join(os.tmpdir(), `test-shelf-thumb-${Date.now()}`);
+  fs.mkdirSync(testTempDir, { recursive: true });
+  const imgFile = path.join(testTempDir, "preview.png");
+  fs.writeFileSync(imgFile, "mock-png-data");
+  const pdfFile = path.join(testTempDir, "document.pdf");
+  fs.writeFileSync(pdfFile, "mock-pdf-data");
+
+  let pdfRendered = false;
+  let itemsChangedCount = 0;
+
+  const engine = createShelfEngine({
+    tempDir: path.join(testTempDir, "staging"),
+    nativeImage: {
+      createFromPath: (filePath) => ({
+        isEmpty: () => false,
+        resize: () => ({
+          toDataURL: () => "data:image/png;base64,mockImageThumbnail"
+        })
+      }),
+      createFromDataURL: (dataUrl) => ({
+        isEmpty: () => false,
+        resize: () => ({
+          toDataURL: () => dataUrl
+        })
+      })
+    },
+    renderPdfThumbnail: async (pdfPath) => {
+      pdfRendered = true;
+      return "data:image/png;base64,mockPdfCoverPage";
+    },
+    onItemsChange: () => {
+      itemsChangedCount++;
+    }
+  });
+
+  const addedItems = await engine.addFiles([imgFile, pdfFile]);
+  assert.equal(addedItems.length, 2);
+
+  const imgItem = addedItems.find((it) => it.name === "preview.png");
+  assert.ok(imgItem);
+  assert.equal(imgItem.thumbnailDataUrl, "data:image/png;base64,mockImageThumbnail");
+
+  // Allow async PDF thumbnail renderer to resolve
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const pdfItem = engine.getItems().find((it) => it.name === "document.pdf");
+  assert.ok(pdfItem);
+  assert.equal(pdfRendered, true);
+  assert.equal(pdfItem.thumbnailDataUrl, "data:image/png;base64,mockPdfCoverPage");
+  assert.ok(itemsChangedCount > 0);
+
+  fs.rmSync(testTempDir, { recursive: true, force: true });
+});
