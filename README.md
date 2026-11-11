@@ -40,9 +40,6 @@
     <img src="https://img.shields.io/badge/Arch-x64-475569?style=for-the-badge" alt="x64 Architecture" />
   </p>
 
-  <!-- Product Preview Video -->
-  https://github.com/user-attachments/assets/bd057d18-f65e-4cf4-bf66-a5d107f18658
-
 </div>
 
 ---
