@@ -18,8 +18,8 @@ const DEFAULT_RELEASE = {
   platforms: {
     'win32-x64': {
       url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.1-Setup.exe',
-      sha256: 'c48bc0eecad5b709bfbe01e0034f38af40cae5b08c1ae40d5ca68a0771412e90',
-      size: 135202073,
+      sha256: 'fd5a7329fce33de2b75e3c8cd98520b3a58108f15748fdd33ab1021f7a6d034b',
+      size: 135202987,
       installerType: 'nsis'
     }
   }

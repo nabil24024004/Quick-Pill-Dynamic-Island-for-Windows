@@ -54,8 +54,8 @@
 | :--- | :--- |
 | **Installer File** | `QuickPill-Windows-v5.6.1-Setup.exe` |
 | **Architecture** | Windows x64 (10 / 11) |
-| **File Size** | `135,202,073 bytes` (~128.9 MB) |
-| **SHA-256 Hash** | `c48bc0eecad5b709bfbe01e0034f38af40cae5b08c1ae40d5ca68a0771412e90` |
+| **File Size** | `135,202,987 bytes` (~128.9 MB) |
+| **SHA-256 Hash** | `fd5a7329fce33de2b75e3c8cd98520b3a58108f15748fdd33ab1021f7a6d034b` |
 | **Test Suite** | `145 passed, 0 failed` across all suites |
 
 ---

@@ -53,8 +53,12 @@ function generateManifest() {
 
   const searchDirs = [DIST_DIR, OUT_MAKE_DIR];
 
-  // Look for Windows installer
-  const winArtifact = findArtifact(searchDirs, /Quick.*Pill.*Setup.*\.exe$/i) ||
+  // Look for Windows installer (prioritizing current version match)
+  const versionEscaped = version.replace(/\./g, '\\.');
+  const winArtifact = findArtifact(searchDirs, new RegExp(`Quick.*Pill.*${versionEscaped}.*Setup.*\\.exe$`, 'i')) ||
+                      findArtifact(searchDirs, new RegExp(`QuickPill.*${versionEscaped}.*\\.exe$`, 'i')) ||
+                      findArtifact(searchDirs, new RegExp(`quick-pill-.*${versionEscaped}.*\\.exe$`, 'i')) ||
+                      findArtifact(searchDirs, /Quick.*Pill.*Setup.*\.exe$/i) ||
                       findArtifact(searchDirs, /QuickPill-Windows.*\.exe$/i) ||
                       findArtifact(searchDirs, /quick-pill-.*-setup\.exe$/i);
 
