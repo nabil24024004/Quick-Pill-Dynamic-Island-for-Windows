@@ -1,34 +1,33 @@
 import { useRef, useEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Layers } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
 const MODES = [
   {
     numeral: '01',
-    name:    'Still Mode',
+    name: 'Still Mode',
     tagline: 'The quiet sentinel.',
-    desc:    'A minimal semicircular capsule resting flush against the top bezel of your display. Zero screen footprint, zero battery drain, and zero cognitive load. Always silently within reach.',
-    imgSrc:  'still-mode.jpg',
-    alt:     'Quick Pill Still Mode - Minimalist idle capsule at the top of desktop screen',
+    desc: 'A minimal semicircular capsule resting flush against the top bezel of your display. Zero screen footprint, zero battery drain, and zero cognitive load. Always silently within reach.',
+    imgSrc: 'still-mode.jpg',
+    alt: 'Quick Pill Still Mode - Minimalist idle capsule at the top of desktop screen',
   },
   {
     numeral: '02',
-    name:    'Quick Mode',
+    name: 'Quick Mode',
     tagline: 'Hover to reveal.',
-    desc:    'Brush your cursor over the capsule and it expands with 60 FPS spring physics to reveal the time, weather forecast, battery diagnostics, and active media scrubber — in under 200ms.',
-    imgSrc:  'quick-mode.jpg',
-    alt:     'Quick Pill Quick Mode - Dynamic spring expansion with clock, weather, battery and media info',
+    desc: 'Brush your cursor over the capsule and it expands with 60 FPS spring physics to reveal the time, weather forecast, battery diagnostics, and active media scrubber — in under 200ms.',
+    imgSrc: 'quick-mode.jpg',
+    alt: 'Quick Pill Quick Mode - Dynamic spring expansion with clock, weather, battery and media info',
   },
   {
     numeral: '03',
-    name:    'Large Mode',
+    name: 'Large Mode',
     tagline: 'Click to command.',
-    desc:    'A full interactive control center unfolds with 16 modular feature tabs. Control per-app audio, capture quick notes, stage files, and check system vitals without leaving your active workspace.',
-    imgSrc:  'large-mode.jpg',
-    alt:     'Quick Pill Large Mode - Full interactive 16-tab desktop productivity dashboard',
+    desc: 'A full interactive control center unfolds with 16 modular feature tabs. Control per-app audio, capture quick notes, stage files, and check system vitals without leaving your active workspace.',
+    imgSrc: 'large-mode.png',
+    alt: 'Quick Pill Large Mode - Full interactive 16-tab desktop productivity dashboard',
   },
 ];
 
@@ -59,10 +58,6 @@ export default function HowItWorks() {
     <section className="how-it-works section" id="how-it-works" ref={sectionRef} aria-label="How Quick Pill Works">
       <div className="container">
         <div className="how-header">
-          <div className="how-badge">
-            <Layers size={11} className="how-badge-icon" />
-            <span>ADAPTIVE DYNAMICS</span>
-          </div>
           <h2 className="how-headline">
             Three Modes. <span className="how-headline--dim">Infinite Utility.</span>
           </h2>

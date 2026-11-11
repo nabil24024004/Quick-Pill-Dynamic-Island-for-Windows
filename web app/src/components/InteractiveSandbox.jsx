@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import {
   Clock, Music, Timer, FolderDown, Rocket, FileText,
   Cloud, Search, Calendar, Sliders, Compass, Bell,
-  Cpu, Clipboard, CheckSquare, Settings, Sparkles
+  Cpu, Clipboard, CheckSquare, Settings
 } from 'lucide-react';
 
 export const SANDBOX_TABS = [
@@ -152,6 +152,28 @@ export default function InteractiveSandbox() {
 
   return (
     <div className="sandbox-wrapper" aria-label="Interactive Quick Pill Simulator">
+      {/* Interactive 16 Tabs - Positioned at top of sandbox */}
+      <div className="sandbox-dock" role="tablist" aria-label="Quick Pill 16 Features">
+        {SANDBOX_TABS.map((tab) => {
+          const Icon = tab.icon;
+          const isActive = tab.id === activeTabId;
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              className={`sandbox-tab-pill ${isActive ? 'is-active' : ''}`}
+              onClick={() => setActiveTabId(tab.id)}
+              aria-selected={isActive}
+            >
+              <Icon size={14} strokeWidth={isActive ? 2 : 1.5} className="tab-pill-icon" />
+              <span className="tab-pill-label">{tab.label}</span>
+              {tab.type === 'video' && <span className="tab-pill-dot" title="Video clip" />}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Simulated Windows 11 Laptop Display Frame */}
       <div className="laptop-frame">
         {/* Top Laptop Bezel with Webcam and Sensor */}
@@ -189,33 +211,6 @@ export default function InteractiveSandbox() {
             )}
           </div>
         </div>
-      </div>
-
-      {/* Interactive 16 Tabs - All options opened out */}
-      <div className="sandbox-dock" role="tablist" aria-label="Quick Pill 16 Features">
-        {SANDBOX_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const isActive = tab.id === activeTabId;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              className={`sandbox-tab-pill ${isActive ? 'is-active' : ''}`}
-              onClick={() => setActiveTabId(tab.id)}
-              aria-selected={isActive}
-            >
-              <Icon size={14} strokeWidth={isActive ? 2 : 1.5} className="tab-pill-icon" />
-              <span className="tab-pill-label">{tab.label}</span>
-              {tab.type === 'video' && <span className="tab-pill-dot" title="Video clip" />}
-            </button>
-          );
-        })}
-      </div>
-
-      {/* Helper hint */}
-      <div className="sandbox-hint">
-        <span>Click any of the 16 interactive tabs above to preview exact transitions directly in your browser</span>
       </div>
     </div>
   );
