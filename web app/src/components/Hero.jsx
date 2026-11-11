@@ -77,8 +77,8 @@ export default function Hero({ onDownloadClick }) {
         </h1>
 
         <p className="hero-subtitle" ref={subtitleRef}>
-          A Dynamic Island for your Windows desktop. Floating unobtrusively above your active workspace with
-          per-app audio mixing, live notifications, focus timers, file staging, and 16 modular utilities.
+          A live notch for your desktop. Floating above your active workspace with
+          per-app audio mixing, live notifications, focus timers, file staging and 16 utilities.
         </p>
 
         <div className="hero-cta" ref={ctaRef}>
