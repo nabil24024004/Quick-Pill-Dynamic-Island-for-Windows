@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
-import { Download, Github, Play, Pause } from 'lucide-react';
+import { Download, Github } from 'lucide-react';
 import Beams from './Beams';
+import InteractiveSandbox from './InteractiveSandbox';
 import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
 export default function Hero({ onDownloadClick }) {
@@ -9,8 +10,6 @@ export default function Hero({ onDownloadClick }) {
   const subtitleRef = useRef(null);
   const ctaRef      = useRef(null);
   const eyebrowRef  = useRef(null);
-  const videoRef    = useRef(null);
-  const [isPlaying, setIsPlaying] = useState(true);
   const { version } = useReleaseInfo();
 
   /* GSAP entrance animation */
@@ -38,37 +37,6 @@ export default function Hero({ onDownloadClick }) {
       '-=0.4'
     );
   }, []);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            video.play().catch(() => {});
-          } else {
-            video.pause();
-          }
-        });
-      },
-      { threshold: 0.2 }
-    );
-
-    observer.observe(video);
-    return () => observer.disconnect();
-  }, []);
-
-  const togglePlay = () => {
-    if (!videoRef.current) return;
-    if (isPlaying) {
-      videoRef.current.pause();
-    } else {
-      videoRef.current.play();
-    }
-    setIsPlaying(!isPlaying);
-  };
 
   const handleDownload = (e) => {
     if (onDownloadClick) {
@@ -109,8 +77,8 @@ export default function Hero({ onDownloadClick }) {
         </h1>
 
         <p className="hero-subtitle" ref={subtitleRef}>
-          A Dynamic Island for your desktop. Floating above your workflow with
-          media controls, live notifications, tasks, timers, and more all in one capsule.
+          A Dynamic Island for your Windows desktop. Floating unobtrusively above your active workspace with
+          per-app audio mixing, live notifications, focus timers, file staging, and 16 modular utilities.
         </p>
 
         <div className="hero-cta" ref={ctaRef}>
@@ -122,7 +90,7 @@ export default function Hero({ onDownloadClick }) {
             aria-label="Download Quick Pill for Windows 10 & 11"
           >
             <Download size={14} strokeWidth={2} aria-hidden="true" />
-            Download
+            Download for Windows
           </a>
           <a
             href="https://github.com/nabil24024004/Quick-Pill"
@@ -137,40 +105,11 @@ export default function Hero({ onDownloadClick }) {
           </a>
         </div>
 
-        <div className="hero-platforms">Windows 10 / 11</div>
+        <div className="hero-platforms">Windows 10 / 11 (64-bit) • 100% Free & Open Source</div>
       </div>
 
-      {/* Live Demo Video Showcase */}
-      <figure className="hero-video-container" aria-label="Quick Pill Demonstration Video">
-        <div className="hero-video-bezel">
-          <div className="hero-video-dots" aria-hidden="true">
-            <span className="dot red" />
-            <span className="dot yellow" />
-            <span className="dot green" />
-          </div>
-          <figcaption className="hero-video-title">Quick Pill — Dynamic Island in Action</figcaption>
-          <button
-            className="hero-video-toggle"
-            onClick={togglePlay}
-            aria-label={isPlaying ? 'Pause demonstration video' : 'Play demonstration video'}
-            title={isPlaying ? 'Pause demo' : 'Play demo'}
-          >
-            {isPlaying ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
-          </button>
-        </div>
-        <video
-          ref={videoRef}
-          src="demo.mp4"
-          poster="/large-mode.jpg"
-          preload="metadata"
-          autoPlay
-          loop
-          muted
-          playsInline
-          title="Quick Pill Dynamic Island for Windows Demo"
-          className="hero-video"
-        />
-      </figure>
+      {/* Interactive Sandbox Hero: Full-width simulated Windows 11 desktop viewport & 16-tab dock */}
+      <InteractiveSandbox />
 
       <div className="hero-rule" aria-hidden="true" />
     </section>

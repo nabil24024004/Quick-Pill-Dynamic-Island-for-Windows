@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 
 const DEFAULT_RELEASE = {
-  version: '5.6.0',
-  name: 'Quick Pill 5.6.0',
+  version: '5.6.1',
+  name: 'Quick Pill 5.6.1',
   releaseDate: '2026-11-11',
   changelog: [
-    'Drop Shelf (Tab 16, Alt+F): Floating staging area to drop files directly into the notch until system restart, with native Windows drag-out and quick open.',
+    'Drop Shelf (Tab 16, Alt+F) Enhancements: Added custom sleek horizontal scrollbar, wheel-scroll to horizontal translation, carousel navigation chevrons, and real visual preview thumbnails for images and PDF documents.',
+    'Drop Shelf Staging: Persistent session staging stash to drop files into the notch with native Windows drag-out and quick open.',
     'Prayer Times & Celestial Arc (Tab 17, Alt+P): Location-synchronized prayer timings with offline astronomical calculation fallback, next prayer countdown hero, celestial sun arc, and collapsed time-to-pray notification banner with chime.',
     'Weather Pod Redesign: Modern glassmorphic 3D depth aesthetic with automatic Day (#FFD801) and Night (#061E40) dynamic accent theme, 7-day forecast cards, and sunrise/sunset metrics.',
     'Search Command Bar: Redesigned with Google Red accent (#DA3A28), Claude.ai quick launcher integration, and crisp official SVG branding for Google, YouTube, GitHub, ChatGPT, and Claude.',
@@ -16,7 +17,7 @@ const DEFAULT_RELEASE = {
   ],
   platforms: {
     'win32-x64': {
-      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.0-Setup.exe',
+      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.1-Setup.exe',
       sha256: 'c48bc0eecad5b709bfbe01e0034f38af40cae5b08c1ae40d5ca68a0771412e90',
       size: 135202073,
       installerType: 'nsis'
@@ -56,7 +57,7 @@ export function useReleaseInfo() {
 
   return {
     releaseInfo,
-    version: releaseInfo.version || '5.6.0',
+    version: releaseInfo.version || '5.6.1',
     windowsUrl,
     changelog: releaseInfo.changelog || [],
     isLoading

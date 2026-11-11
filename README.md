@@ -12,8 +12,8 @@
 
   <!-- Primary Download CTA Button (Image 1 Style) -->
   <p align="center">
-    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.0-Setup.exe">
-      <img src="assets/download-button.svg" alt="Download for Desktop Setup (v5.6.0)" width="280" />
+    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.1-Setup.exe">
+      <img src="assets/download-button.svg" alt="Download for Desktop Setup (v5.6.1)" width="280" />
     </a>
   </p>
 
@@ -25,8 +25,8 @@
 
   <!-- Status & Action Badges (Image 2 Style - for-the-badge) -->
   <p align="center">
-    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.0-Setup.exe"><img src="https://img.shields.io/badge/DESKTOP_APP-DOWNLOAD_NOW-0078D7?style=for-the-badge&logo=windows&logoColor=white" alt="Desktop App Download Now" /></a>
-    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><img src="https://img.shields.io/badge/RELEASE-V5.6.0-0078D7?style=for-the-badge&logo=github&logoColor=white" alt="Release v5.6.0" /></a>
+    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.1-Setup.exe"><img src="https://img.shields.io/badge/DESKTOP_APP-DOWNLOAD_NOW-0078D7?style=for-the-badge&logo=windows&logoColor=white" alt="Desktop App Download Now" /></a>
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><img src="https://img.shields.io/badge/RELEASE-V5.6.1-0078D7?style=for-the-badge&logo=github&logoColor=white" alt="Release v5.6.1" /></a>
     <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/pulls"><img src="https://img.shields.io/badge/PRS-WELCOME-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="PRs Welcome" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-f08236?style=for-the-badge" alt="MIT License" /></a>
   </p>
@@ -47,13 +47,13 @@
 
 ---
 
-## 🌟 What's New in v5.6.0
+## 🌟 What's New in v5.6.1
 
 <table>
   <tr>
     <td width="50%">
       <h3>📁 Drop Shelf (Tab 16 • <code>Alt+F</code>)</h3>
-      <p>A persistent session staging stash at the top of your screen. Drop any files or folders from Windows Explorer straight into the notch. Items remain accessible until system restart — drag them out to copy anywhere or click to launch instantly.</p>
+      <p>A persistent session staging stash at the top of your screen with horizontal scrollbar, carousel navigation chevrons, and real visual previews for images & PDFs. Items remain accessible until system restart — drag them out to copy anywhere or click to launch instantly.</p>
     </td>
     <td width="50%">
       <h3>🕌 Prayer Times & Celestial Arc (Tab 17 • <code>Alt+P</code>)</h3>
@@ -142,7 +142,7 @@ Quick Pill features zero-latency global keyboard navigation. All shortcuts use `
 ## 📥 Installation
 
 ### Option 1: Automatic Installer (Recommended)
-1. Download **[QuickPill-Windows-v5.6.0-Setup.exe](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.0-Setup.exe)**.
+1. Download **[QuickPill-Windows-v5.6.1-Setup.exe](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.1-Setup.exe)**.
 2. Run the installer. Quick Pill installs silently and automatically launches.
 3. Silent auto-updates will keep your installation fresh with zero disruption.
 

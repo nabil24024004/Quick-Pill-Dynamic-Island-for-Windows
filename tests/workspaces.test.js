@@ -323,3 +323,38 @@ test("WorkspaceManager - launchTarget and launchWorkspace execution", async () =
     } catch (_) {}
   }
 });
+
+test("Workspace Purity - WorkspaceManager only manages workspace schemas and excludes raw apps", () => {
+  const manager = new WorkspaceManager();
+  const workspaces = manager.getWorkspaces();
+
+  // All workspaces must have launchProfile or id starting with ws-
+  for (const ws of workspaces) {
+    assert.ok(Array.isArray(ws.launchProfile), `Workspace ${ws.name} must have launchProfile array`);
+    assert.strictEqual(typeof ws.name, "string");
+    assert.ok(!ws.target, "Workspace must not have an application executable target property");
+    assert.ok(!ws.source, "Workspace must not have an application discovery source property");
+  }
+
+  // Raw catalog applications cannot be validated as workspaces
+  const mockApp = {
+    id: "win32-android_studio",
+    name: "Android Studio",
+    launch: "c:\\program files\\android\\android studio\\bin\\studio64.exe",
+    target: "c:\\program files\\android\\android studio\\bin\\studio64.exe",
+    source: "start-menu",
+    type: "win32"
+  };
+
+  const isStrictWorkspace = (item) => {
+    if (!item || typeof item !== "object") return false;
+    if (item.source || item.launch || item.iconLocation || item.type === "win32" || item.type === "uwp") {
+      return false;
+    }
+    return Boolean(Array.isArray(item.launchProfile) || Array.isArray(item.apps) || (item.id && String(item.id).startsWith("ws-")));
+  };
+
+  assert.strictEqual(isStrictWorkspace(mockApp), false, "Raw application must not be recognized as a workspace");
+  assert.strictEqual(isStrictWorkspace(workspaces[0]), true, "Actual workspace must be recognized as a workspace");
+});
+

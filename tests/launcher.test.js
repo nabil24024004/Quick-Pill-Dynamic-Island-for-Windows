@@ -11,6 +11,7 @@ const {
   normalizeExePath,
   normalizeAppName,
   deduplicateCatalog,
+  isInternalHelperExe,
 } = require("../src/services/launcher/discovery");
 
 const {
@@ -543,4 +544,49 @@ test("launcherEngine - launchApp resolves friendly app names and aliases against
     } catch (_) {}
   }
 });
+
+test("discovery - isInternalHelperExe prunes redistributables and internal tools while keeping real apps", () => {
+  // Prunes Visual C++ redistributable caches & installers
+  assert.strictEqual(
+    isInternalHelperExe("c:\\programdata\\package cache\\{33d1}\\vcredist_x86.exe", "Microsoft Visual C++ 2012 Redistributable -"),
+    true
+  );
+  assert.strictEqual(
+    isInternalHelperExe("c:\\programdata\\package cache\\{0e3b}\\vc_redist.x64.exe", "Microsoft Visual C++ v14 Redistributable -"),
+    true
+  );
+  assert.strictEqual(
+    isInternalHelperExe("c:\\windows\\system32\\vcredist_x64.exe", "Visual C++ Runtime Minimum"),
+    true
+  );
+
+  // Prunes ODBC data source configuration tools
+  assert.strictEqual(
+    isInternalHelperExe("c:\\windows\\syswow64\\odbcad32.exe", "ODBC Data Sources"),
+    true
+  );
+  assert.strictEqual(
+    isInternalHelperExe("c:\\windows\\system32\\odbcad32.exe", "ODBC Data Sources (64-bit)"),
+    true
+  );
+
+  // Keeps real user productivity and developer applications
+  assert.strictEqual(
+    isInternalHelperExe("c:\\program files\\android\\android studio\\bin\\studio64.exe", "Android Studio"),
+    false
+  );
+  assert.strictEqual(
+    isInternalHelperExe("c:\\program files\\microsoft vs code\\code.exe", "Visual Studio Code", "code"),
+    false
+  );
+  assert.strictEqual(
+    isInternalHelperExe("c:\\program files\\python312\\python.exe", "Python"),
+    false
+  );
+  assert.strictEqual(
+    isInternalHelperExe("c:\\windows\\system32\\notepad.exe", "Notepad"),
+    false
+  );
+});
+
 

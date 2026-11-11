@@ -76,13 +76,28 @@ function isInternalHelperExe(targetPath, name = "", alias = "") {
     return true;
   }
 
-  // 2. Known background helpers, updaters, daemons, and shell extensions
-  const helperPattern = /(?:^|[\\/_\.-])(?:ssh-askpass|ssh-proxy|helper|updater|daemon|worker|crashpad|crashhandler|shellext|diagnostics?|installer|unins(?:tall)?(?:000)?)\.exe$/i;
+  // 2. Package cache, installer payloads, and redistributable caches
+  if (lowerTarget.includes("\\programdata\\package cache\\") || lowerTarget.includes("\\appdata\\local\\package cache\\")) {
+    return true;
+  }
+
+  // 3. Redistributable executables and installer runtimes
+  if (/^(?:vcredist|vc_redist|dotnetfx|ndp|msi_setup|setup_helper)/i.test(baseExe)) {
+    return true;
+  }
+
+  // 4. Known background helpers, updaters, daemons, and shell extensions
+  const helperPattern = /(?:^|[\\/_\.-])(?:ssh-askpass|ssh-proxy|helper|updater|daemon|worker|crashpad|crashhandler|shellext|diagnostics?|installer|unins(?:tall)?(?:000)?|odbcad32)\.exe$/i;
   if (helperPattern.test(baseExe) || helperPattern.test(lowerAlias)) {
     return true;
   }
 
-  // 3. Known system/office/developer background exes
+  // 5. Name indicates redistributables, runtimes, SDK internal tools, or system diagnostic dialogs
+  if (/(?:redistributable|prerequisites?|runtime minimum|runtime additional|software development kit.*windows|c\+\+.*redistributable|odbc data sources?)/i.test(lowerName)) {
+    return true;
+  }
+
+  // 6. Known system/office/developer background exes
   const blacklistedExes = new Set([
     "iediagcmd.exe",
     "licensemanagershellext.exe",
@@ -98,14 +113,15 @@ function isInternalHelperExe(targetPath, name = "", alias = "") {
     "xboxpcappce.exe",
     "pymanager.exe",
     "pywmanager.exe",
-    "elevate.exe"
+    "elevate.exe",
+    "odbcad32.exe"
   ]);
 
   if (blacklistedExes.has(baseExe)) {
     return true;
   }
 
-  // 4. Name indicates uninstaller or helper
+  // 7. Name indicates uninstaller or helper
   if (/^(?:uninstall|unins\d+|readme|help|setup helper)$/i.test(lowerName.trim())) {
     return true;
   }

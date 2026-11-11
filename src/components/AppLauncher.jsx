@@ -37,6 +37,19 @@ let _memoryFavoritesCache = null;
 let _memoryRunningWindowsCache = null;
 let _memoryWorkspacesCache = null;
 
+// Strictly validates that an entity is a workspace and not a leaked application or window
+const isStrictWorkspace = (item) => {
+  if (!item || typeof item !== "object") return false;
+  if (item.source || item.launch || item.iconLocation || item.type === "win32" || item.type === "uwp") {
+    return false;
+  }
+  return Boolean(
+    Array.isArray(item.launchProfile) ||
+    Array.isArray(item.apps) ||
+    (typeof item.id === "string" && item.id.startsWith("ws-"))
+  );
+};
+
 export default function AppLauncher({
   onClose,
   isOpen = true,
@@ -64,7 +77,12 @@ export default function AppLauncher({
   const [searchResults, setSearchResults] = useState([]);
   const [favorites, setFavorites] = useState(() => _memoryFavoritesCache || []);
   const [runningWindows, setRunningWindows] = useState(() => _memoryRunningWindowsCache || []);
-  const [workspaces, setWorkspaces] = useState(() => _memoryWorkspacesCache || []);
+  const [workspaces, setWorkspaces] = useState(() => {
+    if (Array.isArray(_memoryWorkspacesCache)) {
+      return _memoryWorkspacesCache.filter(isStrictWorkspace);
+    }
+    return [];
+  });
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(() => localStorage.getItem("active-workspace-id") || "dev");
   const [isLoading, setIsLoading] = useState(() => {
     return !(_memoryCatalogCache && _memoryCatalogCache.length > 0);
@@ -114,8 +132,9 @@ export default function AppLauncher({
           _memoryFavoritesCache = favs;
         }
         if (Array.isArray(ws)) {
-          setWorkspaces(ws);
-          _memoryWorkspacesCache = ws;
+          const strictlyWs = ws.filter(isStrictWorkspace);
+          setWorkspaces(strictlyWs);
+          _memoryWorkspacesCache = strictlyWs;
         }
 
         // Running windows in background so slow PowerShell execution doesn't freeze launcher
@@ -196,6 +215,7 @@ export default function AppLauncher({
     const safeFavorites = Array.isArray(favorites) ? favorites : [];
     const safeRunningWindows = Array.isArray(runningWindows) ? runningWindows : [];
     const safeWorkspaces = Array.isArray(workspaces) ? workspaces : [];
+    const strictlyWorkspaces = safeWorkspaces.filter(isStrictWorkspace);
 
     if (query.trim().length > 0) {
       const q = query.toLowerCase();
@@ -206,7 +226,7 @@ export default function AppLauncher({
         return safeSearchResults.filter(item => item && (item.itemType === "window" || item.type === "window" || item.hWnd));
       }
       if (filter === "workspaces") {
-        return safeWorkspaces.filter(w => w && typeof w.name === "string" && w.name.toLowerCase().includes(q));
+        return strictlyWorkspaces.filter(w => w && typeof w.name === "string" && w.name.toLowerCase().includes(q));
       }
       return safeSearchResults.filter(Boolean);
     }
@@ -218,7 +238,7 @@ export default function AppLauncher({
       return safeRunningWindows.filter(Boolean);
     }
     if (filter === "workspaces") {
-      return safeWorkspaces.filter(Boolean);
+      return strictlyWorkspaces;
     }
 
     // Default 'all': favorites first, then all discovered apps
@@ -496,7 +516,7 @@ export default function AppLauncher({
       if (item) {
         if (filter === "windows" || item.itemType === "window" || item.hWnd) {
           handleActivateWindow(item);
-        } else if (filter === "workspaces" || item.isWorkspace) {
+        } else if ((filter === "workspaces" || item.isWorkspace) && isStrictWorkspace(item)) {
           handlePromptLaunchWorkspace(e, item);
         } else {
           handleLaunchApp(item);
@@ -844,7 +864,7 @@ export default function AppLauncher({
               const isSelected = idx === selectedIndex;
               const isFav = Array.isArray(favorites) && favorites.includes(item.id || item.target);
               const isWindowItem = filter === "windows" || item.itemType === "window" || Boolean(item.hWnd);
-              const isWorkspaceItem = filter === "workspaces" || Boolean(item.isWorkspace);
+              const isWorkspaceItem = Boolean((filter === "workspaces" || item.isWorkspace) && isStrictWorkspace(item));
 
               return (
                 <div

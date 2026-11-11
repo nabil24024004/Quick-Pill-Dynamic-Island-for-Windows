@@ -2,132 +2,125 @@ import { useRef, useEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import {
-  Music, Bell, Timer, CheckSquare, Clipboard, Cloud,
-  Clock, Cpu, Rocket, Settings, Shield, Search, Calendar,
-  Sliders, Activity, BatteryCharging, Compass, FileText
+  Compass, FileText, Bell, Sliders, FolderDown,
+  BatteryCharging, Timer, CheckSquare, Clipboard, Cloud,
+  Clock, Calendar, Search, Cpu, Settings, Sparkles
 } from 'lucide-react';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const FEATURES = [
+const ALL_FEATURES = [
   {
     Icon: Compass,
+    tag: 'Navigation & Focus',
     name: 'Quick App Launcher & Workspaces',
-    desc: 'Instant search across installed applications with real icons, running-window switcher with Win32 activation, favorites, and configurable productivity workspaces with safe launch profiles.',
-    imgSrc: 'media-tab.jpg',
-    alt: 'Quick Pill App Launcher & Workspace Switcher on Windows',
+    story: 'Your entire digital workshop, summoned in a heartbeat.',
+    desc: 'Launch any installed application with real process icons, switch running windows with native Win32 window restoration, and toggle dedicated contextual workspaces with zero friction.',
   },
   {
     Icon: FileText,
-    name: 'Quick Notes & Contextual Capture',
-    desc: 'High-speed note capture with dirty-state autosave and crash recovery, searchable inbox with tags, contextual clipboard capture with large-content guard, and direct task conversion.',
-    imgSrc: 'tasks-tab.jpg',
-    alt: 'Quick Pill Quick Notes and Contextual Capture',
+    tag: 'Instant Capture',
+    name: 'Quick Notes & Mind Capture',
+    story: 'A quiet corner for fleeting thoughts before they fade.',
+    desc: 'Jot down quick snippets, meeting takeaways, or code fragments in a friction-free scratchpad with automatic dirty-state save, clipboard protection, and one-click task conversion.',
   },
   {
     Icon: Bell,
+    tag: 'Communications',
     name: 'Smart Notification Actions',
-    desc: 'Real application icons, WhatsApp/VoIP call cards with answer/dismiss, inline replies, local snooze presets, grouped stacks, and privacy masking.',
-    imgSrc: 'notifications-tab.jpg',
-    alt: 'Quick Pill Smart Notification Actions Tab on Windows desktop',
+    story: 'Staying gently connected without breaking your flow.',
+    desc: 'Receive beautifully formatted action cards for WhatsApp and VoIP calls, send inline replies, or snooze alerts with local presets—complete with automatic privacy masking when sharing your screen.',
   },
   {
     Icon: Sliders,
+    tag: 'Acoustic Control',
     name: 'Per-App Audio Mixer',
-    desc: 'Control individual application volume levels, mute/unmute audio streams, monitor live peak audio meters, and switch audio output devices via native Windows WASAPI.',
-    imgSrc: 'media-tab.jpg',
-    alt: 'Quick Pill Per-App Audio Mixer for Windows applications',
+    story: 'Acoustic balance for your everyday headspace.',
+    desc: 'Powered by native Windows WASAPI, fine-tune individual application volume levels, mute/unmute audio streams, monitor live peak levels, and toggle output devices right from your screen crown.',
   },
   {
-    Icon: Activity,
-    name: 'Universal Progress Island',
-    desc: 'Consolidates background file operations, download tasks, and app update progress into an intelligent top-anchored Dynamic Island.',
-    imgSrc: 'quick-mode.jpg',
-    alt: 'Quick Pill Universal Progress Island on Windows desktop',
+    Icon: FolderDown,
+    tag: 'Workflow Staging',
+    name: 'Universal File Shelf & Progress',
+    story: 'A temporary desktop perch for things in motion.',
+    desc: 'Drag screenshots, project PDFs, or design assets up to your screen bezel to hold them safely in place, then glide them into an email or chat. Background downloads anchor directly to the capsule.',
   },
   {
     Icon: BatteryCharging,
-    name: 'Apple Battery Hub',
-    desc: 'Fluid 60 FPS liquid wave canvas physics engine, buoyant micro-bubbles, discharge drain diagnostics, and real-time duration forecasting.',
-    imgSrc: 'still-mode.jpg',
-    alt: 'Quick Pill Apple Dynamic Island Battery Hub',
+    tag: 'Hardware Vitality',
+    name: 'Apple Battery Hub & Fluid Wave',
+    story: 'A living, breathing pulse for your laptop.',
+    desc: 'Engineered with 60 FPS HTML5 canvas physics, fluid liquid waves and buoyant micro-bubbles reflect your battery health, complete with real-time charge forecasting and discharge diagnostics.',
   },
   {
     Icon: Timer,
-    name: 'Preset Timer & Depleting Glow',
-    desc: 'One-tap presets: 15m, 30m, 60m, 100m. A glowing SVG border traces the island edge and depletes as time counts down.',
-    imgSrc: 'timer-tab.jpg',
-    alt: 'Quick Pill Productivity Timer with Edge Depleting Glow animation',
+    tag: 'Deep Work',
+    name: 'Focus Timer & Glowing Perimeter',
+    story: 'Gentle pacing for deep work mornings.',
+    desc: 'No harsh alarms. Choose effortless 15m, 30m, 60m, or 100m presets, and watch a glowing stroke trace and slowly deplete around your island edge. Synchronized with wall-clock time so it never drifts.',
   },
   {
     Icon: CheckSquare,
-    name: 'Minimalist Tasks',
-    desc: 'Apple/Things 3 style task list with circular check controls, capsule input bar, and local persistence across restarts.',
-    imgSrc: 'tasks-tab.jpg',
-    alt: 'Quick Pill Minimalist Task Manager with circular checkboxes',
+    tag: 'Daily Clarity',
+    name: 'Minimalist Tasks & Checklists',
+    story: 'Peace of mind, one small checkmark at a time.',
+    desc: 'Organize daily priorities with satisfying circular check controls, a minimal capsule input bar, and reliable local storage that persists seamlessly between reboots.',
   },
   {
     Icon: Clipboard,
-    name: 'Clipboard History',
-    desc: 'Automatically captures up to 50 clipboard entries. One-click restore to active clipboard with visual confirmation.',
-    imgSrc: 'clipboard-tab.jpg',
-    alt: 'Quick Pill Clipboard History Manager with 50 saved clipboard snippets',
+    tag: 'Safety Net',
+    name: 'Clipboard History Buffer',
+    story: 'A faithful memory that never lets snippets slip away.',
+    desc: 'Quick Pill quietly preserves your last 50 clipboard items—code snippets, hex colors, links, and text fragments—ready to restore with a single click, saving countless frantic searches.',
   },
   {
     Icon: Cloud,
-    name: 'Weather & 3D Forecast',
-    desc: 'Real-time conditions, humidity, wind speed, precipitation, and a 3-day sky-glass forecast. Full °C and °F support.',
-    imgSrc: 'weather-tab.jpg',
-    alt: 'Quick Pill Real-time Weather widget with 3-day sky-glass forecast',
+    tag: 'Atmosphere',
+    name: 'Weather & 3D Sky Glass',
+    story: 'A tiny window to the world outside.',
+    desc: 'Glance up to see real-time ambient temperatures, humidity, wind, and a 3-day sky glass forecast so you always know when it’s the right moment for a refreshing break.',
   },
   {
     Icon: Clock,
-    name: 'Split-Flap Flip Clock',
-    desc: 'Mechanical 3D split-flap clock with glowing orange colon dots and a live date display — pure retro aesthetic.',
-    imgSrc: 'flipclock-tab.jpg',
-    alt: 'Quick Pill Mechanical 3D Split-Flap Flip Clock widget',
+    tag: 'Mechanical Charm',
+    name: 'StandBy Flip Clock & Quotes',
+    story: 'Nostalgic mechanical aesthetic at your screen’s edge.',
+    desc: 'A 3D split-flap mechanical clock pairs with curated reflections of timeless wisdom. The subtle glowing colon pulsates softly to ground your workday with calm perspective.',
   },
   {
     Icon: Calendar,
-    name: 'Interactive Calendar',
-    desc: 'Full month calendar view with highlighted today indicator and smooth navigation.',
-    imgSrc: 'calender-tab.jpg',
-    alt: 'Quick Pill Interactive Full Month Calendar widget',
+    tag: 'Time Orientation',
+    name: 'Compact Monthly Calendar',
+    story: 'Your month in perspective, without bulky windows.',
+    desc: 'A sleek, horizontal monthly grid tailored to your top screen bezel. Check dates, align team sprints, and verify weekdays in seconds without launching heavy calendar apps.',
   },
   {
     Icon: Search,
-    name: 'Universal Search & Launcher',
-    desc: 'Instant search across applications, web queries, and quick actions directly from your island capsule.',
-    imgSrc: 'search-tab.jpg',
-    alt: 'Quick Pill Universal App Search and Web Launcher',
+    tag: 'Instant Launch',
+    name: 'Omnibar Browser & URL Launcher',
+    story: 'The fastest gateway to wherever you need to go.',
+    desc: 'An intuitive omnibar that gets out of your way. Type any query to search Google, or paste localhost:3000 or an internal IP to leap straight into your development server with zero tab hunting.',
   },
   {
-    Icon: Settings,
-    name: 'Comprehensive Settings',
-    desc: 'Themes, positioning, drag-to-reorder tab manager, per-tab visibility, multi-monitor selector, and auto-launch.',
-    imgSrc: 'settings-tab.jpg',
-    alt: 'Quick Pill Customization and Multi-Monitor Settings dashboard',
-  },
-  {
-    Icon: Shield,
-    name: 'Privacy Dot Monitoring',
-    desc: 'Always-on camera (green) and microphone (orange) active-use indicator dots. Know exactly what is accessing your hardware.',
-    imgSrc: 'privacydot-tab.jpg',
-    alt: 'Quick Pill Camera and Microphone Privacy Dot Hardware Indicators',
+    Icon: Compass,
+    tag: 'Spiritual Balance',
+    name: 'Daily Prayer Times (Salah)',
+    story: 'Honoring spiritual balance in the digital rush.',
+    desc: 'A gentle solar arc calculates local prayer windows completely offline, offering peaceful pre-prayer notifications and optional music auto-pause to create space for peace during busy workdays.',
   },
   {
     Icon: Cpu,
-    name: 'System Metrics',
-    desc: 'Real-time CPU load and RAM utilization bars. Battery percentage with a dynamic charging glow accent.',
-    imgSrc: 'system.jpg',
-    alt: 'Quick Pill Live CPU Load and RAM utilization hardware metrics',
+    tag: 'System Health',
+    name: 'Hardware Monitor & Privacy Dots',
+    story: 'Quiet confidence in your machine’s health and privacy.',
+    desc: 'Live gauges monitor CPU loads and RAM utilization so you immediately spot rogue processes. Persistent green and orange privacy dots reassure you whenever your camera or microphone is accessed.',
   },
   {
-    Icon: Music,
-    name: 'Media Controller & Scrubber',
-    desc: 'Full-bleed album art, marquee titles, and an interactive waveform scrubber. Auto-recognizes Spotify, Apple Music, browsers.',
-    imgSrc: 'media-tab.jpg',
-    alt: 'Quick Pill Desktop Media Controller with album art and audio scrubber',
+    Icon: Settings,
+    tag: 'Tailored Fit',
+    name: 'Personalized Themes & Preferences',
+    story: 'Crafted to feel like a natural extension of your workflow.',
+    desc: 'Reorder your favorite tabs with drag-and-drop ease, customize notch positioning across multi-monitor setups, pick your preferred aesthetic themes, and fine-tune hotkeys to make Quick Pill feel like home.',
   },
 ];
 
@@ -137,15 +130,17 @@ export default function Features() {
   useEffect(() => {
     const ctx = gsap.context(() => {
       gsap.fromTo(
-        '.feature-card',
-        { y: 50, opacity: 0 },
+        '.feature-card--dark',
+        { y: 30, opacity: 0 },
         {
-          y: 0, opacity: 1, duration: 0.6,
+          y: 0,
+          opacity: 1,
+          duration: 0.5,
           stagger: { amount: 0.8, from: 'start' },
           ease: 'power3.out',
           scrollTrigger: {
             trigger: sectionRef.current,
-            start: 'top 75%',
+            start: 'top 80%',
             toggleActions: 'play none none none',
           },
         }
@@ -158,31 +153,31 @@ export default function Features() {
     <section className="features section" id="features" ref={sectionRef} aria-label="Quick Pill Features">
       <div className="container">
         <div className="features-header">
-          <h2 className="features-headline">11 Features.</h2>
-          <p className="features-subline">One capsule.</p>
+          <div className="features-badge">
+            <Sparkles size={11} className="features-badge-icon" />
+            <span>16 MODULAR CAPABILITIES</span>
+          </div>
+          <h2 className="features-headline">
+            16 Features. <span className="features-headline--dim">One Capsule.</span>
+          </h2>
+          <p className="features-subline">
+            Engineered with fluid spring physics, native Win32/WASAPI performance, and zero cognitive load.
+          </p>
         </div>
-        <div className="features-grid">
-          {FEATURES.map(({ Icon, name, desc, imgSrc, alt }) => (
-            <article className="feature-card" key={name}>
-              <div className="feature-card-header">
-                <Icon size={20} strokeWidth={1.5} className="feature-icon" aria-hidden="true" />
-                <h3 className="feature-name">{name}</h3>
-              </div>
-              <p className="feature-desc">{desc}</p>
-              {imgSrc && (
-                <div className="feature-img-box">
-                  <img
-                    src={imgSrc}
-                    alt={alt || name}
-                    title={name}
-                    className="feature-card-img"
-                    loading="lazy"
-                    decoding="async"
-                    width="400"
-                    height="200"
-                  />
+
+        <div className="features-grid features-grid--dark">
+          {ALL_FEATURES.map(({ Icon, tag, name, story, desc }) => (
+            <article className="feature-card feature-card--dark" key={name}>
+              <div className="feature-card-top">
+                <span className="feature-card-tag">{tag}</span>
+                <div className="feature-icon-wrapper">
+                  <Icon size={17} strokeWidth={1.75} className="feature-icon" aria-hidden="true" />
                 </div>
-              )}
+              </div>
+
+              <h3 className="feature-name">{name}</h3>
+              <p className="feature-story">{story}</p>
+              <p className="feature-desc">{desc}</p>
             </article>
           ))}
         </div>

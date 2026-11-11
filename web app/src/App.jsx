@@ -82,13 +82,13 @@ export default function App() {
       <main>
         <Hero onDownloadClick={handleNavigateToThankYou} />
 
-        {/* White section */}
+        {/* 16 Features section */}
         <Features />
 
-        {/* Black section separator */}
-        <div className="section-rule--white" />
+        {/* Subtle section separator */}
+        <div className="section-divider-subtle" />
 
-        {/* Black section */}
+        {/* Three Modes section */}
         <HowItWorks />
 
         {/* White section separator */}
