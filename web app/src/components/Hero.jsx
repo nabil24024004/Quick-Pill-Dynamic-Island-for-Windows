@@ -3,6 +3,7 @@ import { gsap } from 'gsap';
 import { Download, Github } from 'lucide-react';
 import Beams from './Beams';
 import InteractiveSandbox from './InteractiveSandbox';
+import MicrosoftStoreBadge from './MicrosoftStoreBadge';
 import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
 export default function Hero({ onDownloadClick }) {
@@ -89,38 +90,33 @@ export default function Hero({ onDownloadClick }) {
             title="Download Quick Pill for Windows 10 & 11"
             aria-label="Download Quick Pill for Windows 10 & 11"
           >
-            <Download size={14} strokeWidth={2} aria-hidden="true" />
+            <Download size={15} strokeWidth={2} aria-hidden="true" />
             Download for Windows
           </a>
-          <a
+          <MicrosoftStoreBadge
             href={msStoreUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ms-store-badge-btn"
-            title="Get Quick Pill from Microsoft Store"
-            aria-label="Get Quick Pill from Microsoft Store"
-          >
-            <img
-              src="/ms-store-dark.svg"
-              alt="Get it from Microsoft"
-              width="161"
-              height="44"
-            />
-          </a>
+            title={`Get Quick Pill v${version} from Microsoft Store`}
+            ariaLabel={`Get Quick Pill v${version} from Microsoft Store`}
+          />
+        </div>
+
+        <div className="hero-platforms">
+          <span>Windows 10 / 11 (64-bit)</span>
+          <span aria-hidden="true">•</span>
+          <span>100% Free &amp; Open Source</span>
+          <span aria-hidden="true">•</span>
           <a
             href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows"
             target="_blank"
             rel="noopener noreferrer"
-            className="btn btn--ghost-white"
+            className="hero-github-link"
             title="View Quick Pill open-source repository on GitHub"
             aria-label="View Quick Pill open-source repository on GitHub"
           >
-            <Github size={14} strokeWidth={1.5} aria-hidden="true" />
+            <Github size={13} strokeWidth={1.75} aria-hidden="true" />
             View on GitHub
           </a>
         </div>
-
-        <div className="hero-platforms">Windows 10 / 11 (64-bit) • 100% Free & Open Source</div>
       </div>
 
       {/* Interactive Sandbox Hero: Full-width simulated Windows 11 desktop viewport & 16-tab dock */}

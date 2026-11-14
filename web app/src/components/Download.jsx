@@ -2,7 +2,7 @@ import { useRef, useEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { Download as DownloadIcon, Github, ExternalLink } from 'lucide-react';
-
+import MicrosoftStoreBadge from './MicrosoftStoreBadge';
 import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -41,7 +41,7 @@ export default function Download({ onDownloadClick }) {
         }
       );
 
-      gsap.fromTo('.download-platforms .btn',
+      gsap.fromTo('.download-platforms > *',
         { y: 20, opacity: 0 },
         {
           y: 0, opacity: 1, duration: 0.5, stagger: 0.1, ease: 'power2.out',
@@ -80,22 +80,6 @@ export default function Download({ onDownloadClick }) {
         {/* Windows & Microsoft Store Download buttons */}
         <div className="download-platforms">
           <a
-            href={msStoreUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ms-store-badge-btn"
-            id="dl-microsoft-store"
-            title={`Get Quick Pill v${version} from Microsoft Store`}
-            aria-label={`Get Quick Pill v${version} from Microsoft Store`}
-          >
-            <img
-              src="/ms-store-dark.svg"
-              alt="Get it from Microsoft"
-              width="161"
-              height="44"
-            />
-          </a>
-          <a
             href="#/thank-you"
             onClick={handleDownload}
             className="btn btn--primary"
@@ -103,9 +87,15 @@ export default function Download({ onDownloadClick }) {
             title={`Download Quick Pill v${version} Setup for Windows 10/11 (.exe)`}
             aria-label={`Download Quick Pill v${version} Setup for Windows 10/11 64-bit installer`}
           >
-            <DownloadIcon size={14} strokeWidth={2} aria-hidden="true" />
+            <DownloadIcon size={15} strokeWidth={2} aria-hidden="true" />
             Download for Windows (.exe)
           </a>
+          <MicrosoftStoreBadge
+            id="dl-microsoft-store"
+            href={msStoreUrl}
+            title={`Get Quick Pill v${version} from Microsoft Store`}
+            ariaLabel={`Get Quick Pill v${version} from Microsoft Store`}
+          />
         </div>
 
         {/* Footer meta row */}
