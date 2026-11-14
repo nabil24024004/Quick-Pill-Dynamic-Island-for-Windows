@@ -1,17 +1,18 @@
 import { useRef, useEffect } from 'react';
 
 const BADGES = [
-  'Electron 38+',
+  'Tauri v2',
+  'Rust Native Core',
+  'Edge WebView2',
   'React 19',
   'Framer Motion 12',
   'Vite 5',
   'GSAP 3',
-  'PowerShell / Win32 API',
-  'WinRT / SMTC Media',
-  'Windows 10 / 11 Shell',
-  'Lucide React',
-  'Vanilla CSS',
-  'Electron Forge 7',
+  'Win32 Overlay & Shell',
+  'WinRT / SMTC & Toast',
+  'Windows WASAPI Audio',
+  'Windows 10 / 11',
+  'NSIS Installer',
 ];
 
 // Double the list so the second copy creates a seamless tail

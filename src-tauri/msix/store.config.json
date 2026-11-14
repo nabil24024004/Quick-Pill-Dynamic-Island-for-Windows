@@ -1,0 +1,12 @@
+{
+  "packageName": "NeoSparkX.QuickPill",
+  "publisherId": "CN=DFBB08CE-EBCC-4045-96A4-05CEDB00F2BD",
+  "publisherDisplayName": "NeoSparkX",
+  "displayName": "Quick Pill",
+  "description": "A live Dynamic Island for Windows 10 & 11 featuring per-app audio mixing, live notifications, focus timers, drop shelf, quick notes, and app launcher.",
+  "storeProductId": "9N371MQB4BS7",
+  "storeUrlFallback": "https://apps.microsoft.com/search?query=Quick+Pill",
+  "minOsVersion": "10.0.19041.0",
+  "maxVersionTested": "10.0.26100.0",
+  "executable": "quick-pill.exe"
+}

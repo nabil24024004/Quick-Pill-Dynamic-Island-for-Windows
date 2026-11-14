@@ -1,70 +1,17 @@
 {
   "name": "quick-pill",
   "productName": "Quick Pill",
-  "version": "5.6.1",
+  "version": "6.0.0",
   "description": "A Dynamic Island for Windows",
-  "main": ".vite/build/main.js",
   "scripts": {
-    "start": "electron-forge start",
-    "dev": "electron-forge start",
-    "electron:dev": "electron-forge start",
-    "build:native": "dotnet publish native/audio-helper/audio-helper.csproj -c Release -r win-x64 --self-contained true -o native/bin",
-    "build:services": "node -e \"const fs = require('fs'); fs.cpSync('src/services', '.vite/build/services', { recursive: true });\"",
-    "build:vite": "electron-forge package",
-    "build": "npm run build:vite && npm run build:services && electron-builder --win",
-    "electron:build": "npm run build:vite && npm run build:services && electron-builder --win",
-    "package": "npm run build:services && electron-forge package",
-    "make": "npm run build:services && electron-forge make",
-    "build-win": "npm run build:services && electron-builder --win",
-    "publish": "electron-forge publish",
-    "test": "node --test tests/*.test.js",
-    "update:manifest": "node scripts/generate-manifest.js",
-    "lint": "echo \"No linting configured\""
-  },
-  "build": {
-    "appId": "com.neosparkx.quickpill",
-    "productName": "Quick Pill",
-    "extraResources": [
-      {
-        "from": "native/bin/audio-helper.exe",
-        "to": "audio-helper.exe"
-      }
-    ],
-    "files": [
-      "**/*",
-      "!dist/**",
-      "!out/**",
-      "!native/**",
-      "!web app/**",
-      "!tests/**",
-      "!.github/**",
-      "!.agents/**",
-      "!.claude/**",
-      "!updates/**",
-      "!scripts/**"
-    ],
-    "directories": {
-      "output": "dist"
-    },
-    "win": {
-      "target": [
-        "nsis"
-      ],
-      "icon": "src/assets/icons/icon.ico",
-      "artifactName": "QuickPill-Windows-v${version}-Setup.${ext}"
-    },
-    "nsis": {
-      "oneClick": true,
-      "perMachine": false,
-      "allowToChangeInstallationDirectory": false,
-      "installerIcon": "src/assets/icons/icon.ico",
-      "uninstallerIcon": "src/assets/icons/icon.ico",
-      "installerHeaderIcon": "src/assets/icons/icon.ico",
-      "createDesktopShortcut": true,
-      "createStartMenuShortcut": true,
-      "shortcutName": "Quick Pill",
-      "artifactName": "QuickPill-Windows-v${version}-Setup.${ext}"
-    }
+    "dev": "tauri dev",
+    "start": "tauri dev",
+    "build": "tauri build",
+    "build:frontend": "vite build",
+    "build:msix": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-msix.ps1",
+    "tauri": "tauri",
+    "test": "cargo test --manifest-path src-tauri/Cargo.toml",
+    "generate-manifest": "node scripts/generate-manifest.js"
   },
   "keywords": [],
   "author": {
@@ -73,32 +20,20 @@
   },
   "license": "MIT",
   "devDependencies": {
-    "@electron-forge/cli": "^7.8.1",
-    "@electron-forge/maker-squirrel": "^7.11.2",
-    "@electron-forge/maker-wix": "^7.8.1",
-    "@electron-forge/maker-zip": "^7.11.1",
-    "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
-    "@electron-forge/plugin-fuses": "^7.8.1",
-    "@electron-forge/plugin-vite": "^7.8.1",
-    "@electron/fuses": "^1.8.0",
-    "electron": "^38.7.2",
-    "electron-builder": "^26.15.3",
+    "@tauri-apps/cli": "^2.12.4",
     "vite": "^5.4.19"
   },
   "dependencies": {
+    "@elevenlabs/elevenlabs-js": "^2.78.0",
+    "@tauri-apps/api": "^2.12.4",
     "@vitejs/plugin-react": "^4.5.2",
-    "electron-squirrel-startup": "^1.0.1",
     "framer-motion": "^12.34.0",
     "lucide-react": "^0.575.0",
-    "node-powershell": "^5.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-markdown": "^10.1.0"
   },
   "allowScripts": {
-    "electron@38.7.2": true,
-    "esbuild@0.21.5": true,
-    "@bitdisaster/exe-icon-extractor@1.0.10": true,
-    "electron-winstaller": true
+    "esbuild@0.21.5": true
   }
 }

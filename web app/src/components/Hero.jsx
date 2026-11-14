@@ -10,7 +10,7 @@ export default function Hero({ onDownloadClick }) {
   const subtitleRef = useRef(null);
   const ctaRef      = useRef(null);
   const eyebrowRef  = useRef(null);
-  const { version } = useReleaseInfo();
+  const { version, msStoreUrl } = useReleaseInfo();
 
   /* GSAP entrance animation */
   useEffect(() => {
@@ -91,6 +91,21 @@ export default function Hero({ onDownloadClick }) {
           >
             <Download size={14} strokeWidth={2} aria-hidden="true" />
             Download for Windows
+          </a>
+          <a
+            href={msStoreUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ms-store-badge-btn"
+            title="Get Quick Pill from Microsoft Store"
+            aria-label="Get Quick Pill from Microsoft Store"
+          >
+            <img
+              src="/ms-store-dark.svg"
+              alt="Get it from Microsoft"
+              width="161"
+              height="44"
+            />
           </a>
           <a
             href="https://github.com/nabil24024004/Quick-Pill"

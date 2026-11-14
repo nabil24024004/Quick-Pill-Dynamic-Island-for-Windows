@@ -1,25 +1,23 @@
 import { useState, useEffect } from 'react';
 
 const DEFAULT_RELEASE = {
-  version: '5.6.1',
-  name: 'Quick Pill 5.6.1',
-  releaseDate: '2026-11-11',
+  version: '6.0.0',
+  name: 'Quick Pill 6.0.0',
+  releaseDate: '2026-11-14',
+  storeProductId: '9N371MQB4BS7',
+  msStoreUrl: 'https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct',
   changelog: [
-    'Drop Shelf (Tab 16, Alt+F) Enhancements: Added custom sleek horizontal scrollbar, wheel-scroll to horizontal translation, carousel navigation chevrons, and real visual preview thumbnails for images and PDF documents.',
-    'Drop Shelf Staging: Persistent session staging stash to drop files into the notch with native Windows drag-out and quick open.',
-    'Prayer Times & Celestial Arc (Tab 17, Alt+P): Location-synchronized prayer timings with offline astronomical calculation fallback, next prayer countdown hero, celestial sun arc, and collapsed time-to-pray notification banner with chime.',
-    'Weather Pod Redesign: Modern glassmorphic 3D depth aesthetic with automatic Day (#FFD801) and Night (#061E40) dynamic accent theme, 7-day forecast cards, and sunrise/sunset metrics.',
-    'Search Command Bar: Redesigned with Google Red accent (#DA3A28), Claude.ai quick launcher integration, and crisp official SVG branding for Google, YouTube, GitHub, ChatGPT, and Claude.',
-    'App Launcher Auto-Collapse: Smart auto-collapse when cursor leaves the notch and automatic dismissal upon launching an application.',
-    'Quick Notes & Task Manager: Seamless note-to-task conversion with defensive normalization, pinned/starred notes, and action shortcuts.',
-    'Crash Shield & Error Boundary: Component-level ErrorBoundary wrapping across all interactive tabs and root window preventing render crashes.',
-    'Self-Healing Tab Sync: Automatic migration and sync ensuring newly added tabs consistently display on the pill and in Settings.'
+    'Native Rust & Tauri v2 Rewrite: Rebuilt Quick Pill from Electron to a native Rust backend + Edge WebView2 frontend for instant launch speed, minimal RAM footprint, and a dramatically smaller installer.',
+    'Direct Win32 Overlay & Global Shortcuts: Native Windows topmost overlay positioning, Ctrl click-through passthrough, and global Alt+Key tab hotkeys handled directly in Rust.',
+    'Native WinRT & WASAPI Engines: Replaced external PowerShell bridges with native WinRT SMTC media controls, live Windows toast notifications, and WASAPI per-app audio mixing.',
+    'Authenticode Signing Pipeline & SAC Protection: Added Windows code-signing build hooks (PFX / Azure Trusted Signing / Cert Store) and Smart App Control policy error handling in the auto-updater.',
+    'Full Feature Parity: Drop Shelf (Alt+F), Prayer Times & Celestial Arc (Alt+P), Weather Pod, Quick Notes, App Launcher & Workspaces, Timer, Clipboard History, Tasks, and Search Bar.'
   ],
   platforms: {
     'win32-x64': {
-      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.1-Setup.exe',
-      sha256: 'fd5a7329fce33de2b75e3c8cd98520b3a58108f15748fdd33ab1021f7a6d034b',
-      size: 135202987,
+      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe',
+      sha256: '6c7a3216fe125efd42ad28b4301829387f19f98a60f1b9fccec79408fa950366',
+      size: 4124348,
       installerType: 'nsis'
     }
   }
@@ -54,11 +52,18 @@ export function useReleaseInfo() {
   }, []);
 
   const windowsUrl = releaseInfo.platforms?.['win32-x64']?.url || DEFAULT_RELEASE.platforms['win32-x64'].url;
+  const storeProductId = (releaseInfo.storeProductId || releaseInfo.platforms?.['ms-store']?.productId || '').trim();
+  const msStoreUrl = storeProductId
+    ? `https://apps.microsoft.com/detail/${storeProductId}?mode=direct`
+    : (releaseInfo.msStoreUrl || releaseInfo.platforms?.['ms-store']?.url || DEFAULT_RELEASE.msStoreUrl);
 
   return {
     releaseInfo,
-    version: releaseInfo.version || '5.6.1',
+    version: releaseInfo.version || '6.0.0',
     windowsUrl,
+    storeProductId,
+    msStoreUrl,
+    storeDirectReady: Boolean(storeProductId),
     changelog: releaseInfo.changelog || [],
     isLoading
   };

@@ -13,7 +13,7 @@ const HEADLINE = 'Download.';
 export default function Download({ onDownloadClick }) {
   const sectionRef  = useRef(null);
   const headlineRef = useRef(null);
-  const { version, windowsUrl } = useReleaseInfo();
+  const { version, windowsUrl, msStoreUrl } = useReleaseInfo();
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -77,8 +77,24 @@ export default function Download({ onDownloadClick }) {
           Free and open-source. Built for Windows 10 &amp; 11. No account required.
         </p>
 
-        {/* Windows Download button */}
+        {/* Windows & Microsoft Store Download buttons */}
         <div className="download-platforms">
+          <a
+            href={msStoreUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ms-store-badge-btn"
+            id="dl-microsoft-store"
+            title={`Get Quick Pill v${version} from Microsoft Store`}
+            aria-label={`Get Quick Pill v${version} from Microsoft Store`}
+          >
+            <img
+              src="/ms-store-dark.svg"
+              alt="Get it from Microsoft"
+              width="161"
+              height="44"
+            />
+          </a>
           <a
             href="#/thank-you"
             onClick={handleDownload}

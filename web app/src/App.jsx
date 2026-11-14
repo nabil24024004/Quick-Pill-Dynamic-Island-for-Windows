@@ -10,8 +10,9 @@ import Audiences   from './components/Audiences';
 import TechStack   from './components/TechStack';
 import Shortcuts   from './components/Shortcuts';
 import Download    from './components/Download';
-import Footer      from './components/Footer';
-import ThankYou    from './components/ThankYou';
+import Footer        from './components/Footer';
+import ThankYou      from './components/ThankYou';
+import PrivacyPolicy from './components/PrivacyPolicy';
 
 // Register GSAP plugins once at the app root
 gsap.registerPlugin(ScrollTrigger);
@@ -29,16 +30,29 @@ function isThankYouPath() {
   );
 }
 
+function isPrivacyPath() {
+  const hash = window.location.hash.toLowerCase();
+  const path = window.location.pathname.toLowerCase();
+  return (
+    hash.includes('privacy') ||
+    path.endsWith('/privacy') ||
+    path.endsWith('/privacy/') ||
+    path.endsWith('/privacy-policy')
+  );
+}
+
+function resolveRouteView() {
+  if (isPrivacyPath()) return 'privacy';
+  if (isThankYouPath()) return 'thank-you';
+  return 'home';
+}
+
 export default function App() {
-  const [currentView, setCurrentView] = useState(() => isThankYouPath() ? 'thank-you' : 'home');
+  const [currentView, setCurrentView] = useState(() => resolveRouteView());
 
   useEffect(() => {
     const handleRouteChange = () => {
-      if (isThankYouPath()) {
-        setCurrentView('thank-you');
-      } else {
-        setCurrentView('home');
-      }
+      setCurrentView(resolveRouteView());
     };
 
     window.addEventListener('popstate', handleRouteChange);
@@ -65,14 +79,25 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
 
+  const handleNavigateToPrivacy = useCallback((e) => {
+    if (e?.preventDefault) e.preventDefault();
+    window.history.pushState({}, '', '#/privacy');
+    setCurrentView('privacy');
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  }, []);
+
   const handleNavigateToHome = useCallback(() => {
     window.history.pushState({}, '', window.location.pathname);
     setCurrentView('home');
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);
 
+  if (currentView === 'privacy') {
+    return <PrivacyPolicy onBackToHome={handleNavigateToHome} />;
+  }
+
   if (currentView === 'thank-you') {
-    return <ThankYou onBackToHome={handleNavigateToHome} />;
+    return <ThankYou onBackToHome={handleNavigateToHome} onPrivacyClick={handleNavigateToPrivacy} />;
   }
 
   return (
@@ -108,7 +133,7 @@ export default function App() {
         <Download onDownloadClick={handleNavigateToThankYou} />
       </main>
 
-      <Footer />
+      <Footer onPrivacyClick={handleNavigateToPrivacy} />
     </>
   );
 }

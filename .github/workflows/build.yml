@@ -3,13 +3,14 @@ name: Windows Build & Release
 on:
   push:
     branches: [ main, master ]
+    tags: [ 'v*' ]
   pull_request:
     branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build for Windows
+    name: Build Quick Pill (Windows x64)
     runs-on: windows-latest
 
     steps:
@@ -22,25 +23,76 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust Build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
       - name: Get version from package.json
         id: pkg
-        run: node -p "\"version=\" + require('./package.json').version" >> $GITHUB_OUTPUT
-        shell: bash
+        shell: pwsh
+        run: |
+          $v = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Install Dependencies
-        run: npm install
+        run: npm ci
 
-      - name: Package Application
-        run: npm run package
+      - name: Run Rust Unit Tests
+        run: npm test
 
-      - name: Make Distributables (Windows)
-        run: npm run make -- --skip-package
+      - name: Build Tauri v2 Bundle & NSIS Installer
+        env:
+          WINDOWS_SIGN_PFX_B64: ${{ secrets.WINDOWS_SIGN_PFX_B64 }}
+          WINDOWS_SIGN_PASSWORD: ${{ secrets.WINDOWS_SIGN_PASSWORD }}
+          WINDOWS_SIGN_THUMBPRINT: ${{ secrets.WINDOWS_SIGN_THUMBPRINT }}
+          WINDOWS_SIGN_TIMESTAMP_URL: ${{ secrets.WINDOWS_SIGN_TIMESTAMP_URL }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_DLIB_PATH: ${{ secrets.AZURE_SIGNING_DLIB_PATH }}
+          AZURE_SIGNING_METADATA_PATH: ${{ secrets.AZURE_SIGNING_METADATA_PATH }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: npm run build
+
+      - name: Stage Release Installer & Package MSIX
+        env:
+          MSIX_PACKAGE_NAME: ${{ secrets.MSIX_PACKAGE_NAME }}
+          MSIX_PUBLISHER_ID: ${{ secrets.MSIX_PUBLISHER_ID }}
+          MSIX_PUBLISHER_DISPLAY: ${{ secrets.MSIX_PUBLISHER_DISPLAY }}
+          MSIX_STORE_PRODUCT_ID: ${{ secrets.MSIX_STORE_PRODUCT_ID }}
+        shell: pwsh
+        run: |
+          $version = "${{ steps.pkg.outputs.version }}"
+          $setup = Get-ChildItem "src-tauri\target\release\bundle\nsis\*.exe" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $setup) { throw "No NSIS setup executable produced." }
+
+          New-Item -ItemType Directory -Force -Path "release-artifacts" | Out-Null
+          $canonicalName = "QuickPill-Windows-v$version-Setup.exe"
+          $dest = Join-Path "release-artifacts" $canonicalName
+          Copy-Item -LiteralPath $setup.FullName -Destination $dest -Force
+
+          $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $canonicalName" | Out-File -FilePath "$dest.sha256" -Encoding utf8
+
+          npm run build:msix
+          $msix = Get-ChildItem "src-tauri\target\release\bundle\msix\*.msix" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if ($msix) {
+            Copy-Item -LiteralPath $msix.FullName -Destination (Join-Path "release-artifacts" $msix.Name) -Force
+          }
+
+          npm run generate-manifest
+          Copy-Item -LiteralPath "web app\public\version.json" -Destination "release-artifacts\version.json" -Force
 
       - name: Upload Windows Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: QuickPill-Windows-v${{ steps.pkg.outputs.version }}
           path: |
-            out/make/**/*.exe
-            out/make/**/*.zip
+            release-artifacts/*
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msix/*.msix
           if-no-files-found: error

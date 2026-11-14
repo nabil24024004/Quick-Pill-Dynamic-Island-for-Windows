@@ -12,6 +12,12 @@ dist
 dist-ssr
 out/
 *.local
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+release-artifacts/
 
 # Editor directories and files
 .vscode/*
@@ -24,10 +30,13 @@ out/
 *.sln
 *.sw?
 *.pdb
+# Tauri / Rust / Web App build outputs
+src-tauri/target/
+src-tauri/gen/
+web app/dist/
+web app/node_modules/
 .claude/
-.vite/
-native/audio-helper/bin/
-native/audio-helper/obj/
+.agents/
 
 # Runtime local stores & test caches
 app-cache.json
@@ -37,4 +46,3 @@ notes.json.bak
 workspaces.json
 draft-recovery.json
 qp_window_manager.ps1
-.agents/

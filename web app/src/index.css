@@ -132,6 +132,30 @@ body::after {
 .btn--outline-black       { background: transparent; color: var(--surface-fg); outline: 2px solid var(--border); }
 .btn--outline-black:hover { background: var(--surface-fg); color: var(--surface); }
 
+.ms-store-badge-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: #202020;
+  overflow: hidden;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: transform var(--ease-instant), border-color var(--ease-instant), box-shadow var(--ease-instant);
+}
+.ms-store-badge-btn:hover {
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 18px rgba(255, 255, 255, 0.14);
+  transform: translateY(-1px);
+}
+.ms-store-badge-btn img {
+  display: block;
+  height: 44px;
+  width: auto;
+}
+
 /* ============================================
    HERO
    ============================================ */
@@ -172,7 +196,7 @@ body::after {
   margin-bottom: 2.5rem;
 }
 .hero-cta {
-  display: flex; gap: 1.25rem; flex-wrap: wrap; justify-content: center;
+  display: flex; gap: 1.25rem; flex-wrap: wrap; justify-content: center; align-items: center;
   margin-bottom: 1.75rem;
 }
 .hero-platforms {
@@ -744,7 +768,7 @@ body::after {
   color: rgba(255,255,255,0.45); max-width: 460px;
   margin-bottom: 3.5rem; line-height: 1.75;
 }
-.download-platforms { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 2rem; }
+.download-platforms { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 2rem; }
 .download-meta { display: flex; align-items: center; gap: 2.5rem; margin-top: 2.5rem; }
 .download-meta a {
   font-family: var(--font-mono); font-size: 0.7rem;

@@ -10,8 +10,8 @@ const AUDIENCES = [
     points: [
       'CPU/RAM monitor accessible without opening Task Manager',
       'Clipboard history for rapid code-snippet recall',
-      'Ctrl + 1–8 keyboard shortcuts to jump directly to any tab',
-      'Click-through translucency to interact behind the island',
+      'Alt + <Key> global keyboard shortcuts to jump straight to any tab',
+      'Ctrl + Hover click-through translucency to interact behind the island',
     ],
   },
   {

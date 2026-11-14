@@ -5,7 +5,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger';
 gsap.registerPlugin(ScrollTrigger);
 
 const SHORTCUTS = [
-  { key: 'Ctrl + 1 – 8',     action: 'Jump directly to Tab 1 through 8 in Large Mode' },
+  { key: 'Alt + <Key>',      action: 'Jump directly to any tab globally (Alt+O, M, N, W, T, L, F, P...)' },
   { key: '← / →',            action: 'Navigate to previous or next tab' },
   { key: 'Mouse Wheel',       action: 'Scroll horizontally across active tabs' },
   { key: 'Ctrl + Hover',      action: '85% translucency + full click-through passthrough' },

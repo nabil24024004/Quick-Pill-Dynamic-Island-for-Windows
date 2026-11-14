@@ -16,8 +16,8 @@ import {
 } from "lucide-react";
 
 /**
- * Extracts native filesystem paths from a DataTransfer object using Electron 38+ webUtils.getPathForFile
- * with fallback to legacy File.path.
+ * Extracts native filesystem paths from a DataTransfer object using the host bridge helper
+ * with fallback to File.path when available.
  */
 export function extractFilePathsFromDataTransfer(dataTransfer) {
   const droppedFiles = dataTransfer?.files;

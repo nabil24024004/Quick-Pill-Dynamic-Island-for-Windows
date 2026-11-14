@@ -15,7 +15,7 @@ import { useReleaseInfo } from '../hooks/useReleaseInfo';
 const GITHUB_URL  = 'https://github.com/nabil24024004/Quick-Pill';
 const DISCORD_URL = 'https://discord.gg/a2xzVkxFVg';
 
-export default function ThankYou({ onBackToHome }) {
+export default function ThankYou({ onBackToHome, onPrivacyClick }) {
   const downloadInitiatedRef = useRef(false);
   const { version, windowsUrl, isLoading } = useReleaseInfo();
 
@@ -110,11 +110,10 @@ export default function ThankYou({ onBackToHome }) {
         >
           <div className="smartscreen-header">
             <h2 className="smartscreen-title">
-              Windows Installation &amp; SmartScreen Guide
+              Windows Installation, SmartScreen &amp; Smart App Control Guide
             </h2>
             <p className="smartscreen-intro">
-              Because Quick Pill is open-source and newly released, Microsoft Defender
-              SmartScreen may prompt an unrecognized app notice. Follow these two steps:
+              If Microsoft Defender SmartScreen prompts an unrecognized app notice while installing an unsigned preview or newly released build, follow these two steps (for Windows 11 <strong>Smart App Control</strong>, signed release builds and Microsoft reputation indexing are required):
             </p>
           </div>
 
@@ -199,13 +198,13 @@ export default function ThankYou({ onBackToHome }) {
             <div className="first-step-card">
               <Layers size={20} className="first-step-icon" />
               <h4>Click for Large Mode</h4>
-              <p>Click the capsule to open the full 11-tab dashboard for tasks, timers, clipboard history, and flip clock.</p>
+              <p>Click the capsule to open the full 16-tab workspace for tasks, timers, audio mixer, drop shelf, notes, and flip clock.</p>
             </div>
 
             <div className="first-step-card">
               <Keyboard size={20} className="first-step-icon" />
               <h4>Keyboard Shortcuts</h4>
-              <p>Press <kbd>Ctrl + 1</kbd> through <kbd>Ctrl + 8</kbd> to jump straight into any feature tab in milliseconds.</p>
+              <p>Press global shortcuts like <kbd>Alt + O</kbd>, <kbd>Alt + M</kbd>, <kbd>Alt + N</kbd>, or <kbd>Alt + F</kbd> to jump straight into any tab.</p>
             </div>
 
             <div className="first-step-card">
@@ -268,6 +267,7 @@ export default function ThankYou({ onBackToHome }) {
                 <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer">GitHub</a>
                 <a href={`${GITHUB_URL}/releases`} target="_blank" rel="noopener noreferrer">All Releases</a>
                 <a href={`${GITHUB_URL}/blob/main/LICENSE`} target="_blank" rel="noopener noreferrer">MIT License</a>
+                <a href="#/privacy" onClick={onPrivacyClick}>Privacy Policy</a>
               </div>
               <p className="footer-copy">
                 © {new Date().getFullYear()} Abrar Nabil. Open-source under MIT License.

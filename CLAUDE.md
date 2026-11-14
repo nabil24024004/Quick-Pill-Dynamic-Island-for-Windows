@@ -1,17 +1,18 @@
 # CLAUDE.md - Quick Pill Developer & AI Guide
 
-Welcome to the **Quick Pill** project codebase! This file serves as the definitive reference for AI assistants and developers working on Quick Pill.
+Welcome to the **Quick Pill** project codebase! This file serves as the reference for AI assistants and developers working on Quick Pill.
 
 ---
 
 ## 📌 Project Overview
 
-**Quick Pill** is a desktop application that recreates Apple's Dynamic Island experience on **Windows 10 & 11**. It acts as a non-intrusive notification hub, system monitor, media controller, and customizable widget panel that expands on hover or click while floating seamlessly above all desktop windows.
+**Quick Pill** is a native Windows desktop application that brings an Apple Dynamic Island experience to **Windows 10 & 11**. It floats above all desktop windows with minimal memory overhead, offering notifications, per-app WASAPI audio mixing, media playback control, a persistent drag-and-drop file shelf, prayer times, quick notes, an app launcher, and customizable widgets.
 
 - **Product Name**: Quick Pill
-- **Current Version**: 5.6.1
+- **Current Version**: 6.0.0
+- **Architecture**: Tauri v2 + Rust native backend + Edge WebView2 (React 19)
 - **License**: MIT
-- **Author**: Abrar Nabil
+- **Author**: Abrar Nabil / NeoSparkX
 
 ---
 
@@ -19,171 +20,105 @@ Welcome to the **Quick Pill** project codebase! This file serves as the definiti
 
 | Layer | Technology / Library | Description |
 | :--- | :--- | :--- |
-| **Desktop Framework** | [Electron 38+](https://www.electronjs.org/) | Windows desktop runtime |
-| **Build & Tooling** | [Electron Forge 7+](https://www.electronforge.io/) & [Vite 5+](https://vitejs.dev/) | HMR development, bundling, and distribution packaging |
-| **Frontend Library** | [React 19](https://react.dev/) | Component-based UI library |
-| **Animations** | [Framer Motion 12](https://www.framer.com/motion/) | Smooth UI physics, layout transitions, and mode expansions |
+| **Desktop Framework** | [Tauri v2](https://v2.tauri.app/) & [Rust](https://www.rust-lang.org/) | Native desktop host, tray icon, global shortcuts, Edge WebView2 |
+| **Windows Native APIs** | `windows` crate (Win32 / WinRT / WASAPI) | Topmost overlay bounds, SMTC media controls, live toasts, UWP discovery, WASAPI audio mixer |
+| **Frontend Library** | [React 19](https://react.dev/) & [Vite 5](https://vitejs.dev/) | UI components, state hooks, and fast HMR bundling |
+| **Animations** | [Framer Motion 12](https://www.framer.com/motion/) | Tuned spring physics (`stiffness: 340, damping: 28, mass: 0.8`) and layout transitions |
 | **Icons** | [Lucide React](https://lucide.dev/) | Modern SVG icon set |
-| **Styling** | Vanilla CSS (`src/App.css`) | Custom animations, themes, dark glassmorphism, responsive metrics |
-| **OS Integration** | PowerShell / Win32 / WinRT | Native media control, hardware stats, app discovery, camera/mic status |
+| **Styling** | Vanilla CSS (`src/App.css`) | Themes, notch geometry, dark glassmorphism, animations |
 
 ---
 
 ## 📁 Repository Structure
 
 ```
-Ripple Island/
-├── .github/                 # GitHub workflows & CI/CD configs
-├── src/                     # Core application source code
-│   ├── assets/              # App icons and media assets
-│   │   └── icons/           # App icons (.ico, .png, etc.)
-│   ├── components/          # Reusable UI components (if modularized)
-│   ├── App.css              # Global styles, themes, and animations
-│   ├── App.jsx              # React root entry point
-│   ├── Island.jsx           # Main Island interface, state & tabs logic (~2700+ lines)
-│   ├── main.js              # Electron main process (OS integrations, IPC handlers, window setup)
-│   └── preload.js           # Secure contextBridge exposing electronAPI to renderer
-├── update/                  # Native extension scripts / hooks (e.g. WH C++ hooks)
-├── forge.config.js          # Electron Forge packaging, makers (Squirrel, ZIP), fuses & post-hooks
-├── index.html               # Main HTML entry document for Vite renderer
-├── package.json             # Dependencies, scripts, and permissions
-├── vite.main.config.mjs     # Vite configuration for Electron Main process
-├── vite.preload.config.mjs  # Vite configuration for Electron Preload script
-└── vite.renderer.config.mjs # Vite configuration for React Renderer process
+Quick pill/
+├── .github/workflows/       # GitHub Actions CI/CD (Windows x64 Tauri v2 + NSIS + signing)
+├── assets/                  # Logos, icons, and README media assets
+├── scripts/
+│   ├── build-msix.ps1       # Packages release binary into Microsoft Store MSIX bundle
+│   ├── generate-manifest.js # Computes SHA-256, byte size & Store links -> web app/public/version.json
+│   └── sign-windows.ps1     # Authenticode signing hook (PFX, Cert Store, Azure Trusted Signing)
+├── src/                     # React frontend
+│   ├── components/          # Feature tabs & widgets (Launcher, Notes, Shelf, Prayer, AudioMixer...)
+│   ├── tauriBridge.js       # Maps Tauri invoke/events -> window.electronAPI for seamless UI compat
+│   ├── App.css              # Global styles & themes
+│   ├── App.jsx              # Root React entrypoint + ErrorBoundary
+│   └── Island.jsx           # Main Island container, mode transitions, shortcuts, & Settings UI
+├── src-tauri/               # Native Rust backend & Tauri v2 bundle config
+│   ├── capabilities/        # Tauri v2 window/command capability permissions
+│   ├── icons/               # App & NSIS installer icons
+│   ├── msix/                # Store manifest template, Visual Assets & store.config.json
+│   ├── src/                 # lib.rs, state.rs, window_overlay.rs, audio_mixer.rs, launcher.rs,
+│   │                        # media.rs, notes.rs, notifications.rs, prayer.rs, shelf.rs,
+│   │                        # shortcuts.rs, system_stats.rs, updater.rs
+│   ├── Cargo.toml           # Rust package & dependencies
+│   └── tauri.conf.json      # Tauri v2 window config, bundle metadata, & NSIS/signing config
+├── web app/                 # Official landing page & download portal (quickpill.neosparkx.com)
+├── package.json             # Frontend dependencies & scripts
+└── vite.config.mjs          # Vite configuration for React frontend
 ```
 
 ---
 
 ## 🖥️ Island Display Modes
 
-The Island interface operates across **3 primary modes** and **2 optional toggle modes**:
-
-1. **Still Mode (Idle)**:
-   - Minimalist, non-distracting resting state (width: ~170px, height: 40px).
-   - Positioned flush against top screen bezel (`top: 0px` default) with flat top corners (`radius: 0`), concave notch ear fillets, and rounded bottom corners (`20px`).
-2. **Quick Mode (Hover)**:
-   - Compact status preview on hover when configured.
-   - Shows current time, live weather, battery level, camera/mic active status, and music "Now Playing" preview with hover-activated media controls.
-3. **Large Mode (Active Hover / NotchNook Compact Style)**:
-   - Full interactive dashboard accessed on hover / click.
-   - Dynamic Island / MacBook Notch geometry: flush to top bezel (`top: 0px`), flat top corners (`borderTopLeftRadius: 0`, `borderTopRightRadius: 0`), smooth concave fillet notch ears merging with the bezel, and rounded bottom corners (`26px`).
-   - **Horizontal Compact Expansion**: Spreads sideways horizontally (`width: 520px`, or `540px` for settings) with a unified, compact height of `135px` across all tabs rather than jumping up in height vertically.
-   - **Horizontal Widget Layouts**: All tabs (Now Playing side-by-side album art card & scrubber, Weather 3D icon & 3-day forecast, Calendar mini-grid & date card, System performance gauges, Tasks, and Timer setup/countdown) are designed horizontally to fit within the sleek 135px height.
-4. **Stealth Mode (Optional Setting)**:
-   - Makes the Island completely transparent when idle to maximize screen real estate.
-5. **Standby Mode (Optional Setting)**:
-   - Keeps Quick View metrics (time, weather, battery) permanently displayed instead of collapsing to Still Mode.
-
----
-
-## 🧩 Feature Tabs (0 to 10)
-
-Quick Pill includes **feature tabs** managed in [Island.jsx](file:///d:/Ripple%20Island/src/Island.jsx):
-
-| Tab ID | Tab Name | Functionality & Recent Enhancements |
-| :-: | :--- | :--- |
-| `0` | **Browser Search** | Instant web search input bar with URL auto-launching |
-| `1` | **Workflows & QA** | Quick Apps launcher (up to 4 configurable apps) and workflow URL shortcuts |
-| `2` | **Overview** | Detailed daily weather preview, location settings, and date header |
-| `3` | **Now Playing** | Active media status, album art display, track playback controls (Spotify / Apple Music / Windows Media) with cleaned UWP app titles and un-cropped title text |
-| `4` | **Calendar** | Full monthly interactive calendar view with date highlighting and compact zero-margin 188px layout |
-| `5` | **Notifications** | Live feed of system alerts, battery notifications, and device updates |
-| `6` | **Game / Stats** | Real-time CPU and RAM hardware utilization counters |
-| `7` | **Clipboard** | History manager for copied text snippets |
-| `8` | **Tasks** | Apple / Things 3 minimalist task manager with circular check controls, capsule input bar, and local persistence |
-| `9` | **Settings** | Full customization suite (Themes, Custom RGB Colors, Background Wallpaper, Multi-monitor selection, Positioning, Auto-launch on boot, Battery Alerts, Stealth/Standby modes, Tab Reordering & Hiding) |
-| `10` | **Timer** | Preset timer chips (15m, 30m, 60m, 100m) and custom time picker with start controls |
-
----
-
-## 🎨 UI Physics & Design System
-
-- **Dynamic Pill Shape**: MacBook-inspired Dynamic Island notch geometry (flat top edge with `borderTopLeftRadius: 0` and `borderTopRightRadius: 0`, and smooth curved bottom corners with `borderBottomLeftRadius`/`borderBottomRightRadius`: 20 in Still/Quick mode, expanding to 32 in Large mode, resting flush at `top: 0px` by default).
-- **Spring Physics**: Framer Motion tuned spring transitions (`stiffness: 340, damping: 28, mass: 0.8`) ensuring frame-accurate morphing without snap artifacts.
-- **Drop Shadows**: Animated `boxShadow` (`0 8px 24px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.18)`) across hovered and unhovered states.
+- **Still Mode (Idle)**: Minimalist capsule resting flush at top screen edge (`top: 0px` default), flat top corners, rounded bottom corners (`20px`).
+- **Quick Mode (Hover)**: Compact glanceable bar showing time, weather, battery, camera/mic privacy indicators, and media preview.
+- **Large Mode (Active)**: Expanded interactive workspace triggered on click or global `Alt + Key` shortcuts.
+- **Ctrl Click-Through**: Holding `Ctrl` while hovering dynamically enables `WS_EX_TRANSPARENT` click-through passthrough at the Win32 level (`window_overlay.rs`).
+- **Stealth / Standby Modes**: Optional transparency-when-idle or always-visible Quick Mode metrics.
 
 ---
 
 ## 💻 Commands & Development Workflows
 
 ### Prerequisites
-- **Node.js**: v16+ and `npm`
-- **Build Tools**:
-  - Windows: Visual Studio C++ Build Tools
+- **Node.js**: v18+ and `npm`
+- **Rust**: `stable` toolchain via `rustup` + Visual Studio C++ Build Tools
+- **Windows**: Windows 10 or 11 (x64) with Microsoft Edge WebView2 Runtime
 
 ### Command Reference
 
 ```bash
-# Install dependencies
+# Install JS dependencies
 npm install
 
-# Start local development server (Electron Forge + Vite HMR)
+# Run Rust unit tests
+npm test
+
+# Start Vite dev server + Tauri v2 window with HMR
 npm start
 
-# Package application into binaries (without building installers)
-npm run package
+# Build frontend only
+npm run build:frontend
 
-# Build production installers for Windows
-npm run make
+# Build release binary + NSIS installer (with optional signing hook)
+npm run build
+
+# Build Microsoft Store MSIX package (src-tauri/target/release/bundle/msix/)
+npm run build:msix
+
+# Generate web app/public/version.json manifest with real SHA-256, byte size & Store URL
+npm run generate-manifest
 ```
 
-### Windows Packaging
-
-To compile production release binaries for Windows (x64):
-
-```bash
-# Windows (x64 Installer & ZIP)
-npm run make -- --platform=win32 --arch=x64
-```
-
-> Output build artifacts are compiled to `out/make/` and renamed according to versioning rules defined in `forge.config.js` (`postMake` hook).
+> Release NSIS installers live in `src-tauri/target/release/bundle/nsis/` and Store MSIX bundles in `src-tauri/target/release/bundle/msix/`.
 
 ---
 
-## 🔌 Architecture & Inter-Process Communication (IPC)
+## 🔌 Architecture & Bridge (`src/tauriBridge.js` ↔ `src-tauri/src/`)
 
-### Renderer (`src/Island.jsx`) ↔ Preload (`src/preload.js`) ↔ Main (`src/main.js`)
-
-All interactions with native operating system APIs execute asynchronously via Electron IPC:
-
-- `electronAPI.setIgnoreMouseEvents(ignore, forward)`: Toggles mouse passthrough so clicks pass through empty transparent areas while catching mouse events over active Island controls.
-- `electronAPI.getSystemMedia()` / `controlSystemMedia(cmd)`: Fetches metadata (title, artist, artwork) and controls playback via PowerShell / WinRT on Windows.
-- `electronAPI.getSystemMetrics()`: Retrieves CPU load percentage and RAM usage via PowerShell WMI (`Win32_Processor`, `Win32_OperatingSystem`).
-- `electronAPI.getBluetoothStatus()`, `getCameraStatus()`, `getMicrophoneStatus()`: Queries Windows registry and hardware status indicators.
-- `electronAPI.searchApps(query)` / `launchApp(name)`: Discovers installed Start Menu / UWP apps on Windows and launches applications.
-- `electronAPI.getDisplays()` / `setDisplay(id)`: Controls multi-monitor placement and bounds alignment.
-- `electronAPI.setAutoLaunch(enable)`: Configures OS startup registry entries (`app.setLoginItemSettings`).
-- `electronAPI.checkForUpdates()`: Checks remote `version.json` for new releases.
-- `electronAPI.startUpdateDownload()` / `cancelUpdateDownload()`: Streams release binary download with progress tracking.
-- `electronAPI.installUpdate()`: Executes NSIS setup (`/S` silent upgrade) and restarts app cleanly.
-- `electronAPI.onUpdateEvent(callback)`: Real-time listener for update lifecycle (`checking`, `available`, `download-progress`, `downloaded`, `error`).
+- `src/tauriBridge.js` exposes `window.electronAPI` and translates calls to Tauri v2 `invoke(...)` commands and `listen(...)` event channels while preserving all frontend component contracts.
+- **Overlay & Display**: `window_overlay.rs` manages Win32 `HWND` extended styles (`WS_EX_LAYERED`, `WS_EX_TRANSPARENT`), monitor bounds reporting (`{ left, top, right, bottom }`), `Ctrl` hover polling, drag-drop, and auto-launch (switches automatically between WinRT `StartupTask` inside Microsoft Store MSIX packages and `HKCU\...\Run` on standalone NSIS installs).
+- **Global Shortcuts**: `shortcuts.rs` registers system-wide `Alt + <Key>` tab shortcuts via `tauri-plugin-global-shortcut` with Settings persistence.
+- **Auto-Updater & Store Dual-Mode**: `state::is_store_packaged()` detects MSIX package identity at runtime via `GetCurrentPackageFullName`. In standalone `.exe` builds, `updater.rs` fetches `https://quickpill.neosparkx.com/version.json`, streams downloads to `%TEMP%\QuickPill-Updates`, verifies SHA-256 checksums, classifies Windows Smart App Control / Device Guard blocks (`4551` / `1260`), and launches silent `/S` NSIS upgrades. In Microsoft Store builds, external `.exe` self-updating is disabled (`store-managed`) for Store Policy 10.2 compliance. `scripts/sign-windows.ps1` hooks into Tauri's `bundle.windows.signCommand`.
 
 ---
-
-## 🔄 Auto-Update & Distribution Architecture
-
-1. **Manifest File (`version.json`)**:
-   - Hosted at `https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/version.json` and in `web app/public/version.json`.
-   - Contains release version, changelog, download URLs, and SHA-256 hashes for Windows (`nsis`).
-2. **Update Engine (`src/updater.js`)**:
-   - Runs in Electron Main process (`main.js`).
-   - Automatically checks for updates 4s after startup (if auto-check enabled).
-   - Performs semver comparisons, streams downloads to temp directory, verifies checksums, and launches silent NSIS upgrade.
-3. **Manifest Generator (`scripts/generate-manifest.js`)**:
-   - `npm run update:manifest`: Inspects compiled release binaries in `dist/` or `out/make/`, computes SHA-256 checksums, and outputs updated `version.json`.
 
 ## 📐 Coding Conventions & Guidelines
 
-1. **Safety & Electron Security**:
-   - Keep `contextBridge` isolated in [preload.js](file:///d:/Ripple%20Island/src/preload.js). Do NOT enable `nodeIntegration` in BrowserWindow `webPreferences`.
-   - Sanitize all string inputs passed to PowerShell / shell execution to prevent command execution escaping.
-2. **Windows Platform Targeting**:
-   - Application targets Windows 10 and 11 environments.
-3. **State Persistence**:
-   - User settings (theme, background color, tab ordering, location, default tab, active display) are persisted in `localStorage`.
-   - When introducing new user preferences, provide default fallbacks using nullish coalescing or logical OR.
-4. **Styling & Animation**:
-   - Keep styles centralized in [App.css](file:///d:/Ripple%20Island/src/App.css).
-   - Use Framer Motion (`<motion.div>`) for layout state transitions between Still, Quick, and Large modes.
-5. **Mouse Passthrough Management**:
-   - Ensure hover listeners accurately notify `electronAPI.setIgnoreMouseEvents` so the window non-interactive area remains click-through without blocking desktop interaction.
+1. **Tauri Capability Least-Privilege**: Keep `src-tauri/capabilities/default.json` scoped to needed permissions and validate inputs in Rust commands.
+2. **Thread & Startup Safety**: Never run slow blocking filesystem/Win32 scans synchronously in Tauri `setup()` before window creation; initialize heavy catalogs asynchronously (`launcher::init_launcher`).
+3. **Mouse Passthrough**: Keep Win32 `ignore_mouse` state synchronized cleanly between `window_overlay.rs` and `Island.jsx` hover handlers.
+4. **Installer Signing & Manifests**: Run `npm run generate-manifest` after every signed release build so `version.json`, `useReleaseInfo.js`, and `RELEASE_NOTES.md` match the distributed `.exe`.

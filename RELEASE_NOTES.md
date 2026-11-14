@@ -1,67 +1,59 @@
-# Quick Pill v5.6.1 — Release Notes
+# Quick Pill v6.0.0 — Release Notes
 
-> **Release Date:** November 11, 2026  
+> **Release Date:** November 14, 2026  
 > **Target OS:** Windows 10 & 11 (64-bit)  
-> **Installer:** `QuickPill-Windows-v5.6.1-Setup.exe`  
-> **Download Link:** [Download Setup (v5.6.1)](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.1-Setup.exe)  
-> **Official Web App:** [quickpill.neosparkx.com](https://quickpill.neosparkx.com/)
+> **Microsoft Store ID:** `9N371MQB4BS7` ([Store Listing](https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct))  
+> **NSIS Installer:** `QuickPill-Windows-v6.0.0-Setup.exe` *(NSIS bundle output: `Quick Pill_6.0.0_x64-setup.exe`)*  
+> **Download Link:** [Download Setup (v6.0.0)](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe)  
+> **Official Web App:** [quickpill.neosparkx.com](https://quickpill.neosparkx.com/) · [Privacy Policy](https://quickpill.neosparkx.com/#/privacy)
 
 ---
 
 ## 🌟 Highlights & Major Improvements
 
-### 1. 🚀 App Launcher: Strict Workspaces Isolation & Catalog Cleanup
-* **Pure Workspace Views:** Resolved an issue where regular desktop applications (e.g. *Android Studio*, *Python*, *Windows PowerShell ISE*) and installer stubs inadvertently populated the **Workspaces** tab (`filter === "workspaces"`).
-* **`isStrictWorkspace()` Verification:** The Workspaces tab now strictly validates workspace objects (requiring an explicit `.apps` schema), ensuring non-workspace apps are filtered out during memory caching, data loading, keyboard navigation, and Enter-to-launch actions.
-* **Redistributable & Noise Pruning:** Enhanced `isInternalHelperExe()` to filter out residual installer stubs, package cache paths (`\package cache\`), Microsoft Visual C++ redistributable packages (`vcredist`, `vc_redist`), setup wrappers, and system diagnostic utilities (`odbcad32.exe`).
+### 1. 🦀 Native Rust + Tauri v2 Rewrite
+* **Lightweight Runtime:** Replaced Electron with a native Rust backend and Microsoft Edge WebView2 frontend while preserving the exact React 19 UI, animations, and 16+ tab layout.
+* **Dramatically Smaller Installer:** Installer size drops from `135,202,987 bytes` (`~128.9 MiB` in v5.6.1) down to **`4,124,348 bytes` (`3.93 MiB`)** for the NSIS setup (`.exe`).
+* **Instant Asynchronous Startup:** Backgrounded app catalog indexing (`launcher::init_launcher`) so the overlay window appears immediately on launch without blocking UI responsiveness.
 
-### 2. 📁 Drop Shelf (Tab 16 • `Alt+F`): Visual Previews & Horizontal Navigation
-* **Image & PDF File Previews:** Shelf cards now render rich inline visual preview thumbnails for supported image formats (`.png`, `.jpg`, `.jpeg`, `.gif`, `.webp`, `.svg`, `.bmp`, `.ico`) and PDF document badges, making it effortless to distinguish between staged files at a glance.
-* **Custom Horizontal Scrollbar:** Introduced a sleek, low-profile glass horizontal scrollbar that remains visible whenever staged items exceed the notch container width.
-* **Carousel Navigation Chevrons:** Added responsive left and right chevron buttons for quick horizontal panning across large file queues.
-* **Mouse Wheel Translation:** Vertical mouse wheel scrolling automatically translates to smooth horizontal shelf navigation (`onWheel` mapping).
-* **Bidirectional Drag-and-Drop:** Seamlessly drag files into the notch to stage them, and drag them **out** of the shelf directly into File Explorer, web browsers, Discord, Slack, or creative apps via native Electron OS drag-out (`startDrag`).
+### 2. ⚡ Direct Win32, WinRT & WASAPI Integrations
+* **Overlay & Click-Through Engine:** `window_overlay.rs` directly manages Win32 `WS_EX_LAYERED` / `WS_EX_TRANSPARENT` click-through passthrough when holding `Ctrl`, topmost positioning, display bounds, and tray interactions.
+* **Zero-Shell Native APIs:** Native Rust WinRT bindings power System Media Transport Controls (SMTC), Windows notification listeners, and UWP app discovery; native WASAPI powers per-app Audio Mixer metering and controls.
+* **Global `Alt + <Key>` Shortcuts:** Registered natively via `tauri-plugin-global-shortcut` with Settings persistence.
 
-### 3. 🕌 Prayer Times & Celestial Arc (Tab 17 • `Alt+P`)
-* **Live Celestial Sun Arc:** Visual celestial tracker rendering the sun and moon's position relative to your location throughout the day.
-* **Synchronized Timings:** High-accuracy prayer calculations (Fajr, Sunrise, Dhuhr, Asr, Maghrib, Isha) with offline astronomical calculation fallbacks.
-* **Next-Prayer Hero Countdown:** Prominent countdown to the next prayer time, accompanied by a tranquil collapsed azan notification banner and audio chime.
-
-### 4. 🎨 Modernized README & Web Experience
-* **Modern README Redesign:** Updated documentation with high-contrast download CTA buttons, official for-the-badge shield badges, and updated product showcase media.
-* **Web App Manifest Sync:** Synced the official React 19 web landing page with live dynamic release metadata, real-time SHA-256 verification, and active setup download links.
+### 3. 🔐 Microsoft Store MSIX, Code Signing & Smart App Control Protection
+* **Microsoft Store Dual-Mode Package (`QuickPill_6.0.0_x64.msix`):** Added `src-tauri/msix/` and `scripts/build-msix.ps1` targeting `NeoSparkX.QuickPill` (`9N371MQB4BS7`). At runtime, `state::is_store_packaged()` checks `GetCurrentPackageFullName` so Store installs manage auto-launch via WinRT `StartupTask` and rely strictly on Microsoft Store updates (Policy 10.2 compliant), eliminating Smart App Control warnings.
+* **Windows Code-Signing Hook (`scripts/sign-windows.ps1`):** Integrated Tauri `bundle.windows.signCommand` (`sha256` + RFC 3161 timestamping) supporting PFX secrets, Windows Certificate Store thumbprints, and Azure Trusted Signing across app binaries, NSIS plugins, uninstaller, and final setup executable.
+* **Auto-Updater Contract Sync & SAC Error Handling:** Aligned Rust `updater.rs` event names/payloads with Settings UI (`Island.jsx`), added cancellation/progress telemetry sync, and added Windows Smart App Control / Device Guard (`4551` / `1260`) launch error detection so blocked direct `.exe` auto-updates keep the app open and surface a clear browser download prompt instead of failing silently.
 
 ---
 
-## 🛠️ Detailed Changelog & Bug Fixes
+## 🛠️ Detailed Changelog & Verification
 
 | Area | Type | Description |
 | :--- | :---: | :--- |
-| **App Launcher** | `Fix` | Filtered external apps and setup wrappers from leaking into the Workspaces category tab. |
-| **Discovery Service** | `Fix` | Pruned `\package cache\` entries, `vcredist*.exe`, and `odbcad32.exe` from the system application catalog. |
-| **Drop Shelf** | `Feat` | Added visual thumbnail previews for image and PDF files. |
-| **Drop Shelf** | `Feat` | Added sleek horizontal scrollbar, wheel translation, and carousel navigation chevrons. |
-| **Drop Shelf** | `Feat` | Full native OS drag-out capability to drag files directly from the notch into external applications. |
-| **Navigation** | `Fix` | Enforced strict schema validation on workspace execution and quick-launch hotkeys. |
-| **Packaging** | `Build` | Re-built and verified clean NSIS installer bundle with standard ASAR compression. |
-| **Tests** | `Tests` | Added unit tests for workspace isolation and redistributable discovery pruning; 145/145 tests passing. |
+| **Runtime** | `Feat` | Full migration from Electron 38 to Tauri v2 + Rust native backend with Edge WebView2. |
+| **Installer & Store** | `Perf` | NSIS setup shrunk to `4,124,348 bytes` (`3.93 MiB`); added Store MSIX package (`5,580,488 bytes`, `9N371MQB4BS7`). |
+| **Signing & CI** | `Build` | Added `scripts/sign-windows.ps1`, `scripts/build-msix.ps1`, Tauri `bundle.windows.signCommand`, and GitHub Actions CI (`windows-latest` + Rust cache + `.exe`/`.msix` staging). |
+| **Auto-Updater** | `Fix` | Aligned `updater.rs` events/payloads with `Island.jsx`, added `store-managed` compliance for MSIX, and handled Windows Smart App Control policy blocks (`4551` / `1260`). |
+| **Repo Cleanup** | `Chore` | Removed legacy Electron stubs, C++ hook experiments, JS test scripts, runtime root JSON caches, and obsolete agent notes. |
+| **Tests** | `Tests` | Native Rust unit test suite (`cargo test`): `14 passed, 0 failed`. |
 
 ---
 
-## 🔒 Verification & Checksum
+## 🔒 Verification & Checksums
 
-| Property | Value |
-| :--- | :--- |
-| **Installer File** | `QuickPill-Windows-v5.6.1-Setup.exe` |
-| **Architecture** | Windows x64 (10 / 11) |
-| **File Size** | `135,202,987 bytes` (~128.9 MB) |
-| **SHA-256 Hash** | `fd5a7329fce33de2b75e3c8cd98520b3a58108f15748fdd33ab1021f7a6d034b` |
-| **Test Suite** | `145 passed, 0 failed` across all suites |
+| Property | NSIS Setup (`.exe`) | Microsoft Store Package (`.msix`) |
+| :--- | :--- | :--- |
+| **Distribution File** | `QuickPill-Windows-v6.0.0-Setup.exe` | `QuickPill_6.0.0_x64.msix` |
+| **Architecture** | Windows x64 (10 / 11) | Windows x64 (10 / 11 Desktop) |
+| **File Size** | `4,124,348 bytes` (`3.93 MiB`) | `5,580,488 bytes` (`5.32 MiB`) |
+| **SHA-256 Hash** | `6c7a3216fe125efd42ad28b4301829387f19f98a60f1b9fccec79408fa950366` | `a2dabcc9031fd84a3e4a755fc157a9a3195e11333a0fc2c139cfecfff325f484` |
+| **Test Suite** | `14 passed, 0 failed` (`cargo test --manifest-path src-tauri/Cargo.toml`) | `14 passed, 0 failed` |
 
 ---
 
 ## 📥 Installation & Upgrade
 
-1. Download **`QuickPill-Windows-v5.6.1-Setup.exe`** from the [Release Asset](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v5.6.1-Setup.exe) or the [GitHub Releases](https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases) page.
-2. Run the installer. Existing configurations, pinned workspaces, notes, and preferences will be preserved automatically.
-3. Quick Pill will launch and position seamlessly at the top center of your display.
+1. **Microsoft Store (Recommended — Smart App Control Ready):** Install directly from the **[Microsoft Store (`9N371MQB4BS7`)](https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct)**.
+2. **Direct Setup (`.exe`):** Download **`QuickPill-Windows-v6.0.0-Setup.exe`** from the [Release Asset](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe) or [GitHub Releases](https://github.com/nabil24024004/Quick-Pill/releases). Existing settings, pinned workspaces, notes, and preferences migrate cleanly.

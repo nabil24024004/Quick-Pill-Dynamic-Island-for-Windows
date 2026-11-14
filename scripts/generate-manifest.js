@@ -1,117 +1,114 @@
-#!/usr/bin/env node
-/**
- * scripts/generate-manifest.js
- * 
- * Automatically generates or updates `version.json` with accurate file sizes and SHA-256 hashes
- * for built release binaries (Windows .exe).
- *
- * Usage:
- *   node scripts/generate-manifest.js [options]
- *   npm run update:manifest
- */
-
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const pkg = require('../package.json');
+const ROOT = path.resolve(__dirname, '..');
+const PKG_PATH = path.join(ROOT, 'package.json');
+const MANIFEST_PATH = path.join(ROOT, 'web app', 'public', 'version.json');
+const STORE_CONFIG_PATH = path.join(ROOT, 'src-tauri', 'msix', 'store.config.json');
 
-const DIST_DIR = path.resolve(__dirname, '../dist');
-const OUT_MAKE_DIR = path.resolve(__dirname, '../out/make');
-const WEB_APP_PUBLIC_DIR = path.resolve(__dirname, '../web app/public');
+const SEARCH_DIRS = [
+  path.join(ROOT, 'src-tauri', 'target', 'release', 'bundle', 'nsis'),
+  path.join(ROOT, 'dist'),
+  path.join(ROOT, 'out', 'make'),
+];
 
-function calculateFileSha256(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  const hash = crypto.createHash('sha256');
-  const buffer = fs.readFileSync(filePath);
-  hash.update(buffer);
-  return hash.digest('hex');
-}
+function findInstallerExe(dirs) {
+  const candidates = [];
 
-function getFileSize(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  return fs.statSync(filePath).size;
-}
-
-function findArtifact(searchDirs, pattern) {
-  for (const dir of searchDirs) {
-    if (!fs.existsSync(dir)) continue;
-    const files = fs.readdirSync(dir, { recursive: true });
-    for (const file of files) {
-      const fullPath = path.isAbsolute(file) ? file : path.join(dir, file);
-      if (typeof file === 'string' && pattern.test(file) && fs.existsSync(fullPath) && fs.statSync(fullPath).isFile()) {
-        return fullPath;
+  function walk(dir, depth) {
+    if (depth > 4 || !fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(full, depth + 1);
+      } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.exe')) {
+        const lower = entry.name.toLowerCase();
+        if (lower.includes('setup') && !lower.includes('uninst')) {
+          const stat = fs.statSync(full);
+          candidates.push({ path: full, name: entry.name, mtime: stat.mtimeMs, size: stat.size });
+        }
       }
     }
   }
-  return null;
+
+  for (const dir of dirs) walk(dir, 0);
+  candidates.sort((a, b) => b.mtime - a.mtime);
+  return candidates[0] || null;
 }
 
-function generateManifest() {
-  const version = pkg.version;
-  console.log(`Generating update manifest for Quick Pill v${version}...`);
+function main() {
+  const pkg = JSON.parse(fs.readFileSync(PKG_PATH, 'utf8'));
+  const installer = findInstallerExe(SEARCH_DIRS);
+  if (!installer) {
+    console.error('[generate-manifest] No setup .exe found in:', SEARCH_DIRS.join(', '));
+    process.exit(1);
+  }
 
-  const searchDirs = [DIST_DIR, OUT_MAKE_DIR];
+  const hash = crypto.createHash('sha256');
+  hash.update(fs.readFileSync(installer.path));
+  const sha256 = hash.digest('hex');
 
-  // Look for Windows installer (prioritizing current version match)
-  const versionEscaped = version.replace(/\./g, '\\.');
-  const winArtifact = findArtifact(searchDirs, new RegExp(`Quick.*Pill.*${versionEscaped}.*Setup.*\\.exe$`, 'i')) ||
-                      findArtifact(searchDirs, new RegExp(`QuickPill.*${versionEscaped}.*\\.exe$`, 'i')) ||
-                      findArtifact(searchDirs, new RegExp(`quick-pill-.*${versionEscaped}.*\\.exe$`, 'i')) ||
-                      findArtifact(searchDirs, /Quick.*Pill.*Setup.*\.exe$/i) ||
-                      findArtifact(searchDirs, /QuickPill-Windows.*\.exe$/i) ||
-                      findArtifact(searchDirs, /quick-pill-.*-setup\.exe$/i);
-
-  const manifest = {
-    version: version,
-    name: `Quick Pill ${version}`,
-    releaseDate: new Date().toISOString().split('T')[0],
-    mandatory: false,
-    minSupportedVersion: '4.0.0',
-    changelog: [
-      `Quick Pill v${version} release.`,
-      'Performance enhancements and stability updates.'
-    ],
-    platforms: {
-      'win32-x64': {
-        url: `https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v${version}-Setup.exe`,
-        sha256: winArtifact ? calculateFileSha256(winArtifact) : '',
-        size: winArtifact ? getFileSize(winArtifact) : 89452012,
-        installerType: 'nsis'
-      }
-    }
-  };
-
-  // Preserve existing changelog if version.json exists in web app/public
-  const publicManifestPath = path.join(WEB_APP_PUBLIC_DIR, 'version.json');
-  if (fs.existsSync(publicManifestPath)) {
+  let existing = {};
+  if (fs.existsSync(MANIFEST_PATH)) {
     try {
-      const existing = JSON.parse(fs.readFileSync(publicManifestPath, 'utf8'));
-      if (existing.version === version && existing.changelog) {
-        manifest.changelog = existing.changelog;
-      }
+      existing = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
     } catch (_) {}
   }
 
-  // Write to web app/public/version.json
-  if (!fs.existsSync(WEB_APP_PUBLIC_DIR)) {
-    fs.mkdirSync(WEB_APP_PUBLIC_DIR, { recursive: true });
-  }
-  fs.writeFileSync(publicManifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-  console.log(`Manifest written to: ${publicManifestPath}`);
-
-  // Also write to dist/version.json if dist directory exists
-  if (fs.existsSync(DIST_DIR)) {
-    const distManifestPath = path.join(DIST_DIR, 'version.json');
-    fs.writeFileSync(distManifestPath, JSON.stringify(manifest, null, 2) + '\n', 'utf8');
-    console.log(`Manifest written to: ${distManifestPath}`);
+  let storeConfig = {};
+  if (fs.existsSync(STORE_CONFIG_PATH)) {
+    try {
+      storeConfig = JSON.parse(fs.readFileSync(STORE_CONFIG_PATH, 'utf8'));
+    } catch (_) {}
   }
 
-  console.log('Update manifest generation complete.');
+  const version = pkg.version;
+  const r2Base = 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev';
+  const storeProductId = String(
+    process.env.MSIX_STORE_PRODUCT_ID ||
+    storeConfig.storeProductId ||
+    existing.storeProductId ||
+    ''
+  ).trim();
+  const msStoreUrl = storeProductId
+    ? `https://apps.microsoft.com/detail/${storeProductId}?mode=direct`
+    : (storeConfig.storeUrlFallback || existing.msStoreUrl || 'https://apps.microsoft.com/search?query=Quick+Pill');
+
+  const manifest = {
+    version,
+    name: `${pkg.productName || 'Quick Pill'} ${version}`,
+    releaseDate: new Date().toISOString().slice(0, 10),
+    mandatory: existing.mandatory ?? false,
+    minSupportedVersion: existing.minSupportedVersion || '4.0.0',
+    storeProductId,
+    msStoreUrl,
+    changelog: Array.isArray(existing.changelog) ? existing.changelog : [],
+    platforms: {
+      'win32-x64': {
+        url: `${r2Base}/QuickPill-Windows-v${version}-Setup.exe`,
+        sha256,
+        size: installer.size,
+        installerType: 'nsis',
+      },
+      'ms-store': {
+        url: msStoreUrl,
+        productId: storeProductId,
+        installerType: 'msix',
+      },
+    },
+  };
+
+  fs.mkdirSync(path.dirname(MANIFEST_PATH), { recursive: true });
+  fs.writeFileSync(MANIFEST_PATH, JSON.stringify(manifest, null, 2) + '\n');
+
+  console.log(`[generate-manifest] Wrote ${MANIFEST_PATH}`);
+  console.log(`  Version:      ${version}`);
+  console.log(`  Installer:    ${installer.path}`);
+  console.log(`  R2 Object:    QuickPill-Windows-v${version}-Setup.exe`);
+  console.log(`  SHA-256:      ${sha256}`);
+  console.log(`  Size:         ${installer.size} bytes`);
+  console.log(`  MS Store URL: ${msStoreUrl}${storeProductId ? '' : ' (fallback search until storeProductId is set)'}`);
 }
 
-if (require.main === module) {
-  generateManifest();
-}
-
-module.exports = { generateManifest };
+main();

@@ -1,3 +1,4 @@
+import './tauriBridge';
 import { createRoot } from 'react-dom/client';
 import Island from './Island';
 import ErrorBoundary from './components/ErrorBoundary';

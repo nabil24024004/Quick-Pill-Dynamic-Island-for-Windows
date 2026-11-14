@@ -1,6 +1,6 @@
 import { Github } from 'lucide-react';
 
-export default function Footer() {
+export default function Footer({ onPrivacyClick }) {
   return (
     <footer className="footer" role="contentinfo" aria-label="Footer">
       <div className="container">
@@ -36,6 +36,13 @@ export default function Footer() {
                 title="MIT License details"
               >
                 MIT License
+              </a>
+              <a
+                href="#/privacy"
+                onClick={onPrivacyClick}
+                title="Quick Pill Privacy Policy"
+              >
+                Privacy Policy
               </a>
             </nav>
             <p className="footer-copy">
