@@ -7,7 +7,7 @@ import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
 gsap.registerPlugin(ScrollTrigger);
 
-const GITHUB_URL  = 'https://github.com/nabil24024004/Quick-Pill';
+const GITHUB_URL  = 'https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows';
 const HEADLINE = 'Download.';
 
 export default function Download({ onDownloadClick }) {

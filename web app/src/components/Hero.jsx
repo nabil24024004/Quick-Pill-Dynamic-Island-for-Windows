@@ -108,7 +108,7 @@ export default function Hero({ onDownloadClick }) {
             />
           </a>
           <a
-            href="https://github.com/nabil24024004/Quick-Pill"
+            href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows"
             target="_blank"
             rel="noopener noreferrer"
             className="btn btn--ghost-white"

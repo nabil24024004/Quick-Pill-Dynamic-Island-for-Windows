@@ -56,4 +56,4 @@
 ## 📥 Installation & Upgrade
 
 1. **Microsoft Store (Recommended — Smart App Control Ready):** Install directly from the **[Microsoft Store (`9N371MQB4BS7`)](https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct)**.
-2. **Direct Setup (`.exe`):** Download **`QuickPill-Windows-v6.0.0-Setup.exe`** from the [Release Asset](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe) or [GitHub Releases](https://github.com/nabil24024004/Quick-Pill/releases). Existing settings, pinned workspaces, notes, and preferences migrate cleanly.
+2. **Direct Setup (`.exe`):** Download **`QuickPill-Windows-v6.0.0-Setup.exe`** from the [Release Asset](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe) or [GitHub Releases](https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases). Existing settings, pinned workspaces, notes, and preferences migrate cleanly.

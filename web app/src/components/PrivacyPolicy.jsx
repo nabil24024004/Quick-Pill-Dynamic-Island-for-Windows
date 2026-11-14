@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ArrowLeft, ShieldCheck, Lock, HardDrive, Globe } from 'lucide-react';
 
-const GITHUB_URL = 'https://github.com/nabil24024004/Quick-Pill';
+const GITHUB_URL = 'https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows';
 
 export default function PrivacyPolicy({ onBackToHome }) {
   useEffect(() => {

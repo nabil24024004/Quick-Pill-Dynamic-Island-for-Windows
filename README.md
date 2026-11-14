@@ -27,16 +27,16 @@
   <p align="center">
     <a href="https://quickpill.neosparkx.com/"><strong>🌐 Official Website</strong></a> • 
     <a href="https://quickpill.neosparkx.com/#/privacy"><strong>🔒 Privacy Policy</strong></a> • 
-    <a href="https://github.com/nabil24024004/Quick-Pill/releases"><strong>📦 GitHub Releases</strong></a> • 
-    <a href="https://github.com/nabil24024004/Quick-Pill/issues"><strong>🐛 Report Bug</strong></a>
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><strong>📦 GitHub Releases</strong></a> • 
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/issues"><strong>🐛 Report Bug</strong></a>
   </p>
 
   <!-- Status & Action Badges (Image 2 Style - for-the-badge) -->
   <p align="center">
     <a href="https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct"><img src="https://img.shields.io/badge/MICROSOFT_STORE-9N371MQB4BS7-0078D7?style=for-the-badge&logo=microsoftstore&logoColor=white" alt="Microsoft Store" /></a>
     <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe"><img src="https://img.shields.io/badge/DESKTOP_APP-DOWNLOAD_NOW-0078D7?style=for-the-badge&logo=windows&logoColor=white" alt="Desktop App Download Now" /></a>
-    <a href="https://github.com/nabil24024004/Quick-Pill/releases"><img src="https://img.shields.io/badge/RELEASE-V6.0.0-0078D7?style=for-the-badge&logo=github&logoColor=white" alt="Release v6.0.0" /></a>
-    <a href="https://github.com/nabil24024004/Quick-Pill/pulls"><img src="https://img.shields.io/badge/PRS-WELCOME-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="PRs Welcome" /></a>
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><img src="https://img.shields.io/badge/RELEASE-V6.0.0-0078D7?style=for-the-badge&logo=github&logoColor=white" alt="Release v6.0.0" /></a>
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/pulls"><img src="https://img.shields.io/badge/PRS-WELCOME-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="PRs Welcome" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-f08236?style=for-the-badge" alt="MIT License" /></a>
   </p>
 
@@ -158,7 +158,7 @@ Quick Pill features zero-latency global keyboard navigation. All shortcuts use `
 3. Built-in auto-updates keep your installation fresh with SHA-256 verification.
 
 ### Option 3: GitHub Releases
-Download installers from the **[GitHub Releases](https://github.com/nabil24024004/Quick-Pill/releases)** page.
+Download installers from the **[GitHub Releases](https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases)** page.
 
 > **Note on Windows SmartScreen & Smart App Control:** Installers from Microsoft Store (`.msix`) are automatically trusted by Windows 11 Smart App Control. For direct `.exe` distribution, maintainers can also configure CI signing secrets via `scripts/sign-windows.ps1` (PFX, Cert Store thumbprints, or Azure Trusted Signing).
 
@@ -188,8 +188,8 @@ Platform:     Windows 10 & 11 (x64)
 
 ```bash
 # Clone the repository
-git clone https://github.com/nabil24024004/Quick-Pill.git
-cd Quick-Pill
+git clone https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows.git
+cd Quick-Pill-Dynamic-Island-for-Windows
 
 # Install dependencies
 npm install

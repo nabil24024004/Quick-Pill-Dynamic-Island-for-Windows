@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
-const GITHUB_URL  = 'https://github.com/nabil24024004/Quick-Pill';
+const GITHUB_URL  = 'https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows';
 const DISCORD_URL = 'https://discord.gg/a2xzVkxFVg';
 
 export default function ThankYou({ onBackToHome, onPrivacyClick }) {

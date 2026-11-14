@@ -12,7 +12,7 @@ export default function Footer({ onPrivacyClick }) {
           <div className="footer-right">
             <nav className="footer-links" aria-label="Footer links">
               <a
-                href="https://github.com/nabil24024004/Quick-Pill"
+                href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows"
                 target="_blank"
                 rel="noopener noreferrer"
                 id="footer-github"
@@ -22,7 +22,7 @@ export default function Footer({ onPrivacyClick }) {
                 GitHub
               </a>
               <a
-                href="https://github.com/nabil24024004/Quick-Pill/releases"
+                href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"
                 target="_blank"
                 rel="noopener noreferrer"
                 title="Download previous releases"
@@ -30,7 +30,7 @@ export default function Footer({ onPrivacyClick }) {
                 Releases
               </a>
               <a
-                href="https://github.com/nabil24024004/Quick-Pill/blob/main/LICENSE"
+                href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/blob/main/LICENSE"
                 target="_blank"
                 rel="noopener noreferrer"
                 title="MIT License details"
