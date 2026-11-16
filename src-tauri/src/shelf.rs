@@ -626,30 +626,36 @@ fn finalize_shelf_drag_state(
     #[cfg(windows)]
     {
         let state = app.state::<SharedState>();
-        let (bounds_opt, disp_x, disp_y, is_ctrl) = if let Ok(ov) = state.overlay.lock() {
+        let (bounds_opt, disp_x, disp_y) = if let Ok(ov) = state.overlay.lock() {
             (
                 ov.bounds.clone(),
                 ov.display_x_px,
                 ov.display_y_px,
-                ov.is_ctrl_held,
             )
         } else {
-            (None, 0, 0, false)
+            (None, 0, 0)
         };
         let active_bounds = bounds_opt.as_ref().or(fallback_bounds);
         let inside_now =
             is_cursor_inside_island_bounds(app, hwnd_raw, disp_x, disp_y, active_bounds);
+        let is_ctrl = crate::window_overlay::is_windows_ctrl_down();
         let effective_ignore = !inside_now || is_ctrl;
 
         if let Ok(mut ov) = state.overlay.lock() {
             ov.is_shelf_drag_out = false;
-            ov.cursor_inside_island = inside_now && !is_ctrl;
+            ov.is_ctrl_held = is_ctrl;
+            ov.cursor_inside_island = inside_now;
             ov.ignore_mouse = effective_ignore;
         }
 
         apply_overlay_styles(hwnd_raw, effective_ignore);
         let _ = app.emit("shelf:drag-ended", json!({ "success": drop_ok }));
-        if inside_now && !is_ctrl {
+        if inside_now && is_ctrl {
+            let _ = app.emit(
+                "island:ctrl-hover",
+                json!({ "active": true, "inside": true, "ctrl": true }),
+            );
+        } else if inside_now {
             let _ = app.emit("island:cursor-entered", ());
         } else {
             let _ = app.emit("island:cursor-outside", ());
@@ -660,27 +666,31 @@ fn finalize_shelf_drag_state(
     {
         let _ = hwnd_raw;
         let state = app.state::<SharedState>();
-        let (bounds_opt, prev_ctrl) = if let Ok(ov) = state.overlay.lock() {
-            (ov.bounds.clone(), ov.is_ctrl_held)
-        } else {
-            (None, false)
-        };
+        let bounds_opt = state
+            .overlay
+            .lock()
+            .ok()
+            .and_then(|ov| ov.bounds.clone());
         let active_bounds = bounds_opt.as_ref().or(fallback_bounds);
-        let (inside_now, ctrl_now) =
+        let (inside_now, is_ctrl) =
             crate::window_overlay::is_linux_cursor_inside_island_bounds(app, active_bounds);
-        let is_ctrl = prev_ctrl || ctrl_now;
         let effective_ignore = !inside_now || is_ctrl;
 
         if let Ok(mut ov) = state.overlay.lock() {
             ov.is_shelf_drag_out = false;
             ov.is_ctrl_held = is_ctrl;
-            ov.cursor_inside_island = inside_now && !is_ctrl;
+            ov.cursor_inside_island = inside_now;
             ov.ignore_mouse = effective_ignore;
         }
 
         crate::window_overlay::apply_linux_overlay_state(app);
         let _ = app.emit("shelf:drag-ended", json!({ "success": drop_ok }));
-        if inside_now && !is_ctrl {
+        if inside_now && is_ctrl {
+            let _ = app.emit(
+                "island:ctrl-hover",
+                json!({ "active": true, "inside": true, "ctrl": true }),
+            );
+        } else if inside_now {
             let _ = app.emit("island:cursor-entered", ());
         } else {
             let _ = app.emit("island:cursor-outside", ());

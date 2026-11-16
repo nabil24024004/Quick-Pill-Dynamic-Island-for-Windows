@@ -27,7 +27,7 @@ export const RemotionRoot: React.FC = () => {
         height={1920}
         schema={QuickPillShowcaseSchema}
         defaultProps={{
-          versionLabel: 'v6.1.0',
+          versionLabel: 'v6.1.1',
           hookHeadline: 'Dynamic Island,\nOn Steroids.',
           ctaUrl: 'quickpill.neosparkx.com',
           voiceoverVolume: 0.96,
@@ -47,7 +47,7 @@ export const RemotionRoot: React.FC = () => {
           height={1920}
           defaultProps={{
             brandName: 'Quick Pill',
-            versionLabel: 'v6.1.0',
+            versionLabel: 'v6.1.1',
             headline: 'Dynamic Island,\nOn Steroids.',
             subtitle: 'Open-source productivity notch\nfor Windows & Linux.',
           }}
@@ -132,7 +132,7 @@ export const RemotionRoot: React.FC = () => {
           height={1920}
           defaultProps={{
             brandName: 'Quick Pill',
-            versionLabel: 'v6.1.0',
+            versionLabel: 'v6.1.1',
             ctaUrl: 'quickpill.neosparkx.com',
             tagline: 'Your Desktop Reimagined.',
           }}

@@ -128,10 +128,9 @@ body {
   scrollbar-width: none;
   -webkit-user-select: none;
   user-select: none;
-  will-change: transform, width, height;
+  will-change: transform;
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  transform-style: preserve-3d;
   background-color: #000000;
 }
 

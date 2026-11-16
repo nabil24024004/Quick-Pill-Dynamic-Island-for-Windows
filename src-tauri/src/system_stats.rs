@@ -464,7 +464,7 @@ pub fn start_system_watchers(app: AppHandle) {
         let initialized = Arc::new(AtomicBool::new(false));
 
         loop {
-            thread::sleep(Duration::from_millis(180));
+            thread::sleep(Duration::from_millis(320));
             #[cfg(windows)]
             {
                 let app_emit = app_keys.clone();

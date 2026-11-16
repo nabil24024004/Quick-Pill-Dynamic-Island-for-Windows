@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useLayoutEffect, useRef, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Camera, Mic, SkipBackIcon, Play, Pause, SkipForwardIcon, Music, Headphones, Zap, Settings, Sun, Cloud, Trash2, ChevronRight, ChevronLeft, Check, X, CloudRain, CloudSnow, CloudLightning, CloudSun, Moon, Eye, EyeOff, GripVertical, List, Search, Star, Calendar as CalendarIcon, Bell, BellOff, AlarmClock, Timer, Activity, Clock, Volume2, VolumeX, Wind, Droplets, Usb, Download, RefreshCw, Sparkles, AlertCircle, CheckCircle2, SlidersHorizontal, Palette, Compass, Layers, Quote, Copy, Shuffle, BatteryCharging, Battery, ArrowDown, ArrowUp, FolderOpen, RotateCcw, FileText, CheckCircle, Upload, Film, Package, Phone, PhoneCall, PhoneIncoming, Send, MessageSquare, ExternalLink, Undo, ChevronDown, ChevronUp, BellRing, Keyboard, Inbox } from "lucide-react";
 import "./App.css";
@@ -1436,15 +1436,14 @@ function openApp(app) {
 
 function openMusicPlayer(source) {
   if (!source) return;
+  const lower = String(source).toLowerCase();
 
-  if (source === "Spotify") {
+  if (lower.includes("spotify")) {
     openApp("Spotify");
-  } else if (source === "Music") {
-    openApp("Music");
-  } else if (source === "music.apple.com" || source.includes("Apple")) {
-    openApp("Music");
+  } else if (lower.includes("apple") || lower === "music") {
+    openApp("Apple Music");
   } else {
-    openApp(source);
+    openApp(cleanAppName(source));
   }
 }
 
@@ -1518,9 +1517,15 @@ const DEFAULT_TAB_SHORTCUTS = {
 const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSeek, accentColor = "#ff2d55" }) => {
   const [animTime, setAnimTime] = useState(0);
   const [scrubPos, setScrubPos] = useState(null);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+  const svgRef = useRef(null);
+  const scrubbingRef = useRef(false);
+  const scrubTargetRef = useRef(null);
 
   useEffect(() => {
-    setScrubPos(null);
+    if (!scrubbingRef.current) {
+      setScrubPos(null);
+    }
   }, [position]);
 
   useEffect(() => {
@@ -1534,8 +1539,9 @@ const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSee
     return () => cancelAnimationFrame(animId);
   }, [isPlaying]);
 
+  const isSeekable = duration > 0;
   const currentPos = scrubPos !== null ? scrubPos : position;
-  const progress = duration > 0 ? Math.min(1, Math.max(0, currentPos / duration)) : 0;
+  const progress = isSeekable ? Math.min(1, Math.max(0, currentPos / duration)) : 0;
   const width = 300;
   const height = 22;
   const centerY = 11;
@@ -1562,19 +1568,31 @@ const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSee
     : `M 0,${centerY - barHeight / 2} L ${playedX},${centerY - barHeight / 2} L ${playedX},${bottomY} L 0,${bottomY} Z`;
 
   const formatTime = (secs) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
+    const safe = Number.isFinite(secs) && secs > 0 ? secs : 0;
+    const m = Math.floor(safe / 60);
+    const s = Math.floor(safe % 60);
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const handleScrubClick = (e) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const newRatio = Math.max(0, Math.min(1, clickX / rect.width));
-    const targetSec = newRatio * duration;
-    setScrubPos(targetSec);
-    if (onSeek && duration > 0) {
+  const clientXToSeconds = (clientX) => {
+    if (!isSeekable) return 0;
+    const trackEl = svgRef.current;
+    if (!trackEl) return 0;
+    const rect = trackEl.getBoundingClientRect();
+    if (rect.width <= 0) return 0;
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    return ratio * duration;
+  };
+
+  const finishScrub = (commit) => {
+    if (!scrubbingRef.current) return;
+    const targetSec = scrubTargetRef.current;
+    scrubbingRef.current = false;
+    setIsScrubbing(false);
+    if (commit && isSeekable && onSeek && typeof targetSec === 'number') {
       onSeek(targetSec);
+    } else if (!commit) {
+      setScrubPos(null);
     }
   };
 
@@ -1585,17 +1603,52 @@ const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSee
         display: 'flex',
         flexDirection: 'column',
         gap: 3,
-        cursor: 'pointer',
+        cursor: isSeekable ? (isScrubbing ? 'grabbing' : 'pointer') : 'default',
         padding: '4px 8px 3px 8px',
         boxSizing: 'border-box',
         borderRadius: 10,
         background: 'rgba(8, 8, 12, 0.72)',
         border: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: 'inset 0 3px 7px rgba(0, 0, 0, 0.88), inset 0 -1px 1px rgba(255, 255, 255, 0.05)'
+        boxShadow: 'inset 0 3px 7px rgba(0, 0, 0, 0.88), inset 0 -1px 1px rgba(255, 255, 255, 0.05)',
+        touchAction: 'none',
+        userSelect: 'none'
       }}
-      onClick={handleScrubClick}
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => {
+        e.stopPropagation();
+        if (!isSeekable) return;
+        scrubbingRef.current = true;
+        setIsScrubbing(true);
+        const sec = clientXToSeconds(e.clientX);
+        scrubTargetRef.current = sec;
+        setScrubPos(sec);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch (_) {}
+      }}
+      onPointerMove={(e) => {
+        if (!scrubbingRef.current) return;
+        e.stopPropagation();
+        const sec = clientXToSeconds(e.clientX);
+        scrubTargetRef.current = sec;
+        setScrubPos(sec);
+      }}
+      onPointerUp={(e) => {
+        if (!scrubbingRef.current) return;
+        e.stopPropagation();
+        const sec = clientXToSeconds(e.clientX);
+        scrubTargetRef.current = sec;
+        setScrubPos(sec);
+        try {
+          if (e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+          }
+        } catch (_) {}
+        finishScrub(true);
+      }}
+      onPointerCancel={() => finishScrub(false)}
     >
-      <svg width="100%" height="18" viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
+      <svg ref={svgRef} width="100%" height="18" viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
         <defs>
           <linearGradient id="scrubber-wave-grad" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor={accentColor} />
@@ -1625,7 +1678,7 @@ const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSee
         <circle
           cx={playedX}
           cy={centerY}
-          r="6.5"
+          r={isScrubbing ? "7.2" : "6.5"}
           fill="#ffffff"
           stroke={accentColor}
           strokeWidth="1.5"
@@ -1635,7 +1688,7 @@ const WaveformScrubber = ({ position = 0, duration = 0, isPlaying = false, onSee
 
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.55)', fontFamily: 'OpenRunde, sans-serif', fontVariantNumeric: 'tabular-nums' }}>
         <span style={{ color: accentColor }}>{formatTime(currentPos)}</span>
-        <span>{formatTime(duration)}</span>
+        <span>{duration > 0 ? formatTime(duration) : '--:--'}</span>
       </div>
     </div>
   );
@@ -2447,6 +2500,22 @@ export default function Island() {
   const externalFileDragTimeoutRef = useRef(null);
   const isShelfDragOutActiveRef = useRef(false);
 
+  const isEditableElement = useCallback((el) => {
+    if (!el) return false;
+    if (el.isContentEditable) return true;
+    const tag = el.tagName;
+    if (tag === "TEXTAREA") return true;
+    if (tag === "INPUT") {
+      const inputType = String(el.type || "text").toLowerCase();
+      return !["range", "checkbox", "radio", "button", "submit", "reset", "color", "file", "image"].includes(inputType);
+    }
+    return false;
+  }, []);
+
+  const isTextEditingFocused = useCallback(() => {
+    return typeof document !== "undefined" && document.hasFocus() && isEditableElement(document.activeElement);
+  }, [isEditableElement]);
+
   const updateMouseIgnore = useCallback((ignore, forward = true, isCtrlOverride = undefined) => {
     const isCtrlFlag = isCtrlOverride !== undefined ? Boolean(isCtrlOverride) : Boolean(ignore && ctrlHeldRef.current);
     if (
@@ -2528,7 +2597,7 @@ export default function Island() {
   }, []);
 
   // Auto-Updater State & Handlers
-  const [appVersion, setAppVersion] = useState("6.1.0");
+  const [appVersion, setAppVersion] = useState("6.1.1");
   const [isStoreBuild, setIsStoreBuild] = useState(false);
   const [updateStatus, setUpdateStatus] = useState("idle"); // 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'store-managed'
   const [updateInfo, setUpdateInfo] = useState(null);
@@ -3106,7 +3175,7 @@ export default function Island() {
     setIsDragging(val);
   };
   const [displays, setDisplays] = useState([]);
-  const [currentDisplayId, setCurrentDisplayId] = useState(localStorage.getItem("display-id") || "2287529652");
+  const [currentDisplayId, setCurrentDisplayId] = useState(localStorage.getItem("display-id") || "");
   const [weatherLocation, setWeatherLocation] = useState(localStorage.getItem("location") || "Chattogram");
   const [autoLaunchEnabled, setAutoLaunchEnabled] = useState(localStorage.getItem("auto-launch") !== "false");
   const [positionMode, setPositionMode] = useState(localStorage.getItem("position-mode") || localStorage.getItem("side-mode") || "top-center");
@@ -3298,13 +3367,17 @@ export default function Island() {
   };
 
   const handlePointerMove = (e) => {
-    const isCtrl = !!(e?.ctrlKey || e?.metaKey);
+    const isCtrl = !!(e?.ctrlKey || e?.metaKey) && !isTextEditingFocused();
     if (isCtrl && !ctrlHeldRef.current) {
+      if (mouseLeaveTimer.current) {
+        clearTimeout(mouseLeaveTimer.current);
+        mouseLeaveTimer.current = null;
+      }
       setCtrlState(true);
-      updateMouseIgnore(true, true);
+      updateMouseIgnore(true, true, true);
     } else if (!isCtrl && ctrlHeldRef.current) {
       setCtrlState(false);
-      updateMouseIgnore(false, true);
+      updateMouseIgnore(!isHoveredRef.current, true, false);
     }
 
     if (swipeStartX.current === null || mode !== "large") return;
@@ -3347,6 +3420,8 @@ export default function Island() {
   const isAnyBanner = isNotificationBanner || isPrayerBanner;
   const isAnyBannerRef = useRef(false);
   isAnyBannerRef.current = isAnyBanner;
+  const currentTabRef = useRef(currentTab);
+  currentTabRef.current = currentTab;
   const width = isAnyBanner
     ? (isPrayerBanner ? 320 : 300)
     : mode === "large"
@@ -3418,7 +3493,6 @@ export default function Island() {
       "auto-launch": "true",
       "position-mode": "top-center",
       "location": "Chattogram",
-      "display-id": "2287529652",
       "tab-order": "[2,4,5,6,7,8,10,0,1,3,9]",
       "hidden-tabs": "[6]"
     };
@@ -4331,7 +4405,7 @@ export default function Island() {
       const islandElem = document.getElementById("Island");
       if (!islandElem) return;
       const rect = islandElem.getBoundingClientRect();
-      const padding = 15;
+      const padding = 6;
       const isInside = (
         e.clientX >= rect.left - padding &&
         e.clientX <= rect.right + padding &&
@@ -4339,10 +4413,14 @@ export default function Island() {
         e.clientY <= rect.bottom + padding
       );
 
-      const isCtrl = !!(e.ctrlKey || e.metaKey);
+      const isCtrl = !!(e.ctrlKey || e.metaKey) && !isTextEditingFocused();
 
       if (isInside) {
         if (isCtrl) {
+          if (mouseLeaveTimer.current) {
+            clearTimeout(mouseLeaveTimer.current);
+            mouseLeaveTimer.current = null;
+          }
           if (!ctrlHeldRef.current) {
             setCtrlState(true);
           }
@@ -4351,7 +4429,7 @@ export default function Island() {
           if (ctrlHeldRef.current) {
             setCtrlState(false);
           }
-          updateMouseIgnore(false, true, false);
+          updateMouseIgnore(!isHoveredRef.current, true, false);
         }
       } else {
         if (ctrlHeldRef.current) {
@@ -4375,12 +4453,21 @@ export default function Island() {
   }, []);
 
   const [mediaPosition, setMediaPosition] = useState(0);
-  const lastMediaActionRef = useRef(0);
+  const lastPlayToggleRef = useRef({ time: 0, prevState: null });
+  const lastSeekActionRef = useRef({ time: 0, position: 0 });
+  const fetchMediaRef = useRef(null);
+  const mediaRefreshTimersRef = useRef([]);
 
   // Sync position from spotifyTrack when track info updates from backend
   useEffect(() => {
     if (spotifyTrack && spotifyTrack.position !== undefined) {
-      setMediaPosition(spotifyTrack.position);
+      const seekInfo = lastSeekActionRef.current;
+      const withinSeekGrace =
+        Date.now() - seekInfo.time < 2200 &&
+        Math.abs(spotifyTrack.position - seekInfo.position) > 2.0;
+      if (!withinSeekGrace) {
+        setMediaPosition(spotifyTrack.position);
+      }
     }
   }, [spotifyTrack?.name, spotifyTrack?.artist, spotifyTrack?.position]);
 
@@ -4396,6 +4483,48 @@ export default function Island() {
     return () => clearInterval(timer);
   }, [spotifyTrack?.state, spotifyTrack?.duration]);
 
+  const scheduleMediaRefresh = useCallback(() => {
+    mediaRefreshTimersRef.current.forEach((id) => clearTimeout(id));
+    mediaRefreshTimersRef.current = [180, 620].map((delay) =>
+      setTimeout(() => {
+        fetchMediaRef.current?.();
+      }, delay)
+    );
+  }, []);
+
+  const triggerMediaCommand = useCallback(async (command, seekSec = 0) => {
+    const cmd = String(command || '').toLowerCase();
+    if (cmd === 'playpause' || cmd === 'play_pause' || cmd === 'toggle') {
+      setSpotifyTrack((prev) => {
+        if (!prev) return prev;
+        lastPlayToggleRef.current = { time: Date.now(), prevState: prev.state };
+        return { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' };
+      });
+    } else if (cmd === 'seek') {
+      lastSeekActionRef.current = { time: Date.now(), position: seekSec };
+      setMediaPosition(seekSec);
+    } else {
+      lastPlayToggleRef.current = { time: 0, prevState: null };
+      lastSeekActionRef.current = { time: 0, position: 0 };
+    }
+
+    if (window.electronAPI?.controlSystemMedia) {
+      try {
+        const ok = await window.electronAPI.controlSystemMedia(command, seekSec);
+        if (ok === false && (cmd === 'playpause' || cmd === 'play_pause' || cmd === 'toggle')) {
+          const rollbackState = lastPlayToggleRef.current.prevState;
+          lastPlayToggleRef.current = { time: 0, prevState: null };
+          if (rollbackState) {
+            setSpotifyTrack((prev) => (prev ? { ...prev, state: rollbackState } : null));
+          }
+        }
+      } catch (err) {
+        console.error(err);
+      }
+      scheduleMediaRefresh();
+    }
+  }, [scheduleMediaRefresh]);
+
   // Now Playing
   useEffect(() => {
     let inflightMedia = false;
@@ -4410,8 +4539,8 @@ export default function Island() {
             track.artwork_url = null;
           }
           if (track) {
-            // If user recently clicked play/pause (within 2.5s), preserve optimistic play/pause state
-            if (Date.now() - lastMediaActionRef.current < 2500) {
+            // Preserve optimistic play/pause state only right after an explicit toggle
+            if (Date.now() - lastPlayToggleRef.current.time < 2500) {
               setSpotifyTrack(prev => prev ? { ...track, state: prev.state } : track);
             } else {
               setSpotifyTrack(track);
@@ -4427,9 +4556,15 @@ export default function Island() {
       }
     };
 
+    fetchMediaRef.current = fetchMedia;
     fetchMedia();
     const interval = setInterval(fetchMedia, 3000);
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      fetchMediaRef.current = null;
+      mediaRefreshTimersRef.current.forEach((id) => clearTimeout(id));
+      mediaRefreshTimersRef.current = [];
+    };
   }, []);
 
   useEffect(() => {
@@ -4489,56 +4624,56 @@ export default function Island() {
     };
   }, [moveTab, visibleTabs, currentTabId, tabShortcuts, recordingTabId]);
 
-  // Ctrl+Hover Click-Through keyboard listeners
+  // Ctrl+Hover Click-Through keyboard & text-input focus listeners
   useEffect(() => {
     const handleCtrlDown = (e) => {
-      if ((e.key === 'Control' || e.key === 'Meta') && isHoveredRef.current) {
+      if ((e.key === 'Control' || e.key === 'Meta') && isHoveredRef.current && !isTextEditingFocused()) {
+        if (mouseLeaveTimer.current) {
+          clearTimeout(mouseLeaveTimer.current);
+          mouseLeaveTimer.current = null;
+        }
         setCtrlState(true);
-        updateMouseIgnore(true, true);
+        updateMouseIgnore(true, true, true);
       }
     };
     const handleCtrlUp = (e) => {
       if (e.key === 'Control' || e.key === 'Meta') {
-        setCtrlState(false);
-        if (isHoveredRef.current) {
-          updateMouseIgnore(false, true);
-        } else {
-          updateMouseIgnore(true, true);
+        if (ctrlHeldRef.current) {
+          setCtrlState(false);
+          if (isHoveredRef.current) {
+            if (mouseLeaveTimer.current) {
+              clearTimeout(mouseLeaveTimer.current);
+              mouseLeaveTimer.current = null;
+            }
+            updateMouseIgnore(false, true, false);
+          } else {
+            updateMouseIgnore(true, true, false);
+          }
         }
       }
     };
+    const handleFocusIn = (e) => {
+      window.electronAPI?.setTextInputFocused?.(isEditableElement(e.target));
+    };
+    const handleFocusOut = (e) => {
+      window.electronAPI?.setTextInputFocused?.(isEditableElement(e.relatedTarget));
+    };
     const handleBlur = () => {
-      // Window lost focus while Ctrl+Hover was active — restore state
-      if (ctrlHeldRef.current) {
-        setCtrlState(false);
-        if (!isHoveredRef.current) {
-          updateMouseIgnore(true, true);
-        }
-      }
+      window.electronAPI?.setTextInputFocused?.(false);
     };
     document.addEventListener('keydown', handleCtrlDown);
     document.addEventListener('keyup', handleCtrlUp);
+    document.addEventListener('focusin', handleFocusIn);
+    document.addEventListener('focusout', handleFocusOut);
     window.addEventListener('blur', handleBlur);
     return () => {
       document.removeEventListener('keydown', handleCtrlDown);
       document.removeEventListener('keyup', handleCtrlUp);
+      document.removeEventListener('focusin', handleFocusIn);
+      document.removeEventListener('focusout', handleFocusOut);
       window.removeEventListener('blur', handleBlur);
     };
-  }, [updateMouseIgnore, setCtrlState]);
-
-  // Ctrl+Hover safety timeout
-  useEffect(() => {
-    if (!ctrlHeld) return;
-    const maxHold = setTimeout(() => {
-      setCtrlState(false);
-      if (isHoveredRef.current) {
-        updateMouseIgnore(false, true);
-      } else {
-        updateMouseIgnore(true, true);
-      }
-    }, 5000);
-    return () => clearTimeout(maxHold);
-  }, [ctrlHeld, updateMouseIgnore, setCtrlState]);
+  }, [updateMouseIgnore, setCtrlState, isEditableElement, isTextEditingFocused]);
 
   // Keep main process informed of #Island bounds so native cursor-in-notch watcher
   // can wake the window during external OS file drags (DoDragDrop)
@@ -4561,11 +4696,42 @@ export default function Island() {
     syncIslandBoundsToMain();
     const t1 = setTimeout(syncIslandBoundsToMain, 180);
     const t2 = setTimeout(syncIslandBoundsToMain, 400);
+    let rafId = null;
+    let observer = null;
+    const elem = document.getElementById("Island");
+    if (elem && typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(() => {
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          syncIslandBoundsToMain();
+        });
+      });
+      observer.observe(elem);
+    }
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      if (rafId) cancelAnimationFrame(rafId);
+      if (observer) observer.disconnect();
     };
   }, [mode, currentTab, width, height, positionMode, islandX, islandY, isTransitioning, syncIslandBoundsToMain]);
+
+  useLayoutEffect(() => {
+    if (!window.electronAPI?.syncOverlayViewport) return;
+    Promise.resolve(
+      window.electronAPI.syncOverlayViewport(
+        false,
+        positionMode,
+        islandX,
+        islandY
+      )
+    )
+      .then(() => {
+        requestAnimationFrame(syncIslandBoundsToMain);
+      })
+      .catch(() => {});
+  }, [positionMode, islandX, islandY, syncIslandBoundsToMain]);
 
   // Global file drag-and-drop & native cursor watcher integration
   useEffect(() => {
@@ -4658,6 +4824,37 @@ export default function Island() {
       });
     }
 
+    let unsubCtrlHover = null;
+    if (window.electronAPI?.onIslandCtrlHover) {
+      unsubCtrlHover = window.electronAPI.onIslandCtrlHover((payload) => {
+        const active = Boolean(payload?.active);
+        const inside = Boolean(payload?.inside);
+        if (mouseLeaveTimer.current) {
+          clearTimeout(mouseLeaveTimer.current);
+          mouseLeaveTimer.current = null;
+        }
+        if (active) {
+          lastIgnoreRef.current = { ignore: true, forward: true, isCtrl: true };
+          setCtrlState(true);
+          setHoverState(true);
+        } else if (inside) {
+          lastIgnoreRef.current = { ignore: false, forward: true, isCtrl: false };
+          setCtrlState(false);
+          setHoverState(true);
+          if (!isAnyBannerRef.current) {
+            setMode((prev) => (prev === "still" || prev === "quick" ? "large" : prev));
+          }
+        } else {
+          lastIgnoreRef.current = {
+            ignore: true,
+            forward: true,
+            isCtrl: Boolean(payload?.ctrl),
+          };
+          setCtrlState(false);
+        }
+      });
+    }
+
     let unsubCursorEntered = null;
     if (window.electronAPI?.onIslandCursorEntered) {
       unsubCursorEntered = window.electronAPI.onIslandCursorEntered(() => {
@@ -4666,8 +4863,9 @@ export default function Island() {
           clearTimeout(mouseLeaveTimer.current);
           mouseLeaveTimer.current = null;
         }
-        if (!ctrlHeldRef.current && !isAnyBannerRef.current) {
-          setHoverState(true);
+        setCtrlState(false);
+        setHoverState(true);
+        if (!isAnyBannerRef.current) {
           setMode((prev) => (prev === "still" || prev === "quick" ? "large" : prev));
         }
       });
@@ -4679,8 +4877,21 @@ export default function Island() {
         if (isDraggingRef.current || isShelfDragOutActiveRef.current || isExternalFileDragRef.current) {
           return;
         }
+        if (mouseLeaveTimer.current) {
+          clearTimeout(mouseLeaveTimer.current);
+          mouseLeaveTimer.current = null;
+        }
+        const activeTag = document.activeElement?.tagName;
+        if (!ctrlHeldRef.current && (activeTag === "INPUT" || activeTag === "TEXTAREA")) {
+          if (currentTabRef.current === 14) {
+            document.activeElement?.blur();
+          } else {
+            return;
+          }
+        }
+        setCtrlState(false);
         setHoverState(false);
-        updateMouseIgnore(true, true);
+        updateMouseIgnore(true, true, false);
         if (standbyBorderEnabled) {
           setMode("quick");
         } else if (largeStandbyEnabled) {
@@ -4704,10 +4915,11 @@ export default function Island() {
       if (typeof unsubDragEnd === "function") unsubDragEnd();
       if (typeof unsubDragEnter === "function") unsubDragEnter();
       if (typeof unsubExternalDrop === "function") unsubExternalDrop();
+      if (typeof unsubCtrlHover === "function") unsubCtrlHover();
       if (typeof unsubCursorEntered === "function") unsubCursorEntered();
       if (typeof unsubCursorOutside === "function") unsubCursorOutside();
     };
-  }, [setHoverState, updateMouseIgnore, standbyBorderEnabled, largeStandbyEnabled]);
+  }, [setHoverState, setCtrlState, updateMouseIgnore, standbyBorderEnabled, largeStandbyEnabled]);
 
   useEffect(() => {
     const handleFocusOut = () => {
@@ -4760,6 +4972,7 @@ export default function Island() {
     suppressClick.current = false;
   };
 
+  const isCompactWinOverlay = window.electronAPI?.platform === "win32";
   const isFree = positionMode === "free";
   const sideStyles = useMemo(() => {
     switch (positionMode) {
@@ -4767,11 +4980,14 @@ export default function Island() {
       case 'top-right': return { left: 'calc(100% - 15px)', top: '6px', x: '-100%' };
       case 'bottom-left': return { left: '15px', top: 'auto', bottom: '45px', x: '0%' };
       case 'bottom-right': return { left: 'calc(100% - 15px)', top: 'auto', bottom: '45px', x: '-100%' };
-      case 'top-center': return { left: '49.8%', top: '0px', x: '-50%' };
-      case 'bottom-center': return { left: '49.8%', top: 'auto', bottom: '45px', x: '-50%' };
-      default: return { left: `${islandX}%`, top: `${islandY}px`, x: '-50%' };
+      case 'top-center': return { left: isCompactWinOverlay ? '50%' : '49.8%', top: '0px', x: '-50%' };
+      case 'bottom-center': return { left: isCompactWinOverlay ? '50%' : '49.8%', top: 'auto', bottom: '45px', x: '-50%' };
+      default:
+        return isCompactWinOverlay
+          ? { left: '50%', top: islandY <= 0 ? '0px' : '24px', x: '-50%' }
+          : { left: `${islandX}%`, top: `${islandY}px`, x: '-50%' };
     }
-  }, [positionMode, islandX, islandY]);
+  }, [positionMode, islandX, islandY, isCompactWinOverlay]);
 
   const isAtTop = (sideStyles.top === '0px' || (positionMode === 'free' && islandY === 0)) && theme !== 'win95';
   const islandBorderStroke = theme === "win95"
@@ -4863,10 +5079,10 @@ export default function Island() {
           mouseLeaveTimer.current = null;
         }
         setHoverState(true);
-        const isCtrl = !!(e?.ctrlKey || e?.metaKey || ctrlHeldRef.current);
+        const isCtrl = !!(e?.ctrlKey || e?.metaKey) && !isTextEditingFocused();
         if (isCtrl) {
           setCtrlState(true);
-          updateMouseIgnore(true, true);
+          updateMouseIgnore(true, true, true);
         } else {
           setCtrlState(false);
           // If a temporary notification alert or prayer alert is currently active, DO NOT force large mode!
@@ -4876,7 +5092,7 @@ export default function Island() {
               clearTimeout(notificationAlertTimeout.current);
               notificationAlertTimeout.current = null;
             }
-            updateMouseIgnore(false, true);
+            updateMouseIgnore(false, true, false);
             return;
           }
           if (prayerAlert) {
@@ -4884,34 +5100,45 @@ export default function Island() {
               clearTimeout(prayerAlertTimeout.current);
               prayerAlertTimeout.current = null;
             }
-            updateMouseIgnore(false, true);
+            updateMouseIgnore(false, true, false);
             return;
           }
           setMode("large");
-          updateMouseIgnore(false, true);
+          updateMouseIgnore(false, true, false);
         }
       }}
       onMouseMove={(e) => {
-        const isCtrl = !!(e?.ctrlKey || e?.metaKey);
+        const isCtrl = !!(e?.ctrlKey || e?.metaKey) && !isTextEditingFocused();
         if (isCtrl && !ctrlHeldRef.current) {
+          if (mouseLeaveTimer.current) {
+            clearTimeout(mouseLeaveTimer.current);
+            mouseLeaveTimer.current = null;
+          }
           setCtrlState(true);
-          updateMouseIgnore(true, true);
+          updateMouseIgnore(true, true, true);
         } else if (!isCtrl && ctrlHeldRef.current) {
           setCtrlState(false);
-          updateMouseIgnore(false, true);
+          updateMouseIgnore(false, true, false);
         }
       }}
-      onMouseLeave={() => {
+      onMouseLeave={(e) => {
         suppressClick.current = false;
-        if (ctrlHeldRef.current) {
-          setCtrlState(false);
-        }
         if (isDraggingRef.current || isExternalFileDragRef.current || isShelfDragOutActiveRef.current) return;
+        // Switching to WS_EX_TRANSPARENT / pointer-events: none synthesizes mouseleave while
+        // the physical cursor is still inside the pill; let Rust's cursor watcher exit cleanly.
+        if (ctrlHeldRef.current || ((e?.ctrlKey || e?.metaKey) && !isTextEditingFocused())) {
+          if (!ctrlHeldRef.current) {
+            setCtrlState(true);
+            updateMouseIgnore(true, true, true);
+          }
+          return;
+        }
         if (mouseLeaveTimer.current) clearTimeout(mouseLeaveTimer.current);
         mouseLeaveTimer.current = setTimeout(() => {
           mouseLeaveTimer.current = null;
+          if (ctrlHeldRef.current) return;
           setHoverState(false);
-          updateMouseIgnore(true, true);
+          updateMouseIgnore(true, true, false);
 
           const activeTag = document.activeElement?.tagName;
           const isLauncher = currentTab === 14;
@@ -4972,6 +5199,8 @@ export default function Island() {
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
       initial={{
+        width: `${width}px`,
+        height: `${height}px`,
         x: sideStyles.x,
         left: sideStyles.left,
         top: sideStyles.top || 'auto',
@@ -5053,7 +5282,7 @@ export default function Island() {
         '--island-bg-color': bgColor,
         position: 'fixed',
         margin: 0,
-        pointerEvents: isTransitioning ? 'auto' : (ctrlHeld && isHovered) ? 'none' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled)) ? 'none' : 'auto'
+        pointerEvents: (ctrlHeld && isHovered) ? 'none' : isTransitioning ? 'auto' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled)) ? 'none' : 'auto'
       }}
     >
       {/* Dynamic Island Notch Ear Fillets (Concave upper corners) */}
@@ -5181,7 +5410,7 @@ export default function Island() {
           display: 'flex',
           alignItems: 'center',
           justifyContent: (mode === "large" && currentTab === 3) ? "flex-start" : "center",
-          pointerEvents: isTransitioning ? 'auto' : (ctrlHeld && isHovered) ? 'none' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled)) ? 'none' : 'auto'
+          pointerEvents: (ctrlHeld && isHovered) ? 'none' : isTransitioning ? 'auto' : (mode === 'still' && !isHovered && (!showInfoWhenIdleEnabled || hideNotActiveIslandEnabled)) ? 'none' : 'auto'
         }}
       >
         {/* Privacy Dots — persistent indicators for active camera/mic */}
@@ -5555,11 +5784,7 @@ export default function Island() {
                       transition={{ duration: 0.25, ease: "easeInOut" }}
                       onClick={(e) => {
                         e.stopPropagation();
-                        lastMediaActionRef.current = Date.now();
-                        setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
-                        if (window.electronAPI?.controlSystemMedia) {
-                          window.electronAPI.controlSystemMedia('playpause');
-                        }
+                        triggerMediaCommand('playpause');
                       }}
                       onMouseEnter={(e) => {
                         if (!ctrlHeldRef.current && !e.ctrlKey && !e.metaKey) {
@@ -7190,10 +7415,7 @@ export default function Island() {
                                   isPlaying={spotifyTrack.state === 'playing'}
                                   accentColor={mediaAccent}
                                   onSeek={(sec) => {
-                                    setMediaPosition(sec);
-                                    if (window.electronAPI?.controlSystemMedia) {
-                                      window.electronAPI.controlSystemMedia('seek', sec);
-                                    }
+                                    triggerMediaCommand('seek', sec);
                                   }}
                                 />
                               </div>
@@ -7202,11 +7424,9 @@ export default function Island() {
                                 <motion.button
                                   whileHover={{ scale: 1.08 }}
                                   whileTap={{ scale: 0.92 }}
-                                  onClick={() => {
-                                    lastMediaActionRef.current = Date.now();
-                                    if (window.electronAPI?.controlSystemMedia) {
-                                      window.electronAPI.controlSystemMedia('previous');
-                                    }
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    triggerMediaCommand('previous');
                                   }}
                                   style={{
                                     width: 30,
@@ -7230,12 +7450,9 @@ export default function Island() {
                                 <motion.button
                                   whileHover={{ scale: 1.08 }}
                                   whileTap={{ scale: 0.92 }}
-                                  onClick={() => {
-                                    lastMediaActionRef.current = Date.now();
-                                    setSpotifyTrack((prev) => prev ? { ...prev, state: prev.state === 'playing' ? 'paused' : 'playing' } : null);
-                                    if (window.electronAPI?.controlSystemMedia) {
-                                      window.electronAPI.controlSystemMedia('playpause');
-                                    }
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    triggerMediaCommand('playpause');
                                   }}
                                   style={{
                                     width: 36,
@@ -7259,11 +7476,9 @@ export default function Island() {
                                 <motion.button
                                   whileHover={{ scale: 1.08 }}
                                   whileTap={{ scale: 0.92 }}
-                                  onClick={() => {
-                                    lastMediaActionRef.current = Date.now();
-                                    if (window.electronAPI?.controlSystemMedia) {
-                                      window.electronAPI.controlSystemMedia('next');
-                                    }
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    triggerMediaCommand('next');
                                   }}
                                   style={{
                                     width: 30,

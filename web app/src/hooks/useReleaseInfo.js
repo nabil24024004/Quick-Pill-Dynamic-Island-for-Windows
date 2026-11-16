@@ -1,34 +1,34 @@
 import { useState, useEffect } from 'react';
 
 const DEFAULT_RELEASE = {
-  version: '6.1.0',
-  name: 'Quick Pill 6.1.0',
+  version: '6.1.1',
+  name: 'Quick Pill 6.1.1',
   releaseDate: '2026-11-16',
   storeProductId: '9N371MQB4BS7',
   msStoreUrl: 'https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct',
   changelog: [
-    'Cross-Platform Linux Support (X11 & Wayland): Added native Linux bundles (.AppImage, .deb, .rpm) with GTK3/GDK overlay positioning, PipeWire/PulseAudio mixer, MPRIS2 media controls, D-Bus notifications, and XDG app discovery.',
-    'Drop Shelf Drag-Out & Portal File Transfer: Improved native Linux drop-in/drag-out across File Manager, Desktop, and sandboxed apps (Snap/Flatpak) via org.freedesktop.portal.FileTransfer and isolated clean-filename exports.',
-    'Snappier Pill Physics & Scroll Switching: Tighter mode transition timing and faster mouse-wheel tab navigation inside Large Mode.',
-    'Microsoft Store & Windows Direct Packages: Updated Dual-Mode MSIX (9N371MQB4BS7) and NSIS Setup installer pipeline to v6.1.0.'
+    'Compact Overlay, Lower Memory & Instant Visibility: Fixed Windows overlay opacity initialization for immediate Store/setup visibility, eliminated hover resize/redraw glitching, and trimmed idle WebView2 footprint.',
+    'Single-Instance & Ctrl+Hover Click-Through: Enforced single-instance locking and fixed OS-level Ctrl+Hover click-through (instant fade/passthrough even when unfocused, clean release restoration, and text-input protection).',
+    'Media Control & Scrubber Fixes: Fixed Windows SMTC command checks with Play/Pause + media-key fallbacks, clamped seek bounds, prevented missing thumbnail caching, and added smooth drag scrubbing.',
+    'Cross-Platform Linux & Microsoft Store MSIX: Rebuilt Windows NSIS Setup, Dual-Mode MSIX (6.1.1.0 / 9N371MQB4BS7), and Linux VM bundling pipeline (.AppImage, .deb, .rpm).'
   ],
   platforms: {
     'win32-x64': {
-      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.0-Setup.exe',
-      sha256: '609893ce0372bde2e08a405ed211e8f49da74892480d544d1a19191f043e5e63',
-      size: 4245513,
+      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.1-Setup.exe',
+      sha256: '606dfa5df49ab351bd01fb55109804d6a1e8696a972ad4fcccaa50177a665c9f',
+      size: 4264420,
       installerType: 'nsis'
     },
     'linux-x64': {
-      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.0.AppImage',
+      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.1.AppImage',
       installerType: 'appimage'
     },
     'linux-deb': {
-      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.0.deb',
+      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.1.deb',
       installerType: 'deb'
     },
     'linux-rpm': {
-      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.0.rpm',
+      url: 'https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.1.rpm',
       installerType: 'rpm'
     }
   }
@@ -80,7 +80,7 @@ export function useReleaseInfo() {
 
   return {
     releaseInfo,
-    version: releaseInfo.version || '6.1.0',
+    version: releaseInfo.version || '6.1.1',
     windowsUrl,
     linuxAppImageUrl,
     linuxDebUrl,

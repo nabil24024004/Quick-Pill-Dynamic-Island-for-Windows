@@ -4,7 +4,7 @@ use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::sync::Mutex;
-#[cfg(windows)]
+#[cfg(any(windows, test))]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(windows)]
@@ -23,8 +23,9 @@ use windows::{
         },
         UI::{
             Input::KeyboardAndMouse::{
-                keybd_event, KEYEVENTF_KEYUP, VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE,
-                VK_MEDIA_PREV_TRACK, VK_MEDIA_STOP,
+                MapVirtualKeyW, SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT,
+                KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, MAPVK_VK_TO_VSC, VIRTUAL_KEY,
+                VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK, VK_MEDIA_STOP,
             },
             WindowsAndMessaging::{EnumWindows, GetWindowTextW, GetWindowThreadProcessId, IsWindowVisible},
         },
@@ -47,7 +48,65 @@ static ARTWORK_CACHE: Lazy<Mutex<(String, Option<String>)>> =
     Lazy::new(|| Mutex::new((String::new(), None)));
 
 #[cfg(windows)]
+static LAST_ACTIVE_AUMID: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
+
+#[cfg(windows)]
 const EPOCH_DIFF_100NS: i64 = 116_444_736_000_000_000;
+
+#[cfg(any(windows, test))]
+fn score_smtc_session(
+    is_playing: bool,
+    is_paused: bool,
+    has_metadata: bool,
+    is_last_active: bool,
+    is_current: bool,
+) -> i32 {
+    let mut score = 0;
+    if is_playing && has_metadata {
+        score += 1000;
+    } else if is_paused && has_metadata {
+        score += 500;
+    } else if has_metadata {
+        score += 250;
+    } else if is_playing {
+        score += 150;
+    }
+    if is_last_active {
+        score += 80;
+    }
+    if is_current {
+        score += 40;
+    }
+    score
+}
+
+#[cfg(any(windows, test))]
+fn compute_seek_target_100ns(
+    start_100ns: i64,
+    end_100ns: i64,
+    min_seek_100ns: Option<i64>,
+    max_seek_100ns: Option<i64>,
+    seek_seconds: f64,
+) -> i64 {
+    let safe_sec = if seek_seconds.is_finite() {
+        seek_seconds.max(0.0)
+    } else {
+        0.0
+    };
+    let offset_100ns = (safe_sec * 10_000_000.0).round() as i64;
+    let raw = start_100ns.saturating_add(offset_100ns);
+
+    let bounds = match (min_seek_100ns, max_seek_100ns) {
+        (Some(lo), Some(hi)) if hi > lo => Some((lo, hi)),
+        _ if end_100ns > start_100ns => Some((start_100ns, end_100ns)),
+        _ => None,
+    };
+
+    match bounds {
+        Some((lo, hi)) => raw.clamp(lo, hi),
+        None => raw.max(0),
+    }
+}
 
 #[cfg(windows)]
 fn now_filetime_100ns() -> i64 {
@@ -59,32 +118,66 @@ fn now_filetime_100ns() -> i64 {
 }
 
 #[cfg(windows)]
-fn get_best_session() -> Option<GlobalSystemMediaTransportControlsSession> {
+fn collect_scored_sessions() -> Vec<GlobalSystemMediaTransportControlsSession> {
     unsafe {
         let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
     }
-    let mgr = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
-        .ok()?
-        .get()
-        .ok()?;
+    let Ok(mgr) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+        .and_then(|op| op.get())
+    else {
+        return Vec::new();
+    };
 
-    if let Ok(curr) = mgr.GetCurrentSession() {
-        return Some(curr);
+    let curr_session = mgr.GetCurrentSession().ok();
+    let curr_aumid = curr_session
+        .as_ref()
+        .and_then(|s| s.SourceAppUserModelId().ok())
+        .map(|s| s.to_string())
+        .unwrap_or_default();
+
+    let last_aumid = LAST_ACTIVE_AUMID
+        .lock()
+        .map(|g| g.clone())
+        .unwrap_or_default();
+
+    let mut scored: Vec<(i32, GlobalSystemMediaTransportControlsSession)> = Vec::new();
+    if let Ok(sessions) = mgr.GetSessions() {
+        for s in sessions {
+            let aumid = s
+                .SourceAppUserModelId()
+                .ok()
+                .map(|id| id.to_string())
+                .unwrap_or_default();
+            let pb_status = s.GetPlaybackInfo().ok().and_then(|pb| pb.PlaybackStatus().ok());
+            let is_playing = pb_status == Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing);
+            let is_paused = pb_status == Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Paused);
+
+            let has_meta = s
+                .TryGetMediaPropertiesAsync()
+                .ok()
+                .and_then(|op| op.get().ok())
+                .map(|p| {
+                    let t = p.Title().ok().map(|x| !x.is_empty()).unwrap_or(false);
+                    let a = p.Artist().ok().map(|x| !x.is_empty()).unwrap_or(false);
+                    t || a
+                })
+                .unwrap_or(false);
+
+            let is_last = !last_aumid.is_empty() && aumid == last_aumid;
+            let is_curr = !curr_aumid.is_empty() && aumid == curr_aumid;
+            let score = score_smtc_session(is_playing, is_paused, has_meta, is_last, is_curr);
+            scored.push((score, s));
+        }
     }
 
-    let sessions = mgr.GetSessions().ok()?;
-    let mut fallback = None;
-    for s in sessions {
-        if let Ok(pb) = s.GetPlaybackInfo() {
-            if pb.PlaybackStatus().ok() == Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing) {
-                return Some(s);
-            }
-        }
-        if fallback.is_none() {
-            fallback = Some(s);
+    if scored.is_empty() {
+        if let Some(curr) = curr_session {
+            return vec![curr];
         }
     }
-    fallback
+
+    scored.sort_by(|a, b| b.0.cmp(&a.0));
+    scored.into_iter().map(|(_, s)| s).collect()
 }
 
 #[cfg(windows)]
@@ -94,7 +187,9 @@ fn read_thumbnail_data_url(
 ) -> Option<String> {
     if let Ok(guard) = ARTWORK_CACHE.lock() {
         if guard.0 == cache_key {
-            return guard.1.clone();
+            if let Some(ref cached) = guard.1 {
+                return Some(cached.clone());
+            }
         }
     }
 
@@ -132,8 +227,11 @@ fn read_thumbnail_data_url(
         Some(format!("data:{mime};base64,{}", BASE64.encode(&bytes)))
     })();
 
-    if let Ok(mut guard) = ARTWORK_CACHE.lock() {
-        *guard = (cache_key.to_string(), result.clone());
+    // Cache only successful thumbnails so transient startup misses recover on the next poll.
+    if let Some(ref url) = result {
+        if let Ok(mut guard) = ARTWORK_CACHE.lock() {
+            *guard = (cache_key.to_string(), Some(url.clone()));
+        }
     }
     result
 }
@@ -204,75 +302,89 @@ fn find_spotify_window_fallback() -> Option<SystemMediaInfo> {
     })
 }
 
+#[cfg(windows)]
+fn get_system_media_blocking() -> Option<SystemMediaInfo> {
+    for session in collect_scored_sessions() {
+        let app_id = session
+            .SourceAppUserModelId()
+            .ok()
+            .map(|s| s.to_string())
+            .unwrap_or_default();
+
+        let props = session.TryGetMediaPropertiesAsync().ok().and_then(|op| op.get().ok());
+        if let Some(p) = props {
+            let title = p.Title().ok().map(|s| s.to_string()).unwrap_or_default();
+            let artist = p.Artist().ok().map(|s| s.to_string()).unwrap_or_default();
+            let album = p.AlbumTitle().ok().map(|s| s.to_string()).unwrap_or_default();
+
+            if !title.is_empty() || !artist.is_empty() {
+                if !app_id.is_empty() {
+                    if let Ok(mut guard) = LAST_ACTIVE_AUMID.lock() {
+                        *guard = app_id.clone();
+                    }
+                }
+
+                let pb_status = session
+                    .GetPlaybackInfo()
+                    .ok()
+                    .and_then(|pb| pb.PlaybackStatus().ok());
+                let is_playing = pb_status
+                    == Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing);
+                let state_str = match pb_status {
+                    Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing) => "playing",
+                    Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Paused) => "paused",
+                    _ => "stopped",
+                };
+
+                let (duration, position) = if let Ok(tl) = session.GetTimelineProperties() {
+                    let start = tl.StartTime().map(|t| t.Duration).unwrap_or(0);
+                    let end = tl.EndTime().map(|t| t.Duration).unwrap_or(0);
+                    let pos = tl.Position().map(|t| t.Duration).unwrap_or(0);
+                    let updated = tl.LastUpdatedTime().map(|d| d.UniversalTime).unwrap_or(0);
+
+                    let dur_s = ((end - start).max(0) as f64) / 10_000_000.0;
+                    let mut pos_s = ((pos - start).max(0) as f64) / 10_000_000.0;
+
+                    if is_playing && updated > EPOCH_DIFF_100NS {
+                        let elapsed_100ns = (now_filetime_100ns() - updated).max(0);
+                        pos_s += (elapsed_100ns as f64) / 10_000_000.0;
+                    }
+                    if dur_s > 0.0 {
+                        pos_s = pos_s.clamp(0.0, dur_s);
+                    }
+                    (dur_s, pos_s)
+                } else {
+                    (0.0, 0.0)
+                };
+
+                let cache_key = format!("{app_id}|{title}|{artist}|{album}");
+                let artwork = read_thumbnail_data_url(&session, &cache_key);
+
+                return Some(SystemMediaInfo {
+                    name: title,
+                    artist,
+                    album,
+                    artwork_url: artwork,
+                    state: state_str.to_string(),
+                    duration,
+                    position,
+                    source: app_id,
+                });
+            }
+        }
+    }
+
+    find_spotify_window_fallback()
+}
+
 #[tauri::command]
 pub async fn get_system_media() -> Option<SystemMediaInfo> {
     #[cfg(windows)]
     {
-        if let Some(session) = get_best_session() {
-            let app_id = session
-                .SourceAppUserModelId()
-                .ok()
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-
-            let props = session.TryGetMediaPropertiesAsync().ok().and_then(|op| op.get().ok());
-            if let Some(p) = props {
-                let title = p.Title().ok().map(|s| s.to_string()).unwrap_or_default();
-                let artist = p.Artist().ok().map(|s| s.to_string()).unwrap_or_default();
-                let album = p.AlbumTitle().ok().map(|s| s.to_string()).unwrap_or_default();
-
-                if !title.is_empty() || !artist.is_empty() {
-                    let pb_status = session
-                        .GetPlaybackInfo()
-                        .ok()
-                        .and_then(|pb| pb.PlaybackStatus().ok());
-                    let is_playing = pb_status
-                        == Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing);
-                    let state_str = match pb_status {
-                        Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing) => "playing",
-                        Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Paused) => "paused",
-                        _ => "stopped",
-                    };
-
-                    let (duration, position) = if let Ok(tl) = session.GetTimelineProperties() {
-                        let start = tl.StartTime().map(|t| t.Duration).unwrap_or(0);
-                        let end = tl.EndTime().map(|t| t.Duration).unwrap_or(0);
-                        let pos = tl.Position().map(|t| t.Duration).unwrap_or(0);
-                        let updated = tl.LastUpdatedTime().map(|d| d.UniversalTime).unwrap_or(0);
-
-                        let dur_s = ((end - start).max(0) as f64) / 10_000_000.0;
-                        let mut pos_s = ((pos - start).max(0) as f64) / 10_000_000.0;
-
-                        if is_playing && updated > 0 {
-                            let elapsed_100ns = (now_filetime_100ns() - updated).max(0);
-                            pos_s += (elapsed_100ns as f64) / 10_000_000.0;
-                        }
-                        if dur_s > 0.0 {
-                            pos_s = pos_s.clamp(0.0, dur_s);
-                        }
-                        (dur_s, pos_s)
-                    } else {
-                        (0.0, 0.0)
-                    };
-
-                    let cache_key = format!("{app_id}|{title}|{artist}|{album}");
-                    let artwork = read_thumbnail_data_url(&session, &cache_key);
-
-                    return Some(SystemMediaInfo {
-                        name: title,
-                        artist,
-                        album,
-                        artwork_url: artwork,
-                        state: state_str.to_string(),
-                        duration,
-                        position,
-                        source: app_id,
-                    });
-                }
-            }
-        }
-
-        return find_spotify_window_fallback();
+        return tokio::task::spawn_blocking(get_system_media_blocking)
+            .await
+            .ok()
+            .flatten();
     }
 
     #[cfg(target_os = "linux")]
@@ -287,8 +399,174 @@ pub async fn get_system_media() -> Option<SystemMediaInfo> {
 #[cfg(windows)]
 fn send_media_vk(vk: u16) {
     unsafe {
-        keybd_event(vk as u8, 0, Default::default(), 0);
-        keybd_event(vk as u8, 0, KEYEVENTF_KEYUP, 0);
+        let scan = MapVirtualKeyW(vk as u32, MAPVK_VK_TO_VSC) as u16;
+        let inputs = [
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VIRTUAL_KEY(vk),
+                        wScan: scan,
+                        dwFlags: KEYEVENTF_EXTENDEDKEY,
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            },
+            INPUT {
+                r#type: INPUT_KEYBOARD,
+                Anonymous: INPUT_0 {
+                    ki: KEYBDINPUT {
+                        wVk: VIRTUAL_KEY(vk),
+                        wScan: scan,
+                        dwFlags: KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP,
+                        time: 0,
+                        dwExtraInfo: 0,
+                    },
+                },
+            },
+        ];
+        SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+    }
+}
+
+#[cfg(windows)]
+fn exec_smtc_command(
+    session: &GlobalSystemMediaTransportControlsSession,
+    cmd: &str,
+    seek_seconds: f64,
+) -> bool {
+    let pb_status = session
+        .GetPlaybackInfo()
+        .ok()
+        .and_then(|pb| pb.PlaybackStatus().ok());
+    let is_playing =
+        pb_status == Some(GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing);
+
+    match cmd {
+        "playpause" | "play_pause" | "toggle" => {
+            if session
+                .TryTogglePlayPauseAsync()
+                .and_then(|o| o.get())
+                .unwrap_or(false)
+            {
+                return true;
+            }
+            if is_playing {
+                session.TryPauseAsync().and_then(|o| o.get()).unwrap_or(false)
+            } else {
+                session.TryPlayAsync().and_then(|o| o.get()).unwrap_or(false)
+            }
+        }
+        "play" => {
+            if session.TryPlayAsync().and_then(|o| o.get()).unwrap_or(false) {
+                return true;
+            }
+            if !is_playing {
+                session
+                    .TryTogglePlayPauseAsync()
+                    .and_then(|o| o.get())
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        }
+        "pause" => {
+            if session.TryPauseAsync().and_then(|o| o.get()).unwrap_or(false) {
+                return true;
+            }
+            if is_playing {
+                session
+                    .TryTogglePlayPauseAsync()
+                    .and_then(|o| o.get())
+                    .unwrap_or(false)
+            } else {
+                false
+            }
+        }
+        "next" => session
+            .TrySkipNextAsync()
+            .and_then(|o| o.get())
+            .unwrap_or(false),
+        "previous" | "prev" => session
+            .TrySkipPreviousAsync()
+            .and_then(|o| o.get())
+            .unwrap_or(false),
+        "stop" => session
+            .TryStopAsync()
+            .and_then(|o| o.get())
+            .unwrap_or(false),
+        "seek" => {
+            let tl = session.GetTimelineProperties().ok();
+            let start = tl
+                .as_ref()
+                .and_then(|t| t.StartTime().ok())
+                .map(|d| d.Duration)
+                .unwrap_or(0);
+            let end = tl
+                .as_ref()
+                .and_then(|t| t.EndTime().ok())
+                .map(|d| d.Duration)
+                .unwrap_or(0);
+            let min_seek = tl
+                .as_ref()
+                .and_then(|t| t.MinSeekTime().ok())
+                .map(|d| d.Duration);
+            let max_seek = tl
+                .as_ref()
+                .and_then(|t| t.MaxSeekTime().ok())
+                .map(|d| d.Duration);
+            let target_100ns =
+                compute_seek_target_100ns(start, end, min_seek, max_seek, seek_seconds);
+            session
+                .TryChangePlaybackPositionAsync(target_100ns)
+                .and_then(|o| o.get())
+                .unwrap_or(false)
+        }
+        _ => false,
+    }
+}
+
+#[cfg(windows)]
+fn control_system_media_blocking(command: String, seek_seconds: f64) -> bool {
+    let cmd = command.trim().to_lowercase();
+    for session in collect_scored_sessions() {
+        if exec_smtc_command(&session, &cmd, seek_seconds) {
+            if let Ok(aumid) = session.SourceAppUserModelId() {
+                let s = aumid.to_string();
+                if !s.is_empty() {
+                    if let Ok(mut guard) = LAST_ACTIVE_AUMID.lock() {
+                        *guard = s;
+                    }
+                }
+            }
+            return true;
+        }
+    }
+
+    if cmd == "seek" {
+        return false;
+    }
+
+    // Virtual key fallback when no SMTC session accepts the control command
+    match cmd.as_str() {
+        "playpause" | "play_pause" | "toggle" | "play" | "pause" => {
+            send_media_vk(VK_MEDIA_PLAY_PAUSE.0);
+            true
+        }
+        "next" => {
+            send_media_vk(VK_MEDIA_NEXT_TRACK.0);
+            true
+        }
+        "previous" | "prev" => {
+            send_media_vk(VK_MEDIA_PREV_TRACK.0);
+            true
+        }
+        "stop" => {
+            send_media_vk(VK_MEDIA_STOP.0);
+            true
+        }
+        _ => false,
     }
 }
 
@@ -296,76 +574,11 @@ fn send_media_vk(vk: u16) {
 pub async fn control_system_media(command: String, seek_seconds: f64) -> bool {
     #[cfg(windows)]
     {
-        let cmd = command.trim().to_lowercase();
-        if let Some(session) = get_best_session() {
-            match cmd.as_str() {
-                "playpause" | "play_pause" | "toggle" => {
-                    if session.TryTogglePlayPauseAsync().and_then(|o| o.get()).is_ok() {
-                        return true;
-                    }
-                }
-                "play" => {
-                    if session.TryPlayAsync().and_then(|o| o.get()).is_ok() {
-                        return true;
-                    }
-                }
-                "pause" => {
-                    if session.TryPauseAsync().and_then(|o| o.get()).is_ok() {
-                        return true;
-                    }
-                }
-                "next" => {
-                    if session.TrySkipNextAsync().and_then(|o| o.get()).is_ok() {
-                        return true;
-                    }
-                }
-                "previous" | "prev" => {
-                    if session.TrySkipPreviousAsync().and_then(|o| o.get()).is_ok() {
-                        return true;
-                    }
-                }
-                "stop" => {
-                    if session.TryStopAsync().and_then(|o| o.get()).is_ok() {
-                        return true;
-                    }
-                }
-                "seek" => {
-                    let start = session
-                        .GetTimelineProperties()
-                        .ok()
-                        .and_then(|tl| tl.StartTime().ok())
-                        .map(|t| t.Duration)
-                        .unwrap_or(0);
-                    let target_100ns = start + (seek_seconds.max(0.0) * 10_000_000.0).round() as i64;
-                    return session
-                        .TryChangePlaybackPositionAsync(target_100ns)
-                        .and_then(|o| o.get())
-                        .unwrap_or(false);
-                }
-                _ => {}
-            }
-        }
-
-        // Virtual key fallback
-        match cmd.as_str() {
-            "playpause" | "play_pause" | "toggle" | "play" | "pause" => {
-                send_media_vk(VK_MEDIA_PLAY_PAUSE.0);
-                true
-            }
-            "next" => {
-                send_media_vk(VK_MEDIA_NEXT_TRACK.0);
-                true
-            }
-            "previous" | "prev" => {
-                send_media_vk(VK_MEDIA_PREV_TRACK.0);
-                true
-            }
-            "stop" => {
-                send_media_vk(VK_MEDIA_STOP.0);
-                true
-            }
-            _ => false,
-        }
+        return tokio::task::spawn_blocking(move || {
+            control_system_media_blocking(command, seek_seconds)
+        })
+        .await
+        .unwrap_or(false);
     }
 
     #[cfg(target_os = "linux")]
@@ -784,5 +997,44 @@ mod linux_mpris {
             .status()
             .map(|s| s.success())
             .unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{compute_seek_target_100ns, score_smtc_session};
+
+    #[test]
+    fn seek_target_clamps_to_seek_bounds_and_handles_invalid_inputs() {
+        // Seek inside bounds
+        assert_eq!(
+            compute_seek_target_100ns(0, 1_800_000_000, Some(0), Some(1_800_000_000), 42.5),
+            425_000_000
+        );
+        // Overshoot clamped to MaxSeekTime
+        assert_eq!(
+            compute_seek_target_100ns(0, 2_000_000_000, Some(100_000_000), Some(1_500_000_000), 250.0),
+            1_500_000_000
+        );
+        // Negative / NaN clamped cleanly to MinSeekTime / 0
+        assert_eq!(
+            compute_seek_target_100ns(50_000_000, 1_000_000_000, Some(100_000_000), Some(900_000_000), -5.0),
+            100_000_000
+        );
+        assert_eq!(
+            compute_seek_target_100ns(0, 1_000_000_000, None, None, f64::NAN),
+            0
+        );
+    }
+
+    #[test]
+    fn session_scoring_prefers_playing_with_metadata_over_empty_current_session() {
+        let empty_current = score_smtc_session(false, false, false, false, true);
+        let paused_with_meta = score_smtc_session(false, true, true, false, false);
+        let playing_with_meta = score_smtc_session(true, false, true, false, false);
+        let sticky_playing = score_smtc_session(true, false, true, true, false);
+        assert!(paused_with_meta > empty_current);
+        assert!(playing_with_meta > paused_with_meta);
+        assert!(sticky_playing > playing_with_meta);
     }
 }

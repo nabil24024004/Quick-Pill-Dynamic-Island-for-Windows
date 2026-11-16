@@ -150,12 +150,13 @@ impl IslandBounds {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct WindowOverlayState {
     pub bounds: Option<IslandBounds>,
     pub ignore_mouse: bool,
     pub forward_mouse: bool,
     pub is_ctrl_held: bool,
+    pub is_text_input_focused: bool,
     pub cursor_inside_island: bool,
     pub is_shelf_drag_out: bool,
     pub current_display_id: String,
@@ -163,7 +164,45 @@ pub struct WindowOverlayState {
     pub display_y_px: i32,
     pub display_width_px: i32,
     pub display_height_px: i32,
+    pub window_x_px: i32,
+    pub window_y_px: i32,
+    pub window_width_px: i32,
+    pub window_height_px: i32,
+    pub scale_factor: f64,
+    pub position_mode: String,
+    pub island_x_pct: f64,
+    pub island_y_px: f64,
+    pub expanded_viewport: bool,
     pub main_hwnd: isize,
+}
+
+impl Default for WindowOverlayState {
+    fn default() -> Self {
+        Self {
+            bounds: None,
+            ignore_mouse: false,
+            forward_mouse: false,
+            is_ctrl_held: false,
+            is_text_input_focused: false,
+            cursor_inside_island: false,
+            is_shelf_drag_out: false,
+            current_display_id: String::new(),
+            display_x_px: 0,
+            display_y_px: 0,
+            display_width_px: 0,
+            display_height_px: 0,
+            window_x_px: 0,
+            window_y_px: 0,
+            window_width_px: 0,
+            window_height_px: 0,
+            scale_factor: 1.0,
+            position_mode: "top-center".to_string(),
+            island_x_pct: 50.0,
+            island_y_px: 6.0,
+            expanded_viewport: false,
+            main_hwnd: 0,
+        }
+    }
 }
 
 pub struct SharedState {

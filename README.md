@@ -19,8 +19,8 @@
       </picture>
     </a>
     &nbsp;&nbsp;
-    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.0-Setup.exe">
-      <img src="assets/download-button.svg" alt="Download for Desktop Setup (v6.1.0)" width="250" />
+    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.1-Setup.exe">
+      <img src="assets/download-button.svg" alt="Download for Desktop Setup (v6.1.1)" width="250" />
     </a>
   </p>
 
@@ -34,8 +34,8 @@
   <!-- Status & Action Badges (Image 2 Style - for-the-badge) -->
   <p align="center">
     <a href="https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct"><img src="https://img.shields.io/badge/MICROSOFT_STORE-9N371MQB4BS7-0078D7?style=for-the-badge&logo=microsoftstore&logoColor=white" alt="Microsoft Store" /></a>
-    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.0-Setup.exe"><img src="https://img.shields.io/badge/DESKTOP_APP-DOWNLOAD_NOW-0078D7?style=for-the-badge&logo=windows&logoColor=white" alt="Desktop App Download Now" /></a>
-    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><img src="https://img.shields.io/badge/RELEASE-V6.1.0-0078D7?style=for-the-badge&logo=github&logoColor=white" alt="Release v6.1.0" /></a>
+    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.1-Setup.exe"><img src="https://img.shields.io/badge/DESKTOP_APP-DOWNLOAD_NOW-0078D7?style=for-the-badge&logo=windows&logoColor=white" alt="Desktop App Download Now" /></a>
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><img src="https://img.shields.io/badge/RELEASE-V6.1.1-0078D7?style=for-the-badge&logo=github&logoColor=white" alt="Release v6.1.1" /></a>
     <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/pulls"><img src="https://img.shields.io/badge/PRS-WELCOME-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="PRs Welcome" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-f08236?style=for-the-badge" alt="MIT License" /></a>
   </p>
@@ -53,27 +53,27 @@
 
 ---
 
-## 🌟 What's New in v6.1.0
+## 🌟 What's New in v6.1.1
 
 <table>
   <tr>
     <td width="50%">
-      <h3>🐧 Cross-Platform Linux (X11 &amp; Wayland)</h3>
-      <p>Brings Quick Pill natively to Linux desktops (GNOME, KDE, Hyprland, Sway, i3) with PipeWire/PulseAudio audio mixing, MPRIS2 media controls, D-Bus notifications, XDG app discovery, and <code>.AppImage</code>, <code>.deb</code>, and <code>.rpm</code> bundles.</p>
+      <h3>⚡ Compact Overlay, Lower RAM &amp; Smooth Hover</h3>
+      <p>Sizes the Windows overlay cleanly to the notch footprint (<code>960x368</code>), optimizes WebView2 startup memory, initializes layered window opacity reliably for Microsoft Store MSIX launches, and enforces single-instance activation on reopen.</p>
     </td>
     <td width="50%">
-      <h3>📁 Upgraded Drop Shelf &amp; Portal Drag-Out</h3>
-      <p>Added cross-app Linux drop-in/drag-out support with <code>org.freedesktop.portal.FileTransfer</code> for Snap/Flatpak browsers, isolated clean-filename exports, and faster pill transition physics.</p>
+      <h3>🎵 Upgraded SMTC Media Controls &amp; Draggable Scrubber</h3>
+      <p>Fixes media transport command execution, clamps SMTC seek bounds, prevents stale artwork caching, and adds pointer-captured click-and-drag scrubbing on the Now Playing waveform.</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <h3>🦀 Native Rust + Tauri v2 Architecture</h3>
-      <p>Lightweight native Rust backend with Microsoft Edge WebView2 (Windows) and WebKitGTK (Linux) — instant launch speed, low memory footprint, and compact installers.</p>
+      <h3>🐧 Cross-Platform Linux (X11 &amp; Wayland)</h3>
+      <p>Native Linux desktops (GNOME, KDE, Hyprland, Sway, i3) with PipeWire/PulseAudio audio mixing, MPRIS2 media controls, D-Bus notifications, XDG app discovery, and <code>.AppImage</code>, <code>.deb</code>, and <code>.rpm</code> bundles.</p>
     </td>
     <td width="50%">
-      <h3>🔐 Microsoft Store MSIX &amp; Code Signing</h3>
-      <p>Ships Dual-Mode Microsoft Store MSIX (<code>9N371MQB4BS7</code>) plus Authenticode signing hooks (<code>sign-windows.ps1</code>) and Smart App Control error handling in the auto-updater.</p>
+      <h3>📁 Upgraded Drop Shelf &amp; Portal Drag-Out</h3>
+      <p>Cross-app Linux drop-in/drag-out support with <code>org.freedesktop.portal.FileTransfer</code> for Snap/Flatpak browsers, isolated clean-filename exports, and Dual-Mode Microsoft Store MSIX (<code>9N371MQB4BS7</code>).</p>
     </td>
   </tr>
 </table>
@@ -153,14 +153,14 @@ Quick Pill features zero-latency global keyboard navigation. All shortcuts use `
 3. Updates and launch-on-startup are managed natively through Windows & Microsoft Store.
 
 ### Option 2: Direct Windows Installer (`.exe`)
-1. Download **[QuickPill-Windows-v6.1.0-Setup.exe](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.0-Setup.exe)**.
+1. Download **[QuickPill-Windows-v6.1.1-Setup.exe](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.1-Setup.exe)**.
 2. Run the installer. Quick Pill installs silently per-user and automatically launches.
 3. Built-in auto-updates keep your installation fresh with SHA-256 verification.
 
 ### Option 3: Linux Packages (`.AppImage`, `.deb`, `.rpm`)
-- **Universal AppImage:** Download **[QuickPill-Linux-v6.1.0.AppImage](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.0.AppImage)**, mark executable (`chmod +x`), and run directly.
-- **Ubuntu / Debian (`.deb`):** `sudo apt install ./QuickPill-Linux-v6.1.0.deb`
-- **Fedora / RHEL (`.rpm`):** `sudo dnf install ./QuickPill-Linux-v6.1.0.rpm`
+- **Universal AppImage:** Download **[QuickPill-Linux-v6.1.1.AppImage](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.1.AppImage)**, mark executable (`chmod +x`), and run directly.
+- **Ubuntu / Debian (`.deb`):** `sudo apt install ./QuickPill-Linux-v6.1.1.deb`
+- **Fedora / RHEL (`.rpm`):** `sudo dnf install ./QuickPill-Linux-v6.1.1.rpm`
 
 ### Option 4: GitHub Releases
 Download installers from the **[GitHub Releases](https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases)** page.

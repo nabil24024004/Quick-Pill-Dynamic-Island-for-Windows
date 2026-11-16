@@ -291,7 +291,7 @@ export const HookScene = Interactive.create({
     },
     versionLabel: {
       type: 'string',
-      default: 'v6.1.0',
+      default: 'v6.1.1',
       description: 'Version label',
     },
     headline: {

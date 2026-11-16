@@ -6,8 +6,12 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
 #[cfg(windows)]
+use std::sync::atomic::AtomicBool;
+#[cfg(windows)]
 use std::sync::atomic::AtomicIsize;
 use std::sync::atomic::Ordering;
+#[cfg(windows)]
+use std::sync::Mutex;
 use std::sync::OnceLock;
 use std::thread;
 use std::time::Duration;
@@ -23,26 +27,33 @@ use windows::{
     core::{HSTRING, PCWSTR},
     ApplicationModel::{StartupTask, StartupTaskState},
     Win32::{
-        Foundation::{HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
+        Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM},
         System::Com::{CoInitializeEx, COINIT_MULTITHREADED},
         System::Registry::{
             RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY,
             HKEY_CURRENT_USER, KEY_SET_VALUE, REG_SZ,
         },
         UI::{
-            Input::KeyboardAndMouse::{GetAsyncKeyState, VK_LBUTTON},
+            Input::KeyboardAndMouse::{
+                GetAsyncKeyState, VK_CONTROL, VK_LBUTTON, VK_LCONTROL, VK_RCONTROL, VK_RMENU,
+            },
             Shell::ShellExecuteW,
             WindowsAndMessaging::{
-                CallWindowProcW, GetCursorPos, GetWindowLongPtrW, GetWindowRect, IsIconic,
-                SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, ShowWindow, GWL_EXSTYLE,
-                GWLP_WNDPROC, HWND_TOPMOST, SIZE_MINIMIZED, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-                SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_SHOWWINDOW, SW_RESTORE,
-                SW_SHOWNOACTIVATE, SW_SHOWNORMAL, WM_POWERBROADCAST, WM_SIZE, WNDPROC,
+                CallWindowProcW, GetCursorPos, GetForegroundWindow, GetLayeredWindowAttributes,
+                GetWindowLongPtrW, GetWindowRect, IsChild, IsIconic, IsWindowVisible,
+                SetForegroundWindow, SetLayeredWindowAttributes, SetWindowLongPtrW, SetWindowPos,
+                ShowWindow, GWL_EXSTYLE, GWLP_WNDPROC, HWND_TOPMOST,
+                LAYERED_WINDOW_ATTRIBUTES_FLAGS, LWA_ALPHA, SIZE_MINIMIZED, SWP_FRAMECHANGED,
+                SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOOWNERZORDER, SWP_NOSIZE, SWP_SHOWWINDOW,
+                SW_RESTORE, SW_SHOWNOACTIVATE, SW_SHOWNORMAL, WM_POWERBROADCAST, WM_SIZE, WNDPROC,
                 WS_EX_LAYERED, WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
             },
         },
     },
 };
+
+#[cfg(windows)]
+static LAST_WEBVIEW_LOW_MEMORY: Mutex<Option<bool>> = Mutex::new(None);
 
 #[cfg(windows)]
 static PREV_WNDPROC: AtomicIsize = AtomicIsize::new(0);
@@ -138,6 +149,203 @@ pub fn enumerate_displays(app: &AppHandle) -> Vec<DisplayInfo> {
     result
 }
 
+#[cfg(any(windows, test))]
+pub fn compute_windows_overlay_rect(
+    disp_x: i32,
+    disp_y: i32,
+    disp_w_px: i32,
+    disp_h_px: i32,
+    scale: f64,
+    position_mode: &str,
+    island_x_pct: f64,
+    island_y_px: f64,
+    _expanded: bool,
+) -> (i32, i32, i32, i32) {
+    let eff_scale = scale.max(1.0);
+    let disp_w = disp_w_px.max(1);
+    let disp_h = disp_h_px.max(1);
+    let disp_w_log = (disp_w as f64) / eff_scale;
+    let disp_h_log = (disp_h as f64) / eff_scale;
+
+    // Keep a fixed compact overlay HWND covering every pill/tab state without resizing on hover,
+    // avoiding DWM/WebView2 surface reallocations and coordinate shifts during animations.
+    let target_w_log = 960.0_f64.min(disp_w_log);
+    let target_h_log = 368.0_f64.min(disp_h_log);
+
+    let win_w = (target_w_log * eff_scale).round().max(1.0) as i32;
+    let win_h = (target_h_log * eff_scale).round().max(1.0) as i32;
+    let center_x = disp_x + ((disp_w as f64) * 0.498).round() as i32;
+
+    let (win_x, win_y) = match position_mode {
+        "top-left" => (disp_x, disp_y),
+        "top-right" => (disp_x + disp_w - win_w, disp_y),
+        "bottom-left" => (disp_x, disp_y + disp_h - win_h),
+        "bottom-right" => (disp_x + disp_w - win_w, disp_y + disp_h - win_h),
+        "bottom-center" => (center_x - (win_w / 2), disp_y + disp_h - win_h),
+        "free" => {
+            let cx = disp_x + ((disp_w as f64) * (island_x_pct.clamp(0.0, 100.0) / 100.0)).round() as i32;
+            let top_pad = if island_y_px <= 0.0 { 0.0 } else { 24.0 };
+            let y = disp_y + (((island_y_px - top_pad) * eff_scale).round() as i32);
+            (cx - (win_w / 2), y)
+        }
+        _ => (center_x - (win_w / 2), disp_y),
+    };
+
+    (win_x, win_y, win_w, win_h)
+}
+
+#[cfg(windows)]
+fn sync_webview2_state(app: &AppHandle, width_px: i32, height_px: i32, low_memory: bool, ensure_visible: bool) {
+    let mem_changed = if let Ok(mut guard) = LAST_WEBVIEW_LOW_MEMORY.lock() {
+        if *guard == Some(low_memory) {
+            false
+        } else {
+            *guard = Some(low_memory);
+            true
+        }
+    } else {
+        true
+    };
+
+    if let Some(win) = app.get_webview_window("main") {
+        let rw = width_px.max(1);
+        let rh = height_px.max(1);
+        let _ = win.with_webview(move |webview| unsafe {
+            use webview2_com::Microsoft::Web::WebView2::Win32::{
+                ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+                COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+            };
+            use windows_core_wv2::Interface;
+
+            let controller = webview.controller();
+            if ensure_visible {
+                let _ = controller.SetIsVisible(true);
+            }
+            if rw > 0 && rh > 0 {
+                let mut cur_bounds = std::mem::zeroed();
+                if controller.Bounds(&mut cur_bounds).is_ok() {
+                    if cur_bounds.right != rw || cur_bounds.bottom != rh || cur_bounds.left != 0 || cur_bounds.top != 0 {
+                        cur_bounds.left = 0;
+                        cur_bounds.top = 0;
+                        cur_bounds.right = rw;
+                        cur_bounds.bottom = rh;
+                        let _ = controller.SetBounds(cur_bounds);
+                    }
+                }
+            }
+            if mem_changed {
+                if let Ok(core) = controller.CoreWebView2() {
+                    if let Ok(wv19) = core.cast::<ICoreWebView2_19>() {
+                        let level = if low_memory {
+                            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+                        } else {
+                            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+                        };
+                        let _ = wv19.SetMemoryUsageTargetLevel(level);
+                    }
+                }
+            }
+        });
+    }
+}
+
+#[cfg(windows)]
+pub fn apply_windows_overlay_rect(app: &AppHandle, state: &SharedState, force_show: bool) {
+    let (hwnd_raw, rx, ry, rw, rh, size_or_pos_changed, expanded, always_on_top) = {
+        let Ok(mut ov) = state.overlay.lock() else {
+            return;
+        };
+        if ov.display_width_px <= 0 || ov.display_height_px <= 0 {
+            return;
+        }
+        let expanded = ov.expanded_viewport || ov.is_shelf_drag_out;
+        let (rx, ry, rw, rh) = compute_windows_overlay_rect(
+            ov.display_x_px,
+            ov.display_y_px,
+            ov.display_width_px,
+            ov.display_height_px,
+            ov.scale_factor,
+            &ov.position_mode,
+            ov.island_x_pct,
+            ov.island_y_px,
+            expanded,
+        );
+
+        let changed = rx != ov.window_x_px
+            || ry != ov.window_y_px
+            || rw != ov.window_width_px
+            || rh != ov.window_height_px;
+
+        if changed && ov.window_width_px > 0 {
+            let eff_scale = ov.scale_factor.max(1.0);
+            let dx_log = (ov.window_x_px - rx) as f64 / eff_scale;
+            let dy_log = (ov.window_y_px - ry) as f64 / eff_scale;
+            if let Some(ref mut b) = ov.bounds {
+                if let Some(v) = b.x.as_mut() { *v += dx_log; }
+                if let Some(v) = b.left.as_mut() { *v += dx_log; }
+                if let Some(v) = b.right.as_mut() { *v += dx_log; }
+                if let Some(v) = b.y.as_mut() { *v += dy_log; }
+                if let Some(v) = b.top.as_mut() { *v += dy_log; }
+                if let Some(v) = b.bottom.as_mut() { *v += dy_log; }
+            }
+        }
+
+        ov.window_x_px = rx;
+        ov.window_y_px = ry;
+        ov.window_width_px = rw;
+        ov.window_height_px = rh;
+        let always_on_top = state.settings.read().map(|s| s.always_on_top).unwrap_or(true);
+        (ov.main_hwnd, rx, ry, rw, rh, changed, expanded, always_on_top)
+    };
+
+    if hwnd_raw != 0 && (size_or_pos_changed || force_show) {
+        unsafe {
+            let hwnd = HWND(hwnd_raw as *mut std::ffi::c_void);
+            let insert_after = if always_on_top {
+                HWND_TOPMOST
+            } else {
+                windows::Win32::UI::WindowsAndMessaging::HWND_NOTOPMOST
+            };
+            let mut flags = SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_SHOWWINDOW;
+            if force_show {
+                flags |= SWP_FRAMECHANGED;
+            }
+            if !always_on_top && !force_show {
+                flags |= windows::Win32::UI::WindowsAndMessaging::SWP_NOZORDER;
+            }
+            let _ = SetWindowPos(hwnd, insert_after, rx, ry, rw, rh, flags);
+            if force_show || !IsWindowVisible(hwnd).as_bool() {
+                let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+            }
+        }
+    }
+
+    let first_paint_done = FIRST_MSIX_SHOW_DONE.load(Ordering::SeqCst);
+    let low_mem = first_paint_done && !expanded;
+    sync_webview2_state(app, rw, rh, low_mem, force_show);
+}
+
+/// Initializes layered alpha opacity when `WS_EX_LAYERED` is active without committed attributes.
+#[cfg(windows)]
+unsafe fn ensure_layered_alpha_initialized(hwnd: HWND) -> bool {
+    let mut key = COLORREF(0);
+    let mut alpha = 0u8;
+    let mut lwa_flags = LAYERED_WINDOW_ATTRIBUTES_FLAGS(0);
+    let missing = GetLayeredWindowAttributes(
+        hwnd,
+        Some(&mut key),
+        Some(&mut alpha),
+        Some(&mut lwa_flags),
+    )
+    .is_err()
+        || lwa_flags.0 == 0
+        || alpha == 0;
+    if missing {
+        let _ = SetLayeredWindowAttributes(hwnd, COLORREF(0), 255, LWA_ALPHA);
+    }
+    missing
+}
+
 #[cfg(windows)]
 pub fn apply_overlay_styles(hwnd_raw: isize, click_through: bool) {
     if hwnd_raw == 0 {
@@ -147,14 +355,20 @@ pub fn apply_overlay_styles(hwnd_raw: isize, click_through: bool) {
         use windows::Win32::UI::WindowsAndMessaging::{SWP_NOZORDER, WS_EX_APPWINDOW};
         let hwnd = HWND(hwnd_raw as *mut std::ffi::c_void);
         let current = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
-        let mut next = (current | WS_EX_TOOLWINDOW.0) & !WS_EX_APPWINDOW.0;
+        // Keep WS_EX_LAYERED permanently active (alpha=255) and only toggle WS_EX_TRANSPARENT
+        // so DWM never tears down or flickers the layered surface on hover transitions.
+        let mut next = (current | WS_EX_TOOLWINDOW.0 | WS_EX_LAYERED.0) & !WS_EX_APPWINDOW.0;
         if click_through {
-            next |= WS_EX_LAYERED.0 | WS_EX_TRANSPARENT.0;
+            next |= WS_EX_TRANSPARENT.0;
         } else {
-            next &= !(WS_EX_TRANSPARENT.0 | WS_EX_LAYERED.0);
+            next &= !WS_EX_TRANSPARENT.0;
         }
+        let layered_toggled = ((next ^ current) & WS_EX_LAYERED.0) != 0;
         if next != current {
             SetWindowLongPtrW(hwnd, GWL_EXSTYLE, next as isize);
+        }
+        let lwa_initialized = ensure_layered_alpha_initialized(hwnd);
+        if layered_toggled || lwa_initialized || !IsWindowVisible(hwnd).as_bool() {
             let _ = SetWindowPos(
                 hwnd,
                 HWND::default(),
@@ -164,6 +378,7 @@ pub fn apply_overlay_styles(hwnd_raw: isize, click_through: bool) {
                 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED,
             );
+            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         }
     }
 }
@@ -175,7 +390,10 @@ pub fn force_topmost_hwnd(hwnd_raw: isize) {
     }
     unsafe {
         let hwnd = HWND(hwnd_raw as *mut std::ffi::c_void);
-        if IsIconic(hwnd).as_bool() {
+        if (GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32 & WS_EX_LAYERED.0) != 0 {
+            ensure_layered_alpha_initialized(hwnd);
+        }
+        if IsIconic(hwnd).as_bool() || !IsWindowVisible(hwnd).as_bool() {
             let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
         }
         let _ = SetWindowPos(
@@ -185,8 +403,43 @@ pub fn force_topmost_hwnd(hwnd_raw: isize) {
             0,
             0,
             0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_NOOWNERZORDER,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER,
         );
+    }
+}
+
+/// Reveals and activates the running Quick Pill overlay window without spawning a second process.
+pub fn activate_existing_instance(app_handle: &AppHandle) {
+    let st = app_handle.state::<SharedState>();
+    let hwnd_raw = {
+        if let Ok(mut ov) = st.overlay.lock() {
+            ov.ignore_mouse = false;
+            ov.is_ctrl_held = false;
+            ov.is_text_input_focused = false;
+            ov.main_hwnd
+        } else {
+            0
+        }
+    };
+    #[cfg(windows)]
+    {
+        if hwnd_raw != 0 {
+            apply_overlay_styles(hwnd_raw, false);
+        }
+        apply_windows_overlay_rect(app_handle, &st, true);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = hwnd_raw;
+        apply_linux_overlay_state(app_handle);
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = hwnd_raw;
+
+    if let Some(w) = app_handle.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.set_focus();
+        let _ = app_handle.emit("open-tab-instant", 2);
     }
 }
 
@@ -197,6 +450,19 @@ unsafe extern "system" fn overlay_wnd_proc(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    let activate_msg = crate::single_instance::activate_msg_id();
+    if activate_msg != 0 && msg == activate_msg {
+        if crate::single_instance::try_claim_activation_window() {
+            if let Some(app) = SUBCLASS_APP.get() {
+                if let Some(state) = app.try_state::<SharedState>() {
+                    state.log("INFO", "[Instance] Secondary launch signal received; activating existing window", None);
+                }
+                activate_existing_instance(app);
+            }
+        }
+        return LRESULT(0);
+    }
+
     match msg {
         WM_POWERBROADCAST => {
             let code = wparam.0 as u32;
@@ -228,6 +494,9 @@ unsafe extern "system" fn overlay_wnd_proc(
         LRESULT(0)
     }
 }
+
+#[cfg(windows)]
+static FIRST_MSIX_SHOW_DONE: AtomicBool = AtomicBool::new(false);
 
 #[cfg(windows)]
 pub fn init_overlay_window(app: &AppHandle, win: &WebviewWindow) {
@@ -270,32 +539,26 @@ pub fn init_overlay_window(app: &AppHandle, win: &WebviewWindow) {
                 ov.display_y_px = d.physical_bounds.y;
                 ov.display_width_px = d.physical_bounds.width;
                 ov.display_height_px = d.physical_bounds.height;
+                ov.scale_factor = d.scale_factor.max(1.0);
                 ov.ignore_mouse = true;
                 ov.forward_mouse = true;
             }
         }
-        let _ = win.set_position(tauri::PhysicalPosition::new(
+        let (rx, ry, rw, rh) = compute_windows_overlay_rect(
             d.physical_bounds.x,
             d.physical_bounds.y,
-        ));
-        let _ = win.set_size(tauri::PhysicalSize::new(
-            d.physical_bounds.width.max(1) as u32,
-            d.physical_bounds.height.max(1) as u32,
-        ));
-        unsafe {
-            let hwnd = HWND(hwnd_raw as *mut std::ffi::c_void);
-            apply_overlay_styles(hwnd_raw, true);
-            let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
-            let _ = SetWindowPos(
-                hwnd,
-                HWND_TOPMOST,
-                d.physical_bounds.x,
-                d.physical_bounds.y,
-                d.physical_bounds.width,
-                d.physical_bounds.height,
-                SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER | SWP_FRAMECHANGED,
-            );
-        }
+            d.physical_bounds.width,
+            d.physical_bounds.height,
+            d.scale_factor,
+            "top-center",
+            50.0,
+            6.0,
+            false,
+        );
+        let _ = win.set_position(tauri::PhysicalPosition::new(rx, ry));
+        let _ = win.set_size(tauri::PhysicalSize::new(rw.max(1) as u32, rh.max(1) as u32));
+        apply_overlay_styles(hwnd_raw, true);
+        apply_windows_overlay_rect(app, &state, true);
     } else {
         state.log("WARN", "[Overlay] No monitor found during init_overlay_window", None);
     }
@@ -833,23 +1096,126 @@ fn poll_linux_cursor_and_mods(app: &AppHandle) -> Option<(f64, f64, bool, bool)>
     gdk_pos
 }
 
+/// Checks whether the global cursor coordinate (with padding) lies inside the rendered island rectangle.
+pub fn cursor_in_bounds(rel_x: f64, rel_y: f64, bounds: &IslandBounds, pad: f64) -> bool {
+    let Some((bx, by, bw, bh)) = bounds.normalized_rect() else {
+        return false;
+    };
+    rel_x >= (bx - pad)
+        && rel_x <= (bx + bw + pad)
+        && rel_y >= (by - pad)
+        && rel_y <= (by + bh + pad)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CursorStepDecision {
+    next_inside: bool,
+    next_ctrl: bool,
+    next_ignore: bool,
+    apply_os_style: bool,
+    emit_ctrl_hover: Option<(bool, bool, bool)>,
+    emit_cursor_entered: bool,
+    emit_cursor_outside: bool,
+}
+
+/// Evaluates overlay click-through and Ctrl+Hover state transitions from physical OS inputs.
+fn evaluate_cursor_step(
+    prev_inside: bool,
+    prev_ignore: bool,
+    prev_ctrl: bool,
+    now_inside: bool,
+    effective_ctrl: bool,
+    lmb_down: bool,
+) -> CursorStepDecision {
+    let prev_ctrl_hover = prev_inside && prev_ctrl;
+
+    if now_inside {
+        if effective_ctrl {
+            return CursorStepDecision {
+                next_inside: true,
+                next_ctrl: true,
+                next_ignore: true,
+                apply_os_style: !prev_ignore || !prev_ctrl,
+                emit_ctrl_hover: (!prev_ctrl_hover).then_some((true, true, true)),
+                emit_cursor_entered: false,
+                emit_cursor_outside: false,
+            };
+        }
+        return CursorStepDecision {
+            next_inside: true,
+            next_ctrl: false,
+            next_ignore: false,
+            apply_os_style: prev_ignore || prev_ctrl || !prev_inside,
+            emit_ctrl_hover: prev_ctrl_hover.then_some((false, true, false)),
+            emit_cursor_entered: prev_ignore || prev_ctrl || !prev_inside,
+            emit_cursor_outside: false,
+        };
+    }
+
+    // While dragging an interactive control inside the pill, keep capture until LMB is released.
+    if lmb_down && !prev_ignore {
+        return CursorStepDecision {
+            next_inside: prev_inside,
+            next_ctrl: prev_ctrl,
+            next_ignore: prev_ignore,
+            apply_os_style: false,
+            emit_ctrl_hover: None,
+            emit_cursor_entered: false,
+            emit_cursor_outside: false,
+        };
+    }
+
+    CursorStepDecision {
+        next_inside: false,
+        next_ctrl: effective_ctrl,
+        next_ignore: true,
+        apply_os_style: !prev_ignore || prev_ctrl != effective_ctrl,
+        emit_ctrl_hover: prev_ctrl_hover.then_some((false, false, effective_ctrl)),
+        emit_cursor_entered: false,
+        emit_cursor_outside: prev_inside,
+    }
+}
+
 #[cfg(target_os = "linux")]
 pub fn is_linux_cursor_inside_island_bounds(
     app: &AppHandle,
     bounds: Option<&IslandBounds>,
 ) -> (bool, bool) {
-    let Some((bx, by, bw, bh)) = bounds.and_then(|b| b.normalized_rect()) else {
+    let Some(bounds_ref) = bounds else {
         return (false, false);
     };
     let Some((rel_x, rel_y, ctrl, _)) = poll_linux_cursor_and_mods(app) else {
         return (false, false);
     };
-    let pad = 4.0;
-    let inside = rel_x >= (bx - pad)
-        && rel_x <= (bx + bw + pad)
-        && rel_y >= (by - pad)
-        && rel_y <= (by + bh + pad);
-    (inside, ctrl)
+    (cursor_in_bounds(rel_x, rel_y, bounds_ref, 4.0), ctrl)
+}
+
+#[cfg(windows)]
+pub fn is_windows_ctrl_down() -> bool {
+    unsafe {
+        let lctrl = (GetAsyncKeyState(VK_LCONTROL.0 as i32) as u16 & 0x8000) != 0;
+        let rctrl = (GetAsyncKeyState(VK_RCONTROL.0 as i32) as u16 & 0x8000) != 0;
+        let ctrl =
+            lctrl || rctrl || (GetAsyncKeyState(VK_CONTROL.0 as i32) as u16 & 0x8000) != 0;
+        if !ctrl {
+            return false;
+        }
+        // Ignore AltGr (LCtrl + RAlt) so international typing doesn't trigger click-through.
+        let rmenu = (GetAsyncKeyState(VK_RMENU.0 as i32) as u16 & 0x8000) != 0;
+        !(rmenu && lctrl && !rctrl)
+    }
+}
+
+#[cfg(windows)]
+fn is_overlay_foreground(hwnd_raw: isize) -> bool {
+    if hwnd_raw == 0 {
+        return false;
+    }
+    unsafe {
+        let hwnd = HWND(hwnd_raw as *mut std::ffi::c_void);
+        let fg = GetForegroundWindow();
+        fg == hwnd || (!fg.0.is_null() && IsChild(hwnd, fg).as_bool())
+    }
 }
 
 #[cfg(windows)]
@@ -902,7 +1268,7 @@ pub fn is_cursor_inside_island_bounds(
     disp_y: i32,
     bounds: Option<&IslandBounds>,
 ) -> bool {
-    let Some((bx, by, bw, bh)) = bounds.and_then(|b| b.normalized_rect()) else {
+    let Some(bounds_ref) = bounds else {
         return false;
     };
     let Some((rel_x, rel_y, _)) =
@@ -910,11 +1276,7 @@ pub fn is_cursor_inside_island_bounds(
     else {
         return false;
     };
-    let pad = 4.0;
-    rel_x >= (bx - pad)
-        && rel_x <= (bx + bw + pad)
-        && rel_y >= (by - pad)
-        && rel_y <= (by + bh + pad)
+    cursor_in_bounds(rel_x, rel_y, bounds_ref, 4.0)
 }
 
 fn start_cursor_watcher(app: AppHandle) {
@@ -922,10 +1284,24 @@ fn start_cursor_watcher(app: AppHandle) {
         let mut drag_out_release_ticks: u32 = 0;
 
         loop {
-            thread::sleep(Duration::from_millis(90));
+            #[cfg(windows)]
+            thread::sleep(Duration::from_millis(45));
+            #[cfg(not(windows))]
+            thread::sleep(Duration::from_millis(80));
+
             let state = app.state::<SharedState>();
 
-            let (bounds_opt, hwnd_raw, ignore_mouse, prev_inside, is_ctrl, is_drag_out, disp_x, disp_y) = {
+            let (
+                bounds_opt,
+                hwnd_raw,
+                ignore_mouse,
+                prev_inside,
+                is_ctrl,
+                is_text_focused,
+                is_drag_out,
+                disp_x,
+                disp_y,
+            ) = {
                 let Ok(ov) = state.overlay.lock() else {
                     continue;
                 };
@@ -935,6 +1311,7 @@ fn start_cursor_watcher(app: AppHandle) {
                     ov.ignore_mouse,
                     ov.cursor_inside_island,
                     ov.is_ctrl_held,
+                    ov.is_text_input_focused,
                     ov.is_shelf_drag_out,
                     ov.display_x_px,
                     ov.display_y_px,
@@ -955,7 +1332,7 @@ fn start_cursor_watcher(app: AppHandle) {
                         continue;
                     }
                     drag_out_release_ticks = drag_out_release_ticks.saturating_add(1);
-                    if drag_out_release_ticks < 6 {
+                    if drag_out_release_ticks < 12 {
                         continue;
                     }
                     drag_out_release_ticks = 0;
@@ -971,20 +1348,32 @@ fn start_cursor_watcher(app: AppHandle) {
                         "shelf:drag-ended",
                         serde_json::json!({ "success": false, "recovered": true }),
                     );
-                    if !is_cursor_inside_island_bounds(
+                    let inside_now = is_cursor_inside_island_bounds(
                         &app,
                         hwnd_raw,
                         disp_x,
                         disp_y,
                         bounds_opt.as_ref(),
-                    ) {
-                        if let Ok(mut ov) = state.overlay.lock() {
-                            ov.cursor_inside_island = false;
-                            ov.ignore_mouse = true;
-                        }
-                        apply_overlay_styles(hwnd_raw, true);
+                    );
+                    let ctrl_now = is_windows_ctrl_down();
+                    let effective_ignore = !inside_now || ctrl_now;
+                    if let Ok(mut ov) = state.overlay.lock() {
+                        ov.is_ctrl_held = ctrl_now;
+                        ov.cursor_inside_island = inside_now;
+                        ov.ignore_mouse = effective_ignore;
+                    }
+                    apply_overlay_styles(hwnd_raw, effective_ignore);
+                    if inside_now && ctrl_now {
+                        let _ = app.emit(
+                            "island:ctrl-hover",
+                            serde_json::json!({ "active": true, "inside": true, "ctrl": true }),
+                        );
+                    } else if inside_now {
+                        let _ = app.emit("island:cursor-entered", ());
+                    } else {
                         let _ = app.emit("island:cursor-outside", ());
                     }
+                    continue;
                 }
                 #[cfg(target_os = "linux")]
                 {
@@ -1000,7 +1389,7 @@ fn start_cursor_watcher(app: AppHandle) {
                         continue;
                     }
                     drag_out_release_ticks = drag_out_release_ticks.saturating_add(1);
-                    if drag_out_release_ticks < 18 {
+                    if drag_out_release_ticks < 20 {
                         continue;
                     }
                     drag_out_release_ticks = 0;
@@ -1018,15 +1407,19 @@ fn start_cursor_watcher(app: AppHandle) {
                     );
                     let (inside_now, ctrl_now) =
                         is_linux_cursor_inside_island_bounds(&app, bounds_opt.as_ref());
-                    let effective_ctrl = is_ctrl || ctrl_now;
-                    let effective_ignore = !inside_now || effective_ctrl;
+                    let effective_ignore = !inside_now || ctrl_now;
                     if let Ok(mut ov) = state.overlay.lock() {
-                        ov.is_ctrl_held = effective_ctrl;
-                        ov.cursor_inside_island = inside_now && !effective_ctrl;
+                        ov.is_ctrl_held = ctrl_now;
+                        ov.cursor_inside_island = inside_now;
                         ov.ignore_mouse = effective_ignore;
                     }
                     apply_linux_overlay_state(&app);
-                    if inside_now && !effective_ctrl {
+                    if inside_now && ctrl_now {
+                        let _ = app.emit(
+                            "island:ctrl-hover",
+                            serde_json::json!({ "active": true, "inside": true, "ctrl": true }),
+                        );
+                    } else if inside_now {
                         let _ = app.emit("island:cursor-entered", ());
                     } else {
                         let _ = app.emit("island:cursor-outside", ());
@@ -1042,90 +1435,101 @@ fn start_cursor_watcher(app: AppHandle) {
                 drag_out_release_ticks = 0;
             }
 
-            #[cfg(windows)]
-            if is_ctrl {
-                continue;
-            }
-
             let Some(bounds) = bounds_opt else {
                 continue;
             };
-            let Some((bx, by, bw, bh)) = bounds.normalized_rect() else {
-                continue;
-            };
 
             #[cfg(windows)]
-            let (rel_x, rel_y, lmb_down) = {
-                let Some(pos) =
+            let (rel_x, rel_y, raw_ctrl, lmb_down, typing_ctrl) = {
+                let Some((rx, ry, lmb)) =
                     query_windows_cursor_pos_and_lmb(&app, hwnd_raw, disp_x, disp_y)
                 else {
                     continue;
                 };
-                pos
+                let ctrl = is_windows_ctrl_down();
+                let typing = ctrl && is_text_focused && is_overlay_foreground(hwnd_raw);
+                (rx, ry, ctrl, lmb, typing)
             };
 
             #[cfg(target_os = "linux")]
-            let (rel_x, rel_y, lmb_down) = {
+            let (rel_x, rel_y, raw_ctrl, lmb_down, typing_ctrl) = {
                 let _ = (disp_x, disp_y);
                 let Some((rx, ry, ctrl_now, lmb)) = poll_linux_cursor_and_mods(&app) else {
                     continue;
                 };
-                if ctrl_now != is_ctrl {
-                    if let Ok(mut ov) = state.overlay.lock() {
-                        ov.is_ctrl_held = ctrl_now;
-                    }
-                    apply_linux_overlay_state(&app);
-                }
-                if ctrl_now {
-                    continue;
-                }
-                (rx, ry, lmb)
+                let typing = ctrl_now
+                    && is_text_focused
+                    && app
+                        .get_webview_window("main")
+                        .and_then(|w| w.is_focused().ok())
+                        .unwrap_or(false);
+                (rx, ry, ctrl_now, lmb, typing)
             };
 
             #[cfg(not(any(windows, target_os = "linux")))]
-            let (rel_x, rel_y, lmb_down) = {
-                let _ = (disp_x, disp_y);
+            let (rel_x, rel_y, raw_ctrl, lmb_down, typing_ctrl) = {
+                let _ = (disp_x, disp_y, is_text_focused);
                 continue;
             };
 
-            let pad = 4.0;
-            let now_inside = rel_x >= (bx - pad)
-                && rel_x <= (bx + bw + pad)
-                && rel_y >= (by - pad)
-                && rel_y <= (by + bh + pad);
+            let pad = if prev_inside && (!ignore_mouse || is_ctrl) {
+                8.0
+            } else {
+                2.0
+            };
+            let now_inside = cursor_in_bounds(rel_x, rel_y, &bounds, pad);
+            let effective_ctrl = raw_ctrl && !typing_ctrl;
+            let decision = evaluate_cursor_step(
+                prev_inside,
+                ignore_mouse,
+                is_ctrl,
+                now_inside,
+                effective_ctrl,
+                lmb_down,
+            );
 
-            if now_inside {
-                if ignore_mouse || !prev_inside {
-                    {
-                        if let Ok(mut ov) = state.overlay.lock() {
-                            ov.cursor_inside_island = true;
-                            ov.ignore_mouse = false;
-                        }
+            let state_changed = decision.next_inside != prev_inside
+                || decision.next_ignore != ignore_mouse
+                || decision.next_ctrl != is_ctrl;
+            if state_changed {
+                if let Ok(mut ov) = state.overlay.lock() {
+                    if !ov.is_shelf_drag_out {
+                        ov.cursor_inside_island = decision.next_inside;
+                        ov.is_ctrl_held = decision.next_ctrl;
+                        ov.ignore_mouse = decision.next_ignore;
                     }
-                    #[cfg(windows)]
-                    apply_overlay_styles(hwnd_raw, false);
-                    #[cfg(target_os = "linux")]
-                    apply_linux_overlay_state(&app);
-                    if !prev_inside && lmb_down {
-                        let _ = app.emit("shelf:drag-enter", ());
-                    }
-                    let _ = app.emit("island:cursor-entered", ());
                 }
-            } else if prev_inside {
-                if !lmb_down {
-                    {
-                        if let Ok(mut ov) = state.overlay.lock() {
-                            ov.cursor_inside_island = false;
-                            #[cfg(target_os = "linux")]
-                            {
-                                ov.ignore_mouse = true;
-                            }
-                        }
-                    }
-                    #[cfg(target_os = "linux")]
-                    apply_linux_overlay_state(&app);
-                    let _ = app.emit("island:cursor-outside", ());
+            }
+
+            if decision.apply_os_style {
+                #[cfg(windows)]
+                if decision.next_ignore != ignore_mouse {
+                    apply_overlay_styles(hwnd_raw, decision.next_ignore);
                 }
+                #[cfg(target_os = "linux")]
+                apply_linux_overlay_state(&app);
+            }
+
+            if let Some((active, inside, ctrl)) = decision.emit_ctrl_hover {
+                let _ = app.emit(
+                    "island:ctrl-hover",
+                    serde_json::json!({
+                        "active": active,
+                        "inside": inside,
+                        "ctrl": ctrl,
+                    }),
+                );
+            }
+
+            if decision.emit_cursor_entered {
+                if !prev_inside && lmb_down {
+                    let _ = app.emit("shelf:drag-enter", ());
+                }
+                let _ = app.emit("island:cursor-entered", ());
+            }
+
+            if decision.emit_cursor_outside {
+                let _ = app.emit("island:cursor-outside", ());
             }
         }
     });
@@ -1178,19 +1582,30 @@ pub fn set_ignore_mouse_events(
     forward: bool,
     is_ctrl: bool,
 ) {
-    let effective_ignore = ignore || is_ctrl;
-    let hwnd_raw = {
+    let (hwnd_raw, effective_ignore) = {
         let Ok(mut ov) = state.overlay.lock() else {
             return;
         };
+        #[cfg(windows)]
+        let os_ctrl = if ov.is_text_input_focused && is_overlay_foreground(ov.main_hwnd) {
+            false
+        } else {
+            is_windows_ctrl_down()
+        };
+        #[cfg(not(windows))]
+        let os_ctrl = false;
+
+        let effective_ctrl = is_ctrl || os_ctrl;
+        let effective_ignore = ignore || effective_ctrl;
         ov.ignore_mouse = effective_ignore;
         ov.forward_mouse = forward;
-        ov.is_ctrl_held = is_ctrl;
-        if ov.is_shelf_drag_out {
+        ov.is_ctrl_held = effective_ctrl;
+        let target_hwnd = if ov.is_shelf_drag_out {
             0
         } else {
             ov.main_hwnd
-        }
+        };
+        (target_hwnd, effective_ignore)
     };
 
     #[cfg(windows)]
@@ -1209,6 +1624,13 @@ pub fn set_ignore_mouse_events(
     let _ = (app, hwnd_raw);
 }
 
+#[tauri::command]
+pub fn set_text_input_focused(state: tauri::State<'_, SharedState>, focused: bool) {
+    if let Ok(mut ov) = state.overlay.lock() {
+        ov.is_text_input_focused = focused;
+    }
+}
+
 static LOGGED_FIRST_BOUNDS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[tauri::command]
@@ -1217,8 +1639,12 @@ pub fn update_island_bounds(
     state: tauri::State<'_, SharedState>,
     bounds: Option<IslandBounds>,
 ) {
+    let mut has_valid_bounds = false;
     if let Some(ref b) = bounds {
         if let Some((x, y, w, h)) = b.normalized_rect() {
+            if w > 1.0 && h > 1.0 {
+                has_valid_bounds = true;
+            }
             if !LOGGED_FIRST_BOUNDS.swap(true, Ordering::SeqCst) {
                 state.log(
                     "INFO",
@@ -1231,10 +1657,17 @@ pub fn update_island_bounds(
     if let Ok(mut ov) = state.overlay.lock() {
         ov.bounds = bounds;
     }
+    #[cfg(windows)]
+    if has_valid_bounds && !FIRST_MSIX_SHOW_DONE.swap(true, Ordering::SeqCst) {
+        apply_windows_overlay_rect(&app, &state, true);
+    }
     #[cfg(target_os = "linux")]
-    apply_linux_overlay_state(&app);
-    #[cfg(not(target_os = "linux"))]
-    let _ = app;
+    {
+        let _ = has_valid_bounds;
+        apply_linux_overlay_state(&app);
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = (&app, has_valid_bounds);
 }
 
 #[tauri::command]
@@ -1268,9 +1701,12 @@ pub fn set_display(
         ov.display_y_px = target.physical_bounds.y;
         ov.display_width_px = target.physical_bounds.width;
         ov.display_height_px = target.physical_bounds.height;
+        ov.scale_factor = target.scale_factor.max(1.0);
+        ov.window_width_px = 0;
         ov.main_hwnd
     };
 
+    #[cfg(not(windows))]
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.set_position(tauri::PhysicalPosition::new(
             target.physical_bounds.x,
@@ -1287,19 +1723,9 @@ pub fn set_display(
     }
 
     #[cfg(windows)]
-    if hwnd_raw != 0 {
-        unsafe {
-            let hwnd = HWND(hwnd_raw as *mut std::ffi::c_void);
-            let _ = SetWindowPos(
-                hwnd,
-                HWND_TOPMOST,
-                target.physical_bounds.x,
-                target.physical_bounds.y,
-                target.physical_bounds.width,
-                target.physical_bounds.height,
-                SWP_NOACTIVATE | SWP_SHOWWINDOW | SWP_NOOWNERZORDER,
-            );
-        }
+    {
+        let _ = hwnd_raw;
+        apply_windows_overlay_rect(&app, &state, true);
     }
     #[cfg(target_os = "linux")]
     {
@@ -1316,8 +1742,52 @@ pub fn set_display(
 }
 
 #[tauri::command]
-pub fn update_window_position(_x_perc: f64, _y_px: f64) -> bool {
-    // Fullscreen transparent overlay positions the island via CSS; preserved for API compatibility.
+pub fn update_window_position(
+    app: AppHandle,
+    state: tauri::State<'_, SharedState>,
+    x_perc: f64,
+    y_px: f64,
+) -> bool {
+    let mut is_free = false;
+    if let Ok(mut ov) = state.overlay.lock() {
+        ov.island_x_pct = x_perc;
+        ov.island_y_px = y_px;
+        is_free = ov.position_mode == "free";
+    }
+    #[cfg(windows)]
+    if is_free {
+        apply_windows_overlay_rect(&app, &state, false);
+    }
+    #[cfg(not(windows))]
+    let _ = (&app, is_free);
+    true
+}
+
+#[tauri::command]
+pub fn sync_overlay_viewport(
+    app: AppHandle,
+    state: tauri::State<'_, SharedState>,
+    expanded: bool,
+    position_mode: Option<String>,
+    island_x_pct: Option<f64>,
+    island_y_px: Option<f64>,
+) -> bool {
+    if let Ok(mut ov) = state.overlay.lock() {
+        ov.expanded_viewport = expanded;
+        if let Some(pm) = position_mode {
+            ov.position_mode = pm;
+        }
+        if let Some(x) = island_x_pct {
+            ov.island_x_pct = x;
+        }
+        if let Some(y) = island_y_px {
+            ov.island_y_px = y;
+        }
+    }
+    #[cfg(windows)]
+    apply_windows_overlay_rect(&app, &state, false);
+    #[cfg(not(windows))]
+    let _ = app;
     true
 }
 
@@ -1593,4 +2063,153 @@ pub fn open_external(url: String) -> Result<bool, String> {
     }
 
     Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{compute_windows_overlay_rect, cursor_in_bounds, evaluate_cursor_step, CursorStepDecision};
+    use crate::state::IslandBounds;
+
+    #[test]
+    fn compact_top_center_1080p_125pct() {
+        // 1920x1080 @ 1.25 -> 960*1.25=1200, 368*1.25=460
+        let (x, y, w, h) =
+            compute_windows_overlay_rect(0, 0, 1920, 1080, 1.25, "top-center", 50.0, 0.0, false);
+        assert_eq!((w, h), (1200, 460));
+        assert_eq!(y, 0);
+        // 1920 * 0.498 = 956; 956 - 600 = 356
+        assert_eq!(x, 356);
+    }
+
+    #[test]
+    fn expanded_top_center_stays_within_display() {
+        let (x, y, w, h) =
+            compute_windows_overlay_rect(0, 0, 1920, 1080, 1.25, "top-center", 50.0, 0.0, true);
+        assert_eq!((w, h), (1200, 460));
+        assert_eq!(y, 0);
+        assert_eq!(x, 356);
+    }
+
+    #[test]
+    fn corners_and_bottom_modes_anchor_to_edges() {
+        assert_eq!(
+            compute_windows_overlay_rect(100, 50, 1920, 1080, 1.0, "top-left", 50.0, 0.0, false),
+            (100, 50, 960, 368)
+        );
+        assert_eq!(
+            compute_windows_overlay_rect(100, 50, 1920, 1080, 1.0, "top-right", 50.0, 0.0, false),
+            (100 + 1920 - 960, 50, 960, 368)
+        );
+        assert_eq!(
+            compute_windows_overlay_rect(0, 0, 1920, 1080, 1.0, "bottom-left", 50.0, 0.0, false),
+            (0, 1080 - 368, 960, 368)
+        );
+        assert_eq!(
+            compute_windows_overlay_rect(0, 0, 1920, 1080, 1.0, "bottom-right", 50.0, 0.0, false),
+            (1920 - 960, 1080 - 368, 960, 368)
+        );
+        assert_eq!(
+            compute_windows_overlay_rect(0, 0, 1920, 1080, 1.0, "bottom-center", 50.0, 0.0, false),
+            (956 - 480, 1080 - 368, 960, 368)
+        );
+    }
+
+    #[test]
+    fn free_mode_accounts_for_top_padding_when_detached() {
+        // 1920x1080 @ 1.5 -> disp_w_log=1280, disp_h_log=720 -> win=1440x552
+        let (x0, y0, w0, h0) =
+            compute_windows_overlay_rect(0, 0, 1920, 1080, 1.5, "free", 50.0, 0.0, false);
+        assert_eq!((x0, y0, w0, h0), (960 - 720, 0, 1440, 552));
+
+        let (x1, y1, _, _) =
+            compute_windows_overlay_rect(0, 0, 1920, 1080, 1.5, "free", 25.0, 100.0, false);
+        // (100 - 24) * 1.5 = 114
+        assert_eq!((x1, y1), (480 - 720, 114));
+    }
+
+    #[test]
+    fn ctrl_hover_enters_without_unignoring_and_releases_cleanly() {
+        // User holds Ctrl BEFORE entering pill bounds: stay click-through and activate ctrl-hover
+        let d_enter = evaluate_cursor_step(false, true, false, true, true, false);
+        assert_eq!(
+            d_enter,
+            CursorStepDecision {
+                next_inside: true,
+                next_ctrl: true,
+                next_ignore: true,
+                apply_os_style: true,
+                emit_ctrl_hover: Some((true, true, true)),
+                emit_cursor_entered: false,
+                emit_cursor_outside: false,
+            }
+        );
+
+        // User releases Ctrl while cursor is still inside pill: turn off click-through & restore hover
+        let d_rel = evaluate_cursor_step(true, true, true, true, false, false);
+        assert_eq!(
+            d_rel,
+            CursorStepDecision {
+                next_inside: true,
+                next_ctrl: false,
+                next_ignore: false,
+                apply_os_style: true,
+                emit_ctrl_hover: Some((false, true, false)),
+                emit_cursor_entered: true,
+                emit_cursor_outside: false,
+            }
+        );
+
+        // User presses Ctrl while already hovered over pill: enable click-through & ghost visual
+        let d_press = evaluate_cursor_step(true, false, false, true, true, false);
+        assert_eq!(
+            d_press,
+            CursorStepDecision {
+                next_inside: true,
+                next_ctrl: true,
+                next_ignore: true,
+                apply_os_style: true,
+                emit_ctrl_hover: Some((true, true, true)),
+                emit_cursor_entered: false,
+                emit_cursor_outside: false,
+            }
+        );
+
+        // User moves outside pill while holding Ctrl (even mid click-through drag): clear inside & ctrl-hover
+        let d_exit = evaluate_cursor_step(true, true, true, false, true, true);
+        assert_eq!(
+            d_exit,
+            CursorStepDecision {
+                next_inside: false,
+                next_ctrl: true,
+                next_ignore: true,
+                apply_os_style: false,
+                emit_ctrl_hover: Some((false, false, true)),
+                emit_cursor_entered: false,
+                emit_cursor_outside: true,
+            }
+        );
+
+        // Interactive drag inside pill (ignore=false, lmb=true) exiting edge preserves drag capture
+        let d_drag = evaluate_cursor_step(true, false, false, false, false, true);
+        assert_eq!(d_drag.next_inside, true);
+        assert_eq!(d_drag.next_ignore, false);
+        assert!(!d_drag.emit_cursor_outside);
+    }
+
+    #[test]
+    fn cursor_in_bounds_uses_padding_consistently() {
+        let bounds = IslandBounds {
+            x: None,
+            y: None,
+            width: None,
+            height: None,
+            left: Some(200.0),
+            top: Some(0.0),
+            right: Some(400.0),
+            bottom: Some(40.0),
+        };
+        assert!(cursor_in_bounds(199.0, 20.0, &bounds, 2.0));
+        assert!(!cursor_in_bounds(195.0, 20.0, &bounds, 2.0));
+        assert!(cursor_in_bounds(195.0, 20.0, &bounds, 8.0));
+    }
 }

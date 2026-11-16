@@ -8,6 +8,7 @@ mod notifications;
 mod prayer;
 mod shelf;
 mod shortcuts;
+mod single_instance;
 mod state;
 mod system_stats;
 mod updater;
@@ -45,31 +46,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(move |app_handle, event| match event.id.as_ref() {
             "toggle" => {
-                let st = app_handle.state::<SharedState>();
-                let hwnd_raw = {
-                    if let Ok(mut ov) = st.overlay.lock() {
-                        ov.ignore_mouse = false;
-                        ov.main_hwnd
-                    } else {
-                        0
-                    }
-                };
-                #[cfg(windows)]
-                if hwnd_raw != 0 {
-                    window_overlay::apply_overlay_styles(hwnd_raw, false);
-                }
-                #[cfg(target_os = "linux")]
-                {
-                    let _ = hwnd_raw;
-                    window_overlay::apply_linux_overlay_state(&app_handle);
-                }
-                #[cfg(not(any(windows, target_os = "linux")))]
-                let _ = hwnd_raw;
-                if let Some(w) = app_handle.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                    let _ = app_handle.emit("open-tab-instant", 2);
-                }
+                window_overlay::activate_existing_instance(&app_handle);
             }
             "always_on_top" => {
                 let next = {
@@ -100,31 +77,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             } = event
             {
                 let app_handle = tray.app_handle();
-                let st = app_handle.state::<SharedState>();
-                let hwnd_raw = {
-                    if let Ok(mut ov) = st.overlay.lock() {
-                        ov.ignore_mouse = false;
-                        ov.main_hwnd
-                    } else {
-                        0
-                    }
-                };
-                #[cfg(windows)]
-                if hwnd_raw != 0 {
-                    window_overlay::apply_overlay_styles(hwnd_raw, false);
-                }
-                #[cfg(target_os = "linux")]
-                {
-                    let _ = hwnd_raw;
-                    window_overlay::apply_linux_overlay_state(&app_handle);
-                }
-                #[cfg(not(any(windows, target_os = "linux")))]
-                let _ = hwnd_raw;
-                if let Some(w) = app_handle.get_webview_window("main") {
-                    let _ = w.show();
-                    let _ = w.set_focus();
-                    let _ = app_handle.emit("open-tab-instant", 2);
-                }
+                window_overlay::activate_existing_instance(&app_handle);
             }
         });
 
@@ -153,6 +106,12 @@ pub fn run() {
         }
     }
 
+    let single_guard = match single_instance::try_acquire() {
+        single_instance::InstanceAcquire::Primary(guard) => std::sync::Arc::new(guard),
+        single_instance::InstanceAcquire::Secondary => return,
+    };
+    let setup_guard = std::sync::Arc::clone(&single_guard);
+
     tauri::Builder::default()
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -161,9 +120,12 @@ pub fn run() {
                 })
                 .build(),
         )
-        .setup(|app| {
+        .setup(move |app| {
             let shared = SharedState::new(app.handle());
             shared.log("INFO", "Quick Pill starting up (Rust/Tauri v2)", None);
+
+            single_instance::start_activation_listener(app.handle().clone(), &setup_guard);
+            app.manage(setup_guard);
 
             shelf::init_shelf(&shared);
             app.manage(shared);
@@ -215,9 +177,11 @@ pub fn run() {
             // Overlay & window controls
             window_overlay::set_ignore_mouse_events,
             window_overlay::update_island_bounds,
+            window_overlay::set_text_input_focused,
             window_overlay::get_displays,
             window_overlay::set_display,
             window_overlay::update_window_position,
+            window_overlay::sync_overlay_viewport,
             window_overlay::set_auto_launch,
             window_overlay::get_always_on_top,
             window_overlay::set_always_on_top,
@@ -317,4 +281,5 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Quick Pill");
+    drop(single_guard);
 }

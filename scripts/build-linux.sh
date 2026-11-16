@@ -315,7 +315,11 @@ cp -f "$BUILD_DIR/web app/public/version.json" "$ARTIFACTS_STAGE/version.json"
 
 echo "[build-linux] Copying release artifacts and manifest back to $ROOT_DIR..."
 mkdir -p "$ROOT_DIR/release-artifacts" "$ROOT_DIR/web app/public"
-rm -f "$ROOT_DIR/release-artifacts"/QuickPill-Linux-v${VERSION}.*
+if [ "$CLEAN_CACHE" -eq 1 ]; then
+  rm -f "$ROOT_DIR/release-artifacts"/QuickPill-Linux-v*
+else
+  rm -f "$ROOT_DIR/release-artifacts"/QuickPill-Linux-v${VERSION}.*
+fi
 cp -f "$ARTIFACTS_STAGE"/* "$ROOT_DIR/release-artifacts/"
 chmod +x "$ROOT_DIR/release-artifacts/QuickPill-Linux-v${VERSION}.AppImage" 2>/dev/null || true
 cp -f "$BUILD_DIR/web app/public/version.json" "$ROOT_DIR/web app/public/version.json"

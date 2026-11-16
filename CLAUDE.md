@@ -9,7 +9,7 @@ Welcome to the **Quick Pill** project codebase! This file serves as the referenc
 **Quick Pill** is a native Windows desktop application that brings an Apple Dynamic Island experience to **Windows 10 & 11**. It floats above all desktop windows with minimal memory overhead, offering notifications, per-app WASAPI audio mixing, media playback control, a persistent drag-and-drop file shelf, prayer times, quick notes, an app launcher, and customizable widgets.
 
 - **Product Name**: Quick Pill
-- **Current Version**: 6.1.0
+- **Current Version**: 6.1.1
 - **Architecture**: Tauri v2 + Rust native backend + Edge WebView2 / WebKitGTK (React 19)
 - **License**: MIT
 - **Author**: Abrar Nabil / NeoSparkX

@@ -106,10 +106,15 @@ const electronAPI = {
       forward: Boolean(forward),
       isCtrl: Boolean(isCtrl),
     }),
+  setTextInputFocused: (focused) =>
+    invoke('set_text_input_focused', {
+      focused: Boolean(focused),
+    }).catch(() => {}),
   updateIslandBounds: (bounds) =>
     invoke('update_island_bounds', {
       bounds: bounds ?? null,
     }),
+  onIslandCtrlHover: (cb) => subscribe('island:ctrl-hover', cb),
   onIslandCursorEntered: (cb) => subscribe('island:cursor-entered', cb),
   onIslandCursorOutside: (cb) => subscribe('island:cursor-outside', cb),
   getPathForFile: getFilePathCompat,
@@ -139,6 +144,13 @@ const electronAPI = {
     invoke('update_window_position', {
       xPerc: Number(xPerc) || 50,
       yPx: Number(yPx) || 0,
+    }),
+  syncOverlayViewport: (expanded, positionMode, islandX, islandY) =>
+    invoke('sync_overlay_viewport', {
+      expanded: Boolean(expanded),
+      positionMode: positionMode ?? null,
+      islandXPct: typeof islandX === 'number' ? islandX : null,
+      islandYPx: typeof islandY === 'number' ? islandY : null,
     }),
   setAutoLaunch: (enable) => invoke('set_auto_launch', { enable: Boolean(enable) }),
   getClipboardText: () => invoke('get_clipboard_text'),
