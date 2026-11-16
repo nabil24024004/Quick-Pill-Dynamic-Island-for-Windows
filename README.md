@@ -3,7 +3,7 @@
   <img src="assets/logo.png" alt="Quick Pill Logo" width="88" height="88" style="border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.4);" />
 
   # Quick Pill
-  ### The Next-Generation Dynamic Island for Windows 10 & 11
+  ### The Next-Generation Dynamic Island for Windows & Linux
 
   <p align="center">
     <strong>A fluid, context-aware notch engineered for power users, creators, and multitaskers.</strong><br />
