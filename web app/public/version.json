@@ -26,14 +26,20 @@
     },
     "linux-x64": {
       "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.1.AppImage",
+      "sha256": "863a243d2f57d08db5f77cd71ea9a2ac5c23d22892eb84d4bba43cb521ea315d",
+      "size": 92695032,
       "installerType": "appimage"
     },
     "linux-deb": {
       "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.1.deb",
+      "sha256": "569f785af8267e5226431c8cbac4c197d45d6d92d1e16c30f3e67350f16f09d8",
+      "size": 7588254,
       "installerType": "deb"
     },
     "linux-rpm": {
       "url": "https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.1.rpm",
+      "sha256": "9edaf716c10fdf55b0291f8647943b0d9af369fabad1884d537b09b83c634c10",
+      "size": 7595546,
       "installerType": "rpm"
     }
   }
