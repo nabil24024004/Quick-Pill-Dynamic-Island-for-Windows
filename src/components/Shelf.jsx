@@ -15,31 +15,77 @@ import {
   ChevronRight
 } from "lucide-react";
 
+function parseUriOrPathLine(line) {
+  const cleaned = (line || "").trim().replace(/^"|"$/g, "");
+  if (!cleaned || cleaned.startsWith("#")) return "";
+  if (/^file:\/\//i.test(cleaned)) {
+    const stripped = cleaned.replace(/^file:\/\/(?:localhost)?/i, "");
+    let decoded = stripped;
+    try {
+      decoded = decodeURIComponent(stripped);
+    } catch {
+      decoded = stripped;
+    }
+    if (/^\/[A-Za-z]:\//.test(decoded)) {
+      return decoded.slice(1);
+    }
+    return decoded;
+  }
+  if (cleaned.startsWith("/") || /^[A-Za-z]:[\\/]/.test(cleaned)) {
+    return cleaned;
+  }
+  return "";
+}
+
 /**
  * Extracts native filesystem paths from a DataTransfer object using the host bridge helper
- * with fallback to File.path when available.
+ * with fallback to File.path and Linux/WebKitGTK URI lists (`text/uri-list`, `text/plain`).
  */
 export function extractFilePathsFromDataTransfer(dataTransfer) {
-  const droppedFiles = dataTransfer?.files;
-  if (!droppedFiles || droppedFiles.length === 0) return [];
-
+  const seen = new Set();
   const filePaths = [];
-  for (let i = 0; i < droppedFiles.length; i++) {
-    const file = droppedFiles[i];
-    if (!file) continue;
-    let resolved = "";
-    if (window.electronAPI?.shelf?.getPathForFile) {
-      resolved = window.electronAPI.shelf.getPathForFile(file);
-    } else if (window.electronAPI?.getPathForFile) {
-      resolved = window.electronAPI.getPathForFile(file);
+  const pushUnique = (candidate) => {
+    const normalized = typeof candidate === "string" ? candidate.trim() : "";
+    if (normalized && !seen.has(normalized)) {
+      seen.add(normalized);
+      filePaths.push(normalized);
     }
-    if (!resolved && typeof file.path === "string") {
-      resolved = file.path;
-    }
-    if (resolved && typeof resolved === "string" && resolved.trim()) {
-      filePaths.push(resolved.trim());
+  };
+
+  const droppedFiles = dataTransfer?.files;
+  if (droppedFiles && droppedFiles.length > 0) {
+    for (let i = 0; i < droppedFiles.length; i++) {
+      const file = droppedFiles[i];
+      if (!file) continue;
+      let resolved = "";
+      if (window.electronAPI?.shelf?.getPathForFile) {
+        resolved = window.electronAPI.shelf.getPathForFile(file);
+      } else if (window.electronAPI?.getPathForFile) {
+        resolved = window.electronAPI.getPathForFile(file);
+      }
+      if (!resolved && typeof file.path === "string") {
+        resolved = file.path;
+      }
+      pushUnique(resolved);
     }
   }
+
+  if (typeof dataTransfer?.getData === "function") {
+    for (const mime of ["text/uri-list", "text/plain"]) {
+      let raw = "";
+      try {
+        raw = dataTransfer.getData(mime) || "";
+      } catch {
+        raw = "";
+      }
+      if (!raw) continue;
+      for (const line of raw.split(/\r?\n/)) {
+        const parsed = parseUriOrPathLine(line);
+        if (parsed) pushUnique(parsed);
+      }
+    }
+  }
+
   return filePaths;
 }
 
@@ -335,6 +381,7 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
   const dragOverResetTimerRef = useRef(null);
   const dragPressRef = useRef(null);
   const wasDraggedRef = useRef(false);
+  const selfDragResetTimerRef = useRef(null);
 
   const checkScrollability = useCallback(() => {
     const el = scrollRef.current;
@@ -361,6 +408,16 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
     }
   };
 
+  const finishSelfDragState = useCallback(() => {
+    if (selfDragResetTimerRef.current) {
+      clearTimeout(selfDragResetTimerRef.current);
+      selfDragResetTimerRef.current = null;
+    }
+    isSelfDraggingRef.current = false;
+    dragPressRef.current = null;
+    window.dispatchEvent(new CustomEvent("shelf-native-drag-end"));
+  }, []);
+
   const triggerNativeDragOut = (item) => {
     if (!item || isSelfDraggingRef.current) return;
     isSelfDraggingRef.current = true;
@@ -369,6 +426,12 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
       dragPressRef.current.started = true;
     }
     setIsDragOver(false);
+    if (selfDragResetTimerRef.current) {
+      clearTimeout(selfDragResetTimerRef.current);
+    }
+    selfDragResetTimerRef.current = setTimeout(() => {
+      finishSelfDragState();
+    }, 30000);
     window.dispatchEvent(new CustomEvent("shelf-native-drag-start"));
     if (window.electronAPI?.shelf?.startDrag) {
       const islandEl = document.getElementById("Island");
@@ -379,11 +442,16 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
         right: Math.round(r.right),
         bottom: Math.round(r.bottom)
       } : null;
-      window.electronAPI.shelf.startDrag(item.id || item.stagedPath, bounds);
+      window.electronAPI.shelf.startDrag(item.id || item.stagedPath, bounds)
+        .catch((err) => {
+          console.error("Failed to start native shelf drag:", err);
+        })
+        .finally(() => {
+          finishSelfDragState();
+        });
+    } else {
+      finishSelfDragState();
     }
-    setTimeout(() => {
-      isSelfDraggingRef.current = false;
-    }, 30000);
   };
 
   // Load items on mount and subscribe to IPC updates
@@ -412,8 +480,7 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
     let unsubscribeDragEnd = null;
     if (window.electronAPI?.shelf?.onDragEnded) {
       unsubscribeDragEnd = window.electronAPI.shelf.onDragEnded(() => {
-        isSelfDraggingRef.current = false;
-        dragPressRef.current = null;
+        finishSelfDragState();
         if (isMounted) setIsDragOver(false);
       });
     }
@@ -460,6 +527,7 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
     return () => {
       isMounted = false;
       if (dragOverResetTimerRef.current) clearTimeout(dragOverResetTimerRef.current);
+      if (selfDragResetTimerRef.current) clearTimeout(selfDragResetTimerRef.current);
       if (typeof unsubscribeUpdate === "function") unsubscribeUpdate();
       if (typeof unsubscribeDragEnd === "function") unsubscribeDragEnd();
       window.removeEventListener("mousemove", handleWindowMouseMove);
@@ -554,10 +622,11 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
     }
   };
 
-  // Handle mouse down on an item to prime drag-out fallback
+  // Handle mouse down on an item to prime native drag-out without invoking WebView2 HTML5 drag
   const handleItemMouseDown = (e, item) => {
     if (e.button !== 0) return;
     if (e.target && e.target.closest && e.target.closest("button")) return;
+    e.preventDefault();
     wasDraggedRef.current = false;
     dragPressRef.current = {
       item,
@@ -593,6 +662,19 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
       window.electronAPI.shelf.clear().then((updated) => {
         if (Array.isArray(updated)) setItems(updated);
       });
+    }
+  };
+
+  // Handle opening native file picker to add files
+  const handlePickFiles = async (e) => {
+    if (e) e.stopPropagation();
+    if (window.electronAPI?.shelf?.pickFiles) {
+      try {
+        const updated = await window.electronAPI.shelf.pickFiles();
+        if (Array.isArray(updated)) setItems(updated);
+      } catch (err) {
+        console.error("Failed to pick files for shelf:", err);
+      }
     }
   };
 
@@ -643,6 +725,38 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
           }}>
             Shelf
           </span>
+
+          <motion.button
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            onClick={handlePickFiles}
+            onPointerDown={(e) => e.stopPropagation()}
+            title="Add files to Shelf"
+            style={{
+              background: "rgba(255, 255, 255, 0.1)",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              color: "#e5e7eb",
+              borderRadius: 999,
+              padding: "2px 10px",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              outline: "none"
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(56, 189, 248, 0.22)";
+              e.currentTarget.style.color = "#ffffff";
+              e.currentTarget.style.borderColor = "rgba(56, 189, 248, 0.45)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "rgba(255, 255, 255, 0.1)";
+              e.currentTarget.style.color = "#e5e7eb";
+              e.currentTarget.style.borderColor = "rgba(255, 255, 255, 0.12)";
+            }}
+          >
+            + Add
+          </motion.button>
 
           {hasItems && (
             <motion.button
@@ -822,7 +936,7 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
                 <div
                   key={item.id}
                   className="shelf-item"
-                  draggable={true}
+                  draggable={false}
                   onDragStart={(e) => handleDragStart(e, item)}
                   onMouseDown={(e) => handleItemMouseDown(e, item)}
                   onClick={(e) => handleItemClick(e, item)}
@@ -849,7 +963,7 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
                     boxSizing: "border-box",
                     transition: "background 0.15s ease, border-color 0.15s ease, transform 0.15s ease",
                     transform: isHovered ? "translateY(-1px)" : "none",
-                    WebkitUserDrag: "element"
+                    WebkitUserDrag: "none"
                   }}
                 >
                   {/* Delete 'X' button on hover */}
@@ -940,6 +1054,10 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
                 : "rgba(18, 19, 24, 0.4)"
             }}
             transition={{ duration: 0.15 }}
+            onClick={!hasItems && !isDragOver ? handlePickFiles : undefined}
+            onPointerDown={(e) => {
+              if (!hasItems && !isDragOver) e.stopPropagation();
+            }}
             style={{
               position: hasItems ? "absolute" : "relative",
               inset: hasItems ? 0 : undefined,
@@ -955,8 +1073,8 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
               justifyContent: "center",
               gap: 4,
               boxSizing: "border-box",
-              cursor: "default",
-              pointerEvents: "none"
+              cursor: !hasItems && !isDragOver ? "pointer" : "default",
+              pointerEvents: !hasItems && !isDragOver ? "auto" : "none"
             }}
           >
             <motion.div
@@ -971,7 +1089,7 @@ export default function Shelf({ accentColor = "#38bdf8" }) {
               color: isDragOver ? "#ffffff" : "#e5e7eb",
               letterSpacing: "-0.01em"
             }}>
-              {isDragOver ? "Release to add" : "Drop files here"}
+              {isDragOver ? "Release to add" : "Drop files here or click to add"}
             </span>
             <span style={{
               fontSize: 10.5,

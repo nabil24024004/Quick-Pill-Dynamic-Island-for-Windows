@@ -58,6 +58,13 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 if hwnd_raw != 0 {
                     window_overlay::apply_overlay_styles(hwnd_raw, false);
                 }
+                #[cfg(target_os = "linux")]
+                {
+                    let _ = hwnd_raw;
+                    window_overlay::apply_linux_overlay_state(&app_handle);
+                }
+                #[cfg(not(any(windows, target_os = "linux")))]
+                let _ = hwnd_raw;
                 if let Some(w) = app_handle.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
@@ -106,6 +113,13 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 if hwnd_raw != 0 {
                     window_overlay::apply_overlay_styles(hwnd_raw, false);
                 }
+                #[cfg(target_os = "linux")]
+                {
+                    let _ = hwnd_raw;
+                    window_overlay::apply_linux_overlay_state(&app_handle);
+                }
+                #[cfg(not(any(windows, target_os = "linux")))]
+                let _ = hwnd_raw;
                 if let Some(w) = app_handle.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
@@ -124,6 +138,21 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    {
+        if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+            std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+        }
+        if std::env::var_os("GDK_BACKEND").is_none()
+            && std::env::var_os("DISPLAY").is_some()
+            && std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_none()
+            && std::env::var_os("SWAYSOCK").is_none()
+            && std::env::var_os("QUICK_PILL_WAYLAND").is_none()
+        {
+            std::env::set_var("GDK_BACKEND", "x11");
+        }
+    }
+
     tauri::Builder::default()
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -146,8 +175,27 @@ pub fn run() {
             }
 
             if let Some(main_win) = app.get_webview_window("main") {
-                #[cfg(windows)]
                 window_overlay::init_overlay_window(app.handle(), &main_win);
+                let app_dnd = app.handle().clone();
+                main_win.on_window_event(move |event| {
+                    if let tauri::WindowEvent::DragDrop(drag_ev) = event {
+                        match drag_ev {
+                            tauri::DragDropEvent::Enter { .. } => {
+                                let _ = app_dnd.emit("shelf:drag-enter", ());
+                            }
+                            tauri::DragDropEvent::Drop { paths, .. } => {
+                                let list: Vec<String> = paths
+                                    .iter()
+                                    .map(|p| p.to_string_lossy().to_string())
+                                    .collect();
+                                if !list.is_empty() {
+                                    let _ = app_dnd.emit("shelf:external-drop", list);
+                                }
+                            }
+                            _ => {}
+                        }
+                    }
+                });
             } else {
                 app.state::<SharedState>().log("ERROR", "[Setup] Main webview window not found!", None);
             }
@@ -247,6 +295,7 @@ pub fn run() {
             // File Shelf
             shelf::shelf_get_items,
             shelf::shelf_add_files,
+            shelf::shelf_pick_files,
             shelf::shelf_remove_item,
             shelf::shelf_clear,
             shelf::shelf_open_file,

@@ -73,8 +73,13 @@ export default function App() {
     }
   }, [currentView]);
 
-  const handleNavigateToThankYou = useCallback(() => {
-    window.history.pushState({}, '', '#/thank-you');
+  const handleNavigateToThankYou = useCallback((options) => {
+    const opts = options && !options.nativeEvent ? options : {};
+    const targetHash =
+      opts.os === 'linux'
+        ? `#/thank-you?os=linux&format=${encodeURIComponent(opts.format || 'appimage')}`
+        : '#/thank-you';
+    window.history.pushState({}, '', targetHash);
     setCurrentView('thank-you');
     window.scrollTo({ top: 0, behavior: 'instant' });
   }, []);

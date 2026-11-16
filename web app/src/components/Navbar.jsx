@@ -15,7 +15,7 @@ export default function Navbar() {
         <ul className="navbar-links">
           <li><a href="#features" title="Explore Quick Pill features">Features</a></li>
           <li><a href="#how-it-works" title="Learn how Quick Pill works">How it works</a></li>
-          <li><a href="#download" title="Download Quick Pill for Windows">Download</a></li>
+          <li><a href="#download" title="Download Quick Pill for Windows and Linux">Download</a></li>
           <li>
             <a
               href="https://github.com/nabil24024004/Quick-Pill"

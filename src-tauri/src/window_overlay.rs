@@ -1,13 +1,22 @@
-use crate::state::{to_wide, IslandBounds, SharedState};
+#[cfg(windows)]
+use crate::state::to_wide;
+use crate::state::{IslandBounds, SharedState};
 use serde::Serialize;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use std::path::Path;
-use std::sync::atomic::{AtomicIsize, Ordering};
+#[cfg(windows)]
+use std::sync::atomic::AtomicIsize;
+use std::sync::atomic::Ordering;
 use std::sync::OnceLock;
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+
+#[cfg(target_os = "linux")]
+use gtk::{cairo, gdk, glib, prelude::*};
+#[cfg(target_os = "linux")]
+use std::sync::atomic::AtomicBool;
 
 #[cfg(windows)]
 use windows::{
@@ -35,7 +44,9 @@ use windows::{
     },
 };
 
+#[cfg(windows)]
 static PREV_WNDPROC: AtomicIsize = AtomicIsize::new(0);
+#[cfg(windows)]
 static SUBCLASS_APP: OnceLock<AppHandle> = OnceLock::new();
 
 #[cfg(windows)]
@@ -306,8 +317,610 @@ pub fn init_overlay_window(app: &AppHandle, win: &WebviewWindow) {
     start_topmost_heartbeat(app.clone());
 }
 
+#[cfg(target_os = "linux")]
+static LINUX_CSS_INSTALLED: OnceLock<()> = OnceLock::new();
+#[cfg(target_os = "linux")]
+static LINUX_DRAW_HOOKED: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "linux")]
+static LINUX_POINTER_TRACKED: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "linux")]
+static LAST_LINUX_OVERLAY_APPLIED: std::sync::Mutex<
+    Option<(bool, bool, bool, bool, i32, i32, i32, i32, i32, i32, i32, i32)>,
+> = std::sync::Mutex::new(None);
+
+#[cfg(target_os = "linux")]
+static LINUX_DRAG_IN_PROGRESS: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+#[cfg(target_os = "linux")]
+pub fn set_linux_drag_in_progress(active: bool) {
+    LINUX_DRAG_IN_PROGRESS.store(active, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(target_os = "linux")]
+pub fn is_linux_drag_in_progress() -> bool {
+    LINUX_DRAG_IN_PROGRESS.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+#[cfg(target_os = "linux")]
+std::thread_local! {
+    static LAST_LINUX_DRAG_EVENT: std::cell::RefCell<Option<(gtk::Widget, gdk::Event)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+#[cfg(target_os = "linux")]
+fn find_deepest_child_widget(widget: &gtk::Widget) -> gtk::Widget {
+    if let Ok(container) = widget.clone().dynamic_cast::<gtk::Container>() {
+        let children = container.children();
+        if let Some(last) = children.last() {
+            return find_deepest_child_widget(last);
+        }
+    }
+    widget.clone()
+}
+
+#[cfg(target_os = "linux")]
+fn attach_linux_pointer_event_tracker(widget: &gtk::Widget) {
+    let children = widget
+        .clone()
+        .dynamic_cast::<gtk::Container>()
+        .map(|c| c.children())
+        .unwrap_or_default();
+    if !children.is_empty() {
+        for child in children {
+            attach_linux_pointer_event_tracker(&child);
+        }
+        return;
+    }
+
+    widget.add_events(
+        gdk::EventMask::BUTTON_PRESS_MASK
+            | gdk::EventMask::BUTTON_RELEASE_MASK
+            | gdk::EventMask::POINTER_MOTION_MASK
+            | gdk::EventMask::BUTTON1_MOTION_MASK,
+    );
+    widget.connect_button_press_event(|w, ev| {
+        let raw_ev: &gdk::Event = ev;
+        LAST_LINUX_DRAG_EVENT.with(|slot| {
+            *slot.borrow_mut() = Some((w.clone(), raw_ev.clone()));
+        });
+        glib::Propagation::Proceed
+    });
+    widget.connect_motion_notify_event(|w, ev| {
+        if ev.state().contains(gdk::ModifierType::BUTTON1_MASK) {
+            let raw_ev: &gdk::Event = ev;
+            LAST_LINUX_DRAG_EVENT.with(|slot| {
+                *slot.borrow_mut() = Some((w.clone(), raw_ev.clone()));
+            });
+        }
+        glib::Propagation::Proceed
+    });
+}
+
+#[cfg(target_os = "linux")]
+pub fn get_linux_drag_source_and_event(
+    gtk_win: &gtk::ApplicationWindow,
+) -> (gtk::Widget, Option<gdk::Event>) {
+    let stored = LAST_LINUX_DRAG_EVENT.with(|slot| slot.borrow().clone());
+    if let Some((w, ev)) = stored {
+        return (w, Some(ev));
+    }
+    let fallback_widget = find_deepest_child_widget(gtk_win.upcast_ref::<gtk::Widget>());
+    (fallback_widget, None)
+}
+
+#[cfg(target_os = "linux")]
+fn apply_linux_gtk_window_state(
+    gtk_win: &gtk::ApplicationWindow,
+    always_on_top: bool,
+    bounds_opt: Option<&IslandBounds>,
+    click_through: bool,
+    passthrough_all: bool,
+    is_shelf_drag_out: bool,
+) {
+    LINUX_CSS_INSTALLED.get_or_init(|| {
+        if let Some(screen) = gdk::Screen::default() {
+            let provider = gtk::CssProvider::new();
+            let _ = provider.load_from_data(
+                b"window, window.background, .background, webview { background-color: rgba(0, 0, 0, 0); background-image: none; box-shadow: none; border: none; }",
+            );
+            gtk::StyleContext::add_provider_for_screen(
+                &screen,
+                &provider,
+                gtk::STYLE_PROVIDER_PRIORITY_USER,
+            );
+        }
+    });
+
+    gtk::prelude::WidgetExt::set_app_paintable(gtk_win, true);
+    gtk_win.set_decorated(false);
+    if !gtk::prelude::WidgetExt::is_realized(gtk_win) {
+        if let Some(screen) = gtk::prelude::GtkWindowExt::screen(gtk_win) {
+            if let Some(visual) = screen.rgba_visual() {
+                gtk::prelude::WidgetExt::set_visual(gtk_win, Some(&visual));
+            }
+        }
+    }
+
+    if !LINUX_DRAW_HOOKED.swap(true, Ordering::SeqCst) {
+        gtk::prelude::WidgetExt::connect_draw(gtk_win, |_w, cr| {
+            cr.set_source_rgba(0.0, 0.0, 0.0, 0.0);
+            cr.set_operator(cairo::Operator::Source);
+            let _ = cr.paint();
+            glib::Propagation::Proceed
+        });
+    }
+
+    if !LINUX_POINTER_TRACKED.load(Ordering::SeqCst) && !gtk_win.children().is_empty() {
+        LINUX_POINTER_TRACKED.store(true, Ordering::SeqCst);
+        attach_linux_pointer_event_tracker(gtk_win.upcast_ref::<gtk::Widget>());
+    }
+
+    let Some(gdk_win) = gtk_win.window() else {
+        return;
+    };
+
+    let accept_focus = if is_shelf_drag_out {
+        true
+    } else {
+        !click_through && !passthrough_all
+    };
+    let win_width = gtk::prelude::WidgetExt::allocated_width(gtk_win)
+        .max(gdk_win.width())
+        .max(800);
+    let win_height = gtk::prelude::WidgetExt::allocated_height(gtk_win)
+        .max(gdk_win.height())
+        .max(600);
+
+    let (qx, qy, qw, qh) =
+        if let Some((bx, by, bw, bh)) = bounds_opt.and_then(|b| b.normalized_rect()) {
+            let x = (bx.floor() as i32 - 16).max(0) & !7;
+            let y = (by.floor() as i32 - 12).max(0) & !7;
+            let w = ((bw.ceil() as i32 + 32).max(80) + 7) & !7;
+            let h = ((bh.ceil() as i32 + 28).max(48) + 7) & !7;
+            (x, y, w, h)
+        } else {
+            ((win_width / 2 - 220).max(0), 0, 440, 96)
+        };
+
+    // During shelf drag-out on XWayland/Mutter, keep input_shape_combine_region non-empty
+    // around the pill until GTK's internal ipc_widget takes over the drag grab, then make
+    // our overlay input-passthrough so targets underneath the Shelf still accept drops.
+    let (rx, ry, rw, rh) = if passthrough_all && !is_shelf_drag_out {
+        (0, 0, 0, 0)
+    } else if is_shelf_drag_out && is_linux_drag_in_progress() {
+        (0, 0, 0, 0)
+    } else {
+        (qx, qy, qw, qh)
+    };
+
+    // Restrict the visual XShape bounding region so Mutter / XWayland does not
+    // alpha-blend a full-screen ARGB surface across unoccupied desktop areas on every scroll frame.
+    let (vx, vy, vw, vh) = if is_shelf_drag_out {
+        (qx, qy, qw, qh)
+    } else if accept_focus || qw > 280 || qh > 96 {
+        let cx = qx + qw / 2;
+        let vw_val = (qw + 64).max(840);
+        let vx_val = (cx - vw_val / 2).max(0);
+        let target_h = (qh + 64).max(560);
+        if qy + qh / 2 < win_height / 2 {
+            (vx_val, (qy - 32).max(0), vw_val, target_h)
+        } else {
+            let bottom = qy + qh + 32;
+            let vy_val = (bottom - target_h).max(0);
+            (vx_val, vy_val, vw_val, (bottom - vy_val).max(qh + 64))
+        }
+    } else {
+        ((qx - 36).max(0), (qy - 18).max(0), qw + 72, qh + 52)
+    };
+
+    let effective_keep_above = always_on_top && !is_shelf_drag_out;
+
+    let target_state = (
+        effective_keep_above,
+        accept_focus,
+        passthrough_all,
+        is_shelf_drag_out,
+        rx,
+        ry,
+        rw,
+        rh,
+        vx,
+        vy,
+        vw,
+        vh,
+    );
+    if let Ok(guard) = LAST_LINUX_OVERLAY_APPLIED.lock() {
+        if *guard == Some(target_state) {
+            return;
+        }
+    }
+
+    gtk_win.set_keep_above(effective_keep_above);
+    gtk_win.set_skip_taskbar_hint(true);
+    gtk_win.set_skip_pager_hint(true);
+    gtk_win.stick();
+    gdk_win.set_override_redirect(false);
+    if is_shelf_drag_out && is_linux_drag_in_progress() {
+        gdk_win.lower();
+    } else if effective_keep_above {
+        gdk_win.raise();
+    }
+    gtk::prelude::GtkWindowExt::set_accept_focus(gtk_win, accept_focus);
+
+    if (passthrough_all && !is_shelf_drag_out) || rw <= 0 || rh <= 0 {
+        let empty = cairo::Region::create();
+        gdk_win.input_shape_combine_region(&empty, 0, 0);
+    } else {
+        let rect = cairo::RectangleInt::new(rx, ry, rw, rh);
+        let region = cairo::Region::create_rectangle(&rect);
+        gdk_win.input_shape_combine_region(&region, 0, 0);
+    }
+
+    let vis_rect = cairo::RectangleInt::new(vx, vy, vw, vh);
+    let visual_region = cairo::Region::create_rectangle(&vis_rect);
+    let pill_vis_rect = cairo::RectangleInt::new(qx, qy, qw, qh);
+    let _ = visual_region.union_rectangle(&pill_vis_rect);
+    gdk_win.shape_combine_region(Some(&visual_region), 0, 0);
+
+    if let Ok(mut guard) = LAST_LINUX_OVERLAY_APPLIED.lock() {
+        *guard = Some(target_state);
+    }
+}
+
+#[cfg(target_os = "linux")]
+pub fn apply_linux_overlay_state(app: &AppHandle) {
+    let state = app.state::<SharedState>();
+    let always_on_top = state
+        .settings
+        .read()
+        .map(|s| s.always_on_top)
+        .unwrap_or(true);
+    let (bounds_opt, click_through, passthrough_all, is_shelf_drag_out) = {
+        let Ok(ov) = state.overlay.lock() else {
+            return;
+        };
+        (
+            ov.bounds.clone(),
+            ov.ignore_mouse,
+            ov.is_ctrl_held,
+            ov.is_shelf_drag_out,
+        )
+    };
+
+    let Some(win) = app.get_webview_window("main") else {
+        return;
+    };
+    if gtk::is_initialized_main_thread() {
+        if let Ok(gtk_win) = win.gtk_window() {
+            apply_linux_gtk_window_state(
+                &gtk_win,
+                always_on_top,
+                bounds_opt.as_ref(),
+                click_through,
+                passthrough_all,
+                is_shelf_drag_out,
+            );
+        }
+    } else {
+        let win_cb = win.clone();
+        let _ = win.run_on_main_thread(move || {
+            if let Ok(gtk_win) = win_cb.gtk_window() {
+                apply_linux_gtk_window_state(
+                    &gtk_win,
+                    always_on_top,
+                    bounds_opt.as_ref(),
+                    click_through,
+                    passthrough_all,
+                    is_shelf_drag_out,
+                );
+            }
+        });
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn start_linux_resume_watcher(app: AppHandle) {
+    // 1. Monotonic vs wall-clock jump detector (universal across systemd/elogind/openrc)
+    let app_clock = app.clone();
+    thread::spawn(move || {
+        let mut last_wall = chrono::Utc::now().timestamp_millis();
+        let mut last_mono = std::time::Instant::now();
+        loop {
+            thread::sleep(Duration::from_secs(3));
+            let now_wall = chrono::Utc::now().timestamp_millis();
+            let now_mono = std::time::Instant::now();
+            let elapsed_wall_ms = now_wall - last_wall;
+            let elapsed_mono_ms = now_mono.duration_since(last_mono).as_millis() as i64;
+            last_wall = now_wall;
+            last_mono = now_mono;
+
+            if elapsed_wall_ms - elapsed_mono_ms > 10_000 {
+                let _ = app_clock.emit("system-resume", ());
+                if let Some(st) = app_clock.try_state::<SharedState>() {
+                    st.log("INFO", "[Power] Linux system resumed; reasserting overlay", None);
+                }
+                apply_linux_overlay_state(&app_clock);
+            }
+        }
+    });
+
+    // 2. systemd-logind PrepareForSleep(false) D-Bus listener
+    thread::spawn(move || {
+        let Ok(conn) = zbus::blocking::Connection::system() else {
+            return;
+        };
+        let Ok(proxy) = zbus::blocking::Proxy::new(
+            &conn,
+            "org.freedesktop.login1",
+            "/org/freedesktop/login1",
+            "org.freedesktop.login1.Manager",
+        ) else {
+            return;
+        };
+        let Ok(signals) = proxy.receive_signal("PrepareForSleep") else {
+            return;
+        };
+        for msg in signals {
+            if let Ok(going_to_sleep) = msg.body().deserialize::<bool>() {
+                if !going_to_sleep {
+                    let _ = app.emit("system-resume", ());
+                    apply_linux_overlay_state(&app);
+                }
+            }
+        }
+    });
+}
+
+#[cfg(target_os = "linux")]
+pub fn init_overlay_window(app: &AppHandle, win: &WebviewWindow) {
+    let state = app.state::<SharedState>();
+    let displays = enumerate_displays(app);
+    let target = displays
+        .iter()
+        .find(|d| d.is_primary)
+        .or_else(|| displays.first())
+        .cloned();
+
+    if let Some(d) = target {
+        state.log(
+            "INFO",
+            &format!(
+                "[Overlay/Linux] Initializing on display {} ({}x{} at {},{} scale={})",
+                d.id,
+                d.physical_bounds.width,
+                d.physical_bounds.height,
+                d.physical_bounds.x,
+                d.physical_bounds.y,
+                d.scale_factor
+            ),
+            None,
+        );
+        if let Ok(mut ov) = state.overlay.lock() {
+            ov.main_hwnd = 1;
+            ov.current_display_id = d.id.clone();
+            ov.display_x_px = d.physical_bounds.x;
+            ov.display_y_px = d.physical_bounds.y;
+            ov.display_width_px = d.physical_bounds.width;
+            ov.display_height_px = d.physical_bounds.height;
+            ov.ignore_mouse = true;
+            ov.forward_mouse = true;
+        }
+        let _ = win.set_decorations(false);
+        let _ = win.set_skip_taskbar(true);
+        let _ = win.set_always_on_top(true);
+        let _ = win.set_position(tauri::PhysicalPosition::new(
+            d.physical_bounds.x,
+            d.physical_bounds.y,
+        ));
+        let _ = win.set_size(tauri::PhysicalSize::new(
+            d.physical_bounds.width.max(1) as u32,
+            (d.physical_bounds.height - 2).max(1) as u32,
+        ));
+    } else {
+        if let Ok(mut ov) = state.overlay.lock() {
+            ov.main_hwnd = 1;
+        }
+        state.log("WARN", "[Overlay/Linux] No monitor found during init_overlay_window", None);
+    }
+
+    let win_hooks = win.clone();
+    let _ = win.run_on_main_thread(move || {
+        if let Ok(gtk_win) = win_hooks.gtk_window() {
+            gtk_win.set_decorated(false);
+            gtk_win.set_skip_taskbar_hint(true);
+            gtk_win.set_skip_pager_hint(true);
+            gtk_win.set_keep_above(true);
+            gtk::prelude::GtkWindowExt::set_accept_focus(&gtk_win, false);
+            gtk_win.stick();
+        }
+    });
+
+    apply_linux_overlay_state(app);
+    start_cursor_watcher(app.clone());
+    start_topmost_heartbeat(app.clone());
+    start_linux_resume_watcher(app.clone());
+}
+
+#[cfg(target_os = "linux")]
+fn read_gdk_cursor_on_main_thread(win: &WebviewWindow) -> Option<(f64, f64, bool, bool)> {
+    let display = gdk::Display::default()?;
+    let seat = display.default_seat()?;
+    let pointer = seat.pointer()?;
+    let root = gdk::Window::default_root_window();
+    let (win_under_root, abs_x, abs_y, mods) = root.device_position_double(&pointer);
+    let (gx, gy) = if win_under_root.is_some() || abs_x != 0.0 || abs_y != 0.0 {
+        (abs_x, abs_y)
+    } else {
+        let (_, px, py) = pointer.position();
+        (px as f64, py as f64)
+    };
+    let (win_x, win_y) = {
+        let state = win.app_handle().state::<SharedState>();
+        let scale = win.scale_factor().ok().unwrap_or(1.0).max(1.0);
+        let disp_opt = state
+            .overlay
+            .lock()
+            .ok()
+            .map(|ov| (ov.display_x_px as f64 / scale, ov.display_y_px as f64 / scale));
+        disp_opt.unwrap_or_else(|| {
+            win.gtk_window()
+                .ok()
+                .and_then(|gtk_win| gtk_win.window().map(|gw| gw.position()))
+                .map(|(x, y)| (x as f64, y as f64))
+                .unwrap_or((0.0, 0.0))
+        })
+    };
+    let ctrl = mods.contains(gdk::ModifierType::CONTROL_MASK);
+    let lmb = mods.contains(gdk::ModifierType::BUTTON1_MASK);
+    Some((gx - win_x, gy - win_y, ctrl, lmb))
+}
+
+#[cfg(target_os = "linux")]
+fn poll_linux_cursor_and_mods(app: &AppHandle) -> Option<(f64, f64, bool, bool)> {
+    let gdk_pos = app.get_webview_window("main").and_then(|win| {
+        if gtk::is_initialized_main_thread() {
+            read_gdk_cursor_on_main_thread(&win)
+        } else {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let win_cb = win.clone();
+            if win
+                .run_on_main_thread(move || {
+                    let _ = tx.send(read_gdk_cursor_on_main_thread(&win_cb));
+                })
+                .is_err()
+            {
+                return None;
+            }
+            rx.recv_timeout(Duration::from_millis(50)).ok().flatten()
+        }
+    });
+
+    // Hyprland Wayland fast path for true global coordinates when pointer is outside input region,
+    // combined with real GDK modifier flags so Ctrl click-through and LMB release remain accurate.
+    if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
+        if let Ok(out) = std::process::Command::new("hyprctl")
+            .args(["cursorpos", "-j"])
+            .output()
+        {
+            if out.status.success() {
+                if let Ok(v) = serde_json::from_slice::<serde_json::Value>(&out.stdout) {
+                    if let (Some(x), Some(y)) = (
+                        v.get("x").and_then(|n| n.as_f64()),
+                        v.get("y").and_then(|n| n.as_f64()),
+                    ) {
+                        let st = app.state::<SharedState>();
+                        let scale = app
+                            .get_webview_window("main")
+                            .and_then(|w| w.scale_factor().ok())
+                            .unwrap_or(1.0)
+                            .max(1.0);
+                        let (dx, dy) = if let Ok(ov) = st.overlay.lock() {
+                            (ov.display_x_px as f64 / scale, ov.display_y_px as f64 / scale)
+                        } else {
+                            (0.0, 0.0)
+                        };
+                        let (ctrl, lmb) = gdk_pos
+                            .map(|(_, _, c, l)| (c, l))
+                            .unwrap_or((false, false));
+                        return Some((x - dx, y - dy, ctrl, lmb));
+                    }
+                }
+            }
+        }
+    }
+
+    gdk_pos
+}
+
+#[cfg(target_os = "linux")]
+pub fn is_linux_cursor_inside_island_bounds(
+    app: &AppHandle,
+    bounds: Option<&IslandBounds>,
+) -> (bool, bool) {
+    let Some((bx, by, bw, bh)) = bounds.and_then(|b| b.normalized_rect()) else {
+        return (false, false);
+    };
+    let Some((rel_x, rel_y, ctrl, _)) = poll_linux_cursor_and_mods(app) else {
+        return (false, false);
+    };
+    let pad = 4.0;
+    let inside = rel_x >= (bx - pad)
+        && rel_x <= (bx + bw + pad)
+        && rel_y >= (by - pad)
+        && rel_y <= (by + bh + pad);
+    (inside, ctrl)
+}
+
+#[cfg(windows)]
+pub fn query_windows_cursor_pos_and_lmb(
+    app: &AppHandle,
+    hwnd_raw: isize,
+    disp_x: i32,
+    disp_y: i32,
+) -> Option<(f64, f64, bool)> {
+    let cursor_pt = unsafe {
+        let mut pt = POINT::default();
+        if GetCursorPos(&mut pt).is_err() {
+            return None;
+        }
+        pt
+    };
+    let (win_x, win_y, scale) = {
+        let mut wx = disp_x;
+        let mut wy = disp_y;
+        if hwnd_raw != 0 {
+            unsafe {
+                let hwnd = HWND(hwnd_raw as *mut std::ffi::c_void);
+                let mut rect = RECT::default();
+                if GetWindowRect(hwnd, &mut rect).is_ok() {
+                    wx = rect.left;
+                    wy = rect.top;
+                }
+            }
+        }
+        let s = app
+            .get_webview_window("main")
+            .and_then(|w| w.scale_factor().ok())
+            .unwrap_or(1.0)
+            .max(1.0);
+        (wx, wy, s)
+    };
+    let lmb = unsafe { (GetAsyncKeyState(VK_LBUTTON.0 as i32) as u16 & 0x8000) != 0 };
+    Some((
+        (cursor_pt.x - win_x) as f64 / scale,
+        (cursor_pt.y - win_y) as f64 / scale,
+        lmb,
+    ))
+}
+
+#[cfg(windows)]
+pub fn is_cursor_inside_island_bounds(
+    app: &AppHandle,
+    hwnd_raw: isize,
+    disp_x: i32,
+    disp_y: i32,
+    bounds: Option<&IslandBounds>,
+) -> bool {
+    let Some((bx, by, bw, bh)) = bounds.and_then(|b| b.normalized_rect()) else {
+        return false;
+    };
+    let Some((rel_x, rel_y, _)) =
+        query_windows_cursor_pos_and_lmb(app, hwnd_raw, disp_x, disp_y)
+    else {
+        return false;
+    };
+    let pad = 4.0;
+    rel_x >= (bx - pad)
+        && rel_x <= (bx + bw + pad)
+        && rel_y >= (by - pad)
+        && rel_y <= (by + bh + pad)
+}
+
 fn start_cursor_watcher(app: AppHandle) {
     thread::spawn(move || {
+        let mut drag_out_release_ticks: u32 = 0;
+
         loop {
             thread::sleep(Duration::from_millis(90));
             let state = app.state::<SharedState>();
@@ -328,7 +941,109 @@ fn start_cursor_watcher(app: AppHandle) {
                 )
             };
 
-            if is_drag_out || is_ctrl || hwnd_raw == 0 {
+            if hwnd_raw == 0 {
+                continue;
+            }
+
+            if is_drag_out {
+                #[cfg(windows)]
+                {
+                    let lmb_down =
+                        unsafe { (GetAsyncKeyState(VK_LBUTTON.0 as i32) as u16 & 0x8000) != 0 };
+                    if lmb_down {
+                        drag_out_release_ticks = 0;
+                        continue;
+                    }
+                    drag_out_release_ticks = drag_out_release_ticks.saturating_add(1);
+                    if drag_out_release_ticks < 6 {
+                        continue;
+                    }
+                    drag_out_release_ticks = 0;
+                    state.log(
+                        "WARN",
+                        "[Overlay] Auto-recovering stale shelf drag-out state after LMB release",
+                        None,
+                    );
+                    if let Ok(mut ov) = state.overlay.lock() {
+                        ov.is_shelf_drag_out = false;
+                    }
+                    let _ = app.emit(
+                        "shelf:drag-ended",
+                        serde_json::json!({ "success": false, "recovered": true }),
+                    );
+                    if !is_cursor_inside_island_bounds(
+                        &app,
+                        hwnd_raw,
+                        disp_x,
+                        disp_y,
+                        bounds_opt.as_ref(),
+                    ) {
+                        if let Ok(mut ov) = state.overlay.lock() {
+                            ov.cursor_inside_island = false;
+                            ov.ignore_mouse = true;
+                        }
+                        apply_overlay_styles(hwnd_raw, true);
+                        let _ = app.emit("island:cursor-outside", ());
+                    }
+                }
+                #[cfg(target_os = "linux")]
+                {
+                    if is_linux_drag_in_progress() {
+                        drag_out_release_ticks = 0;
+                        continue;
+                    }
+                    let lmb_down = poll_linux_cursor_and_mods(&app)
+                        .map(|(_, _, _, lmb)| lmb)
+                        .unwrap_or(false);
+                    if lmb_down {
+                        drag_out_release_ticks = 0;
+                        continue;
+                    }
+                    drag_out_release_ticks = drag_out_release_ticks.saturating_add(1);
+                    if drag_out_release_ticks < 18 {
+                        continue;
+                    }
+                    drag_out_release_ticks = 0;
+                    state.log(
+                        "WARN",
+                        "[Overlay/Linux] Auto-recovering stale shelf drag-out state after LMB release",
+                        None,
+                    );
+                    if let Ok(mut ov) = state.overlay.lock() {
+                        ov.is_shelf_drag_out = false;
+                    }
+                    let _ = app.emit(
+                        "shelf:drag-ended",
+                        serde_json::json!({ "success": false, "recovered": true }),
+                    );
+                    let (inside_now, ctrl_now) =
+                        is_linux_cursor_inside_island_bounds(&app, bounds_opt.as_ref());
+                    let effective_ctrl = is_ctrl || ctrl_now;
+                    let effective_ignore = !inside_now || effective_ctrl;
+                    if let Ok(mut ov) = state.overlay.lock() {
+                        ov.is_ctrl_held = effective_ctrl;
+                        ov.cursor_inside_island = inside_now && !effective_ctrl;
+                        ov.ignore_mouse = effective_ignore;
+                    }
+                    apply_linux_overlay_state(&app);
+                    if inside_now && !effective_ctrl {
+                        let _ = app.emit("island:cursor-entered", ());
+                    } else {
+                        let _ = app.emit("island:cursor-outside", ());
+                    }
+                    continue;
+                }
+                #[cfg(not(any(windows, target_os = "linux")))]
+                {
+                    let _ = drag_out_release_ticks;
+                    continue;
+                }
+            } else {
+                drag_out_release_ticks = 0;
+            }
+
+            #[cfg(windows)]
+            if is_ctrl {
                 continue;
             }
 
@@ -340,36 +1055,38 @@ fn start_cursor_watcher(app: AppHandle) {
             };
 
             #[cfg(windows)]
-            let cursor_pt = unsafe {
-                let mut pt = POINT::default();
-                if GetCursorPos(&mut pt).is_err() {
+            let (rel_x, rel_y, lmb_down) = {
+                let Some(pos) =
+                    query_windows_cursor_pos_and_lmb(&app, hwnd_raw, disp_x, disp_y)
+                else {
+                    continue;
+                };
+                pos
+            };
+
+            #[cfg(target_os = "linux")]
+            let (rel_x, rel_y, lmb_down) = {
+                let _ = (disp_x, disp_y);
+                let Some((rx, ry, ctrl_now, lmb)) = poll_linux_cursor_and_mods(&app) else {
+                    continue;
+                };
+                if ctrl_now != is_ctrl {
+                    if let Ok(mut ov) = state.overlay.lock() {
+                        ov.is_ctrl_held = ctrl_now;
+                    }
+                    apply_linux_overlay_state(&app);
+                }
+                if ctrl_now {
                     continue;
                 }
-                pt
+                (rx, ry, lmb)
             };
 
-            let (win_x, win_y, scale) = {
-                let mut wx = disp_x;
-                let mut wy = disp_y;
-                #[cfg(windows)]
-                unsafe {
-                    let hwnd = HWND(hwnd_raw as *mut std::ffi::c_void);
-                    let mut rect = RECT::default();
-                    if GetWindowRect(hwnd, &mut rect).is_ok() {
-                        wx = rect.left;
-                        wy = rect.top;
-                    }
-                }
-                let s = app
-                    .get_webview_window("main")
-                    .and_then(|w| w.scale_factor().ok())
-                    .unwrap_or(1.0)
-                    .max(1.0);
-                (wx, wy, s)
+            #[cfg(not(any(windows, target_os = "linux")))]
+            let (rel_x, rel_y, lmb_down) = {
+                let _ = (disp_x, disp_y);
+                continue;
             };
-
-            let rel_x = (cursor_pt.x - win_x) as f64 / scale;
-            let rel_y = (cursor_pt.y - win_y) as f64 / scale;
 
             let pad = 4.0;
             let now_inside = rel_x >= (bx - pad)
@@ -387,20 +1104,26 @@ fn start_cursor_watcher(app: AppHandle) {
                     }
                     #[cfg(windows)]
                     apply_overlay_styles(hwnd_raw, false);
+                    #[cfg(target_os = "linux")]
+                    apply_linux_overlay_state(&app);
+                    if !prev_inside && lmb_down {
+                        let _ = app.emit("shelf:drag-enter", ());
+                    }
                     let _ = app.emit("island:cursor-entered", ());
                 }
             } else if prev_inside {
-                #[cfg(windows)]
-                let lmb_down = unsafe { (GetAsyncKeyState(VK_LBUTTON.0 as i32) as u16 & 0x8000) != 0 };
-                #[cfg(not(windows))]
-                let lmb_down = false;
-
                 if !lmb_down {
                     {
                         if let Ok(mut ov) = state.overlay.lock() {
                             ov.cursor_inside_island = false;
+                            #[cfg(target_os = "linux")]
+                            {
+                                ov.ignore_mouse = true;
+                            }
                         }
                     }
+                    #[cfg(target_os = "linux")]
+                    apply_linux_overlay_state(&app);
                     let _ = app.emit("island:cursor-outside", ());
                 }
             }
@@ -421,15 +1144,35 @@ fn start_topmost_heartbeat(app: AppHandle) {
             if !always_on_top {
                 continue;
             }
-            let hwnd_raw = state.overlay.lock().map(|o| o.main_hwnd).unwrap_or(0);
+            let (hwnd_raw, is_drag_out) = state
+                .overlay
+                .lock()
+                .map(|o| (o.main_hwnd, o.is_shelf_drag_out))
+                .unwrap_or((0, false));
             #[cfg(windows)]
             force_topmost_hwnd(hwnd_raw);
+            #[cfg(target_os = "linux")]
+            if hwnd_raw != 0 && !is_drag_out {
+                if let Some(w) = app.get_webview_window("main") {
+                    let w_cb = w.clone();
+                    let _ = w.run_on_main_thread(move || {
+                        if let Ok(gtk_win) = w_cb.gtk_window() {
+                            gtk_win.set_keep_above(true);
+                        }
+                    });
+                }
+            }
+            #[cfg(target_os = "linux")]
+            let _ = is_drag_out;
+            #[cfg(not(target_os = "linux"))]
+            let _ = is_drag_out;
         }
     });
 }
 
 #[tauri::command]
 pub fn set_ignore_mouse_events(
+    app: AppHandle,
     state: tauri::State<'_, SharedState>,
     ignore: bool,
     forward: bool,
@@ -451,15 +1194,29 @@ pub fn set_ignore_mouse_events(
     };
 
     #[cfg(windows)]
-    if hwnd_raw != 0 {
-        apply_overlay_styles(hwnd_raw, effective_ignore);
+    {
+        let _ = &app;
+        if hwnd_raw != 0 {
+            apply_overlay_styles(hwnd_raw, effective_ignore);
+        }
     }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = hwnd_raw;
+        apply_linux_overlay_state(&app);
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = (app, hwnd_raw);
 }
 
 static LOGGED_FIRST_BOUNDS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
 #[tauri::command]
-pub fn update_island_bounds(state: tauri::State<'_, SharedState>, bounds: Option<IslandBounds>) {
+pub fn update_island_bounds(
+    app: AppHandle,
+    state: tauri::State<'_, SharedState>,
+    bounds: Option<IslandBounds>,
+) {
     if let Some(ref b) = bounds {
         if let Some((x, y, w, h)) = b.normalized_rect() {
             if !LOGGED_FIRST_BOUNDS.swap(true, Ordering::SeqCst) {
@@ -474,6 +1231,10 @@ pub fn update_island_bounds(state: tauri::State<'_, SharedState>, bounds: Option
     if let Ok(mut ov) = state.overlay.lock() {
         ov.bounds = bounds;
     }
+    #[cfg(target_os = "linux")]
+    apply_linux_overlay_state(&app);
+    #[cfg(not(target_os = "linux"))]
+    let _ = app;
 }
 
 #[tauri::command]
@@ -515,9 +1276,13 @@ pub fn set_display(
             target.physical_bounds.x,
             target.physical_bounds.y,
         ));
+        #[cfg(target_os = "linux")]
+        let target_h = (target.physical_bounds.height - 2).max(1) as u32;
+        #[cfg(not(target_os = "linux"))]
+        let target_h = target.physical_bounds.height.max(1) as u32;
         let _ = w.set_size(tauri::PhysicalSize::new(
             target.physical_bounds.width.max(1) as u32,
-            target.physical_bounds.height.max(1) as u32,
+            target_h,
         ));
     }
 
@@ -536,6 +1301,16 @@ pub fn set_display(
             );
         }
     }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = hwnd_raw;
+        if let Ok(mut guard) = LAST_LINUX_OVERLAY_APPLIED.lock() {
+            *guard = None;
+        }
+        apply_linux_overlay_state(&app);
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = hwnd_raw;
 
     Ok(true)
 }
@@ -579,6 +1354,7 @@ fn set_msix_startup_task(enable: bool) -> Result<bool, String> {
 
 #[tauri::command]
 pub fn set_auto_launch(enable: bool) -> Result<bool, String> {
+    #[cfg(windows)]
     if crate::state::is_store_packaged() {
         return set_msix_startup_task(enable);
     }
@@ -621,6 +1397,52 @@ pub fn set_auto_launch(enable: bool) -> Result<bool, String> {
             return Err(format!("Registry update failed: {:?}", res));
         }
     }
+
+    #[cfg(target_os = "linux")]
+    {
+        let autostart_dir = dirs::config_dir()
+            .unwrap_or_else(|| {
+                std::path::PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| ".".into()))
+                    .join(".config")
+            })
+            .join("autostart");
+        let desktop_file = autostart_dir.join("quick-pill.desktop");
+
+        if enable {
+            std::fs::create_dir_all(&autostart_dir)
+                .map_err(|e| format!("Failed to create autostart directory: {e}"))?;
+            let exe_path = std::env::var("APPIMAGE")
+                .ok()
+                .filter(|p| !p.trim().is_empty())
+                .unwrap_or_else(|| {
+                    std::env::current_exe()
+                        .map(|p| p.to_string_lossy().to_string())
+                        .unwrap_or_else(|_| "quick-pill".to_string())
+                });
+            let escaped_exec = if exe_path.contains(' ') {
+                format!("\"{exe_path}\"")
+            } else {
+                exe_path
+            };
+            let entry = format!(
+                "[Desktop Entry]\n\
+                 Type=Application\n\
+                 Version=1.0\n\
+                 Name=Quick Pill\n\
+                 Comment=Dynamic Island for Desktop\n\
+                 Exec={escaped_exec}\n\
+                 Icon=quick-pill\n\
+                 Terminal=false\n\
+                 X-GNOME-Autostart-enabled=true\n"
+            );
+            std::fs::write(&desktop_file, entry)
+                .map_err(|e| format!("Failed to write autostart desktop entry: {e}"))?;
+        } else if desktop_file.exists() {
+            std::fs::remove_file(&desktop_file)
+                .map_err(|e| format!("Failed to remove autostart desktop entry: {e}"))?;
+        }
+    }
+
     Ok(true)
 }
 
@@ -666,6 +1488,21 @@ pub fn set_always_on_top(
             );
         }
     }
+    #[cfg(target_os = "linux")]
+    {
+        let _ = hwnd_raw;
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.set_always_on_top(enable);
+            let w_cb = w.clone();
+            let _ = w.run_on_main_thread(move || {
+                if let Ok(gtk_win) = w_cb.gtk_window() {
+                    gtk_win.set_keep_above(enable);
+                }
+            });
+        }
+    }
+    #[cfg(not(any(windows, target_os = "linux")))]
+    let _ = hwnd_raw;
 
     let _ = app.emit("always-on-top-changed", enable);
     Ok(enable)
@@ -676,6 +1513,11 @@ pub fn focus_window(app: AppHandle, state: tauri::State<'_, SharedState>) -> boo
     let hwnd_raw = state.overlay.lock().map(|o| o.main_hwnd).unwrap_or(0);
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.set_focus();
+        #[cfg(target_os = "linux")]
+        {
+            let _ = hwnd_raw;
+            return true;
+        }
     }
     #[cfg(windows)]
     if hwnd_raw != 0 {
@@ -688,6 +1530,8 @@ pub fn focus_window(app: AppHandle, state: tauri::State<'_, SharedState>) -> boo
         }
         return true;
     }
+    #[cfg(not(windows))]
+    let _ = hwnd_raw;
     false
 }
 
@@ -735,6 +1579,17 @@ pub fn open_external(url: String) -> Result<bool, String> {
         if (hinst.0 as isize) <= 32 {
             return Err(format!("ShellExecuteW failed with code {}", hinst.0 as isize));
         }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(&normalized)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .map_err(|e| format!("xdg-open failed: {e}"))?;
     }
 
     Ok(true)

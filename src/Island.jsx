@@ -2528,7 +2528,7 @@ export default function Island() {
   }, []);
 
   // Auto-Updater State & Handlers
-  const [appVersion, setAppVersion] = useState("6.0.0");
+  const [appVersion, setAppVersion] = useState("6.1.0");
   const [isStoreBuild, setIsStoreBuild] = useState(false);
   const [updateStatus, setUpdateStatus] = useState("idle"); // 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error' | 'store-managed'
   const [updateInfo, setUpdateInfo] = useState(null);
@@ -3138,7 +3138,7 @@ export default function Island() {
       x: 0,
       scale: 1,
       transition: {
-        duration: 0.16,
+        duration: 0.11,
         ease: [0.16, 1, 0.3, 1]
       }
     },
@@ -3147,7 +3147,7 @@ export default function Island() {
       x: direction < 0 ? 10 : direction > 0 ? -10 : 0,
       scale: 0.985,
       transition: {
-        duration: 0.10,
+        duration: 0.07,
         ease: [0.16, 1, 0.3, 1]
       }
     })
@@ -3257,7 +3257,7 @@ export default function Island() {
       wheelAccumulator.current = 0;
     }, 150);
 
-    if (Math.abs(wheelAccumulator.current) >= 30) {
+    if (Math.abs(wheelAccumulator.current) >= 15) {
       const isNext = wheelAccumulator.current > 0;
       wheelLockout.current = true;
       wheelAccumulator.current = 0;
@@ -3265,7 +3265,7 @@ export default function Island() {
       moveTab(isNext ? 1 : -1);
       setTimeout(() => {
         wheelLockout.current = false;
-      }, 250);
+      }, 140);
     }
   };
 
@@ -3345,6 +3345,8 @@ export default function Island() {
   const isNotificationBanner = Boolean(notificationAlert && mode !== "large");
   const isPrayerBanner = Boolean(prayerAlert && mode !== "large");
   const isAnyBanner = isNotificationBanner || isPrayerBanner;
+  const isAnyBannerRef = useRef(false);
+  isAnyBannerRef.current = isAnyBanner;
   const width = isAnyBanner
     ? (isPrayerBanner ? 320 : 300)
     : mode === "large"
@@ -4570,16 +4572,16 @@ export default function Island() {
     const hasFilesInDrag = (e) => {
       const types = e?.dataTransfer?.types;
       if (!types) return false;
-      return Array.from(types).includes("Files");
+      const arr = Array.from(types);
+      return (
+        arr.includes("Files") ||
+        arr.includes("text/uri-list") ||
+        arr.includes("application/x-moz-file")
+      );
     };
 
-    const handleWindowFileDragOver = (e) => {
-      if (!hasFilesInDrag(e)) return;
+    const activateExternalDragUi = (resetDelayMs = 280) => {
       if (isShelfDragOutActiveRef.current) return;
-      e.preventDefault();
-      if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = "copy";
-      }
       if (mouseLeaveTimer.current) {
         clearTimeout(mouseLeaveTimer.current);
         mouseLeaveTimer.current = null;
@@ -4597,7 +4599,17 @@ export default function Island() {
       externalFileDragTimeoutRef.current = setTimeout(() => {
         isExternalFileDragRef.current = false;
         window.dispatchEvent(new CustomEvent("quick-pill-file-drag-end"));
-      }, 280);
+      }, resetDelayMs);
+    };
+
+    const handleWindowFileDragOver = (e) => {
+      if (!hasFilesInDrag(e)) return;
+      if (isShelfDragOutActiveRef.current) return;
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = "copy";
+      }
+      activateExternalDragUi(280);
     };
 
     const handleNativeDragStart = () => {
@@ -4609,11 +4621,40 @@ export default function Island() {
       }
     };
 
+    const handleNativeDragEnd = () => {
+      isShelfDragOutActiveRef.current = false;
+      lastIgnoreRef.current = { ignore: null, forward: null, isCtrl: null };
+    };
+
     let unsubDragEnd = null;
     if (window.electronAPI?.shelf?.onDragEnded) {
-      unsubDragEnd = window.electronAPI.shelf.onDragEnded(() => {
-        isShelfDragOutActiveRef.current = false;
-        lastIgnoreRef.current = { ignore: true, forward: true, isCtrl: false };
+      unsubDragEnd = window.electronAPI.shelf.onDragEnded(handleNativeDragEnd);
+    }
+
+    let unsubDragEnter = null;
+    if (window.electronAPI?.shelf?.onDragEnter) {
+      unsubDragEnter = window.electronAPI.shelf.onDragEnter(() => {
+        activateExternalDragUi(600);
+      });
+    }
+
+    let unsubExternalDrop = null;
+    if (window.electronAPI?.shelf?.onExternalDrop) {
+      unsubExternalDrop = window.electronAPI.shelf.onExternalDrop((paths) => {
+        if (isShelfDragOutActiveRef.current) return;
+        isExternalFileDragRef.current = false;
+        if (externalFileDragTimeoutRef.current) {
+          clearTimeout(externalFileDragTimeoutRef.current);
+          externalFileDragTimeoutRef.current = null;
+        }
+        window.dispatchEvent(new CustomEvent("quick-pill-file-drag-end"));
+        if (Array.isArray(paths) && paths.length > 0) {
+          setHoverState(true);
+          updateMouseIgnore(false, true);
+          setMode("large");
+          setTabState((prev) => (prev[0] === 16 ? prev : [16, 1]));
+          window.electronAPI?.shelf?.addFiles?.(paths);
+        }
       });
     }
 
@@ -4621,6 +4662,14 @@ export default function Island() {
     if (window.electronAPI?.onIslandCursorEntered) {
       unsubCursorEntered = window.electronAPI.onIslandCursorEntered(() => {
         lastIgnoreRef.current = { ignore: false, forward: true, isCtrl: false };
+        if (mouseLeaveTimer.current) {
+          clearTimeout(mouseLeaveTimer.current);
+          mouseLeaveTimer.current = null;
+        }
+        if (!ctrlHeldRef.current && !isAnyBannerRef.current) {
+          setHoverState(true);
+          setMode((prev) => (prev === "still" || prev === "quick" ? "large" : prev));
+        }
       });
     }
 
@@ -4645,12 +4694,16 @@ export default function Island() {
     window.addEventListener("dragenter", handleWindowFileDragOver);
     window.addEventListener("dragover", handleWindowFileDragOver);
     window.addEventListener("shelf-native-drag-start", handleNativeDragStart);
+    window.addEventListener("shelf-native-drag-end", handleNativeDragEnd);
 
     return () => {
       window.removeEventListener("dragenter", handleWindowFileDragOver);
       window.removeEventListener("dragover", handleWindowFileDragOver);
       window.removeEventListener("shelf-native-drag-start", handleNativeDragStart);
+      window.removeEventListener("shelf-native-drag-end", handleNativeDragEnd);
       if (typeof unsubDragEnd === "function") unsubDragEnd();
+      if (typeof unsubDragEnter === "function") unsubDragEnter();
+      if (typeof unsubExternalDrop === "function") unsubExternalDrop();
       if (typeof unsubCursorEntered === "function") unsubCursorEntered();
       if (typeof unsubCursorOutside === "function") unsubCursorOutside();
     };
@@ -4744,7 +4797,8 @@ export default function Island() {
       id="Island"
       onDragEnter={(e) => {
         const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
-        if (types.includes("Files") && !isShelfDragOutActiveRef.current) {
+        const hasFiles = types.includes("Files") || types.includes("text/uri-list") || types.includes("application/x-moz-file");
+        if (hasFiles && !isShelfDragOutActiveRef.current) {
           e.preventDefault();
           if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
           isExternalFileDragRef.current = true;
@@ -4759,7 +4813,8 @@ export default function Island() {
       }}
       onDragOver={(e) => {
         const types = e.dataTransfer?.types ? Array.from(e.dataTransfer.types) : [];
-        if (types.includes("Files") && !isShelfDragOutActiveRef.current) {
+        const hasFiles = types.includes("Files") || types.includes("text/uri-list") || types.includes("application/x-moz-file");
+        if (hasFiles && !isShelfDragOutActiveRef.current) {
           e.preventDefault();
           e.stopPropagation();
           if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
@@ -5632,7 +5687,7 @@ export default function Island() {
         </AnimatePresence >
       ) : null}
 
-      <AnimatePresence custom={direction} mode="wait">
+      <AnimatePresence custom={direction}>
         {mode === "large" && (
           <motion.div
             key={currentTabId}

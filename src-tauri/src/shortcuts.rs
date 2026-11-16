@@ -1,5 +1,8 @@
 use crate::state::{SharedState, DEFAULT_TAB_SHORTCUTS};
+#[cfg(windows)]
 use crate::window_overlay::apply_overlay_styles;
+#[cfg(target_os = "linux")]
+use crate::window_overlay::apply_linux_overlay_state;
 use once_cell::sync::Lazy;
 use serde_json::{json, Value};
 use std::collections::HashMap;
@@ -67,6 +70,13 @@ pub fn handle_shortcut_event(app: &AppHandle, shortcut: &Shortcut, state_event: 
         if hwnd_raw != 0 {
             apply_overlay_styles(hwnd_raw, false);
         }
+        #[cfg(target_os = "linux")]
+        {
+            let _ = hwnd_raw;
+            apply_linux_overlay_state(app);
+        }
+        #[cfg(not(any(windows, target_os = "linux")))]
+        let _ = hwnd_raw;
         if let Some(w) = app.get_webview_window("main") {
             let _ = w.set_focus();
         }

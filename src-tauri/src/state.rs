@@ -1,12 +1,16 @@
+#[cfg(windows)]
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use chrono::Utc;
+#[cfg(windows)]
 use image::{codecs::png::PngEncoder, imageops::FilterType, ColorType, ImageEncoder, RgbaImage};
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::{self, OpenOptions};
-use std::io::{Cursor, Write};
+#[cfg(windows)]
+use std::io::Cursor;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, RwLock};
@@ -315,10 +319,12 @@ pub fn atomic_write_bytes(path: &Path, bytes: &[u8]) -> Result<(), String> {
     })
 }
 
+#[cfg(any(windows, test))]
 pub fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
+#[cfg(any(windows, test))]
 pub fn from_wide_slice(buf: &[u16]) -> String {
     let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
     String::from_utf16_lossy(&buf[..len])

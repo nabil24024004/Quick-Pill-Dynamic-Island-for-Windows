@@ -46,6 +46,10 @@ if (typeof window !== 'undefined') {
     isShelfDragOutActive = true;
   });
 
+  window.addEventListener('shelf-native-drag-end', () => {
+    isShelfDragOutActive = false;
+  });
+
   subscribe('shelf:drag-ended', () => {
     isShelfDragOutActive = false;
   });
@@ -179,7 +183,7 @@ const electronAPI = {
   onAlwaysOnTopChange: (cb) => subscribe('always-on-top-changed', cb),
   onSystemResume: (cb) => subscribe('system-resume', cb),
 
-  platform: 'win32',
+  platform: typeof navigator !== 'undefined' && /linux/i.test(navigator.userAgent) ? 'linux' : 'win32',
 
   audioMixer: {
     getDevices: () => invoke('audio_mixer_get_devices'),
@@ -278,6 +282,7 @@ const electronAPI = {
   shelf: {
     getItems: () => invoke('shelf_get_items'),
     addFiles: (filePaths) => invoke('shelf_add_files', { filePaths }),
+    pickFiles: () => invoke('shelf_pick_files'),
     removeItem: (id) => invoke('shelf_remove_item', { id }),
     clear: () => invoke('shelf_clear'),
     openFile: (filePathOrId) => invoke('shelf_open_file', { filePathOrId }),
@@ -290,6 +295,8 @@ const electronAPI = {
     getPathForFile: getFilePathCompat,
     onUpdate: (cb) => subscribe('shelf:update', cb),
     onDragEnded: (cb) => subscribe('shelf:drag-ended', cb),
+    onDragEnter: (cb) => subscribe('shelf:drag-enter', cb),
+    onExternalDrop: (cb) => subscribe('shelf:external-drop', cb),
   },
 
   prayer: {

@@ -136,11 +136,36 @@ export const SANDBOX_TABS = [
   },
 ];
 
+const VIDEO_TAB_DURATION_MS = 5000;
+const IMAGE_TAB_DURATION_MS = 3500;
+
 export default function InteractiveSandbox() {
   const [activeTabId, setActiveTabId] = useState('overview');
+  const [interactionTick, setInteractionTick] = useState(0);
   const videoRef = useRef(null);
 
-  const activeTab = SANDBOX_TABS.find(t => t.id === activeTabId) || SANDBOX_TABS[0];
+  const activeIndex = Math.max(
+    0,
+    SANDBOX_TABS.findIndex((t) => t.id === activeTabId)
+  );
+  const activeTab = SANDBOX_TABS[activeIndex] || SANDBOX_TABS[0];
+  const cycleDurationMs =
+    activeTab.type === 'video' ? VIDEO_TAB_DURATION_MS : IMAGE_TAB_DURATION_MS;
+
+  // Automatically advance tabs one after another and preload next image asset
+  useEffect(() => {
+    const nextTab = SANDBOX_TABS[(activeIndex + 1) % SANDBOX_TABS.length];
+    if (nextTab.type === 'image') {
+      const preload = new Image();
+      preload.src = nextTab.src;
+    }
+
+    const timer = window.setTimeout(() => {
+      setActiveTabId(nextTab.id);
+    }, cycleDurationMs);
+
+    return () => window.clearTimeout(timer);
+  }, [activeIndex, cycleDurationMs, interactionTick]);
 
   // Ensure video auto-plays upon tab change
   useEffect(() => {
@@ -149,6 +174,11 @@ export default function InteractiveSandbox() {
       videoRef.current.play().catch(() => {});
     }
   }, [activeTabId, activeTab.type]);
+
+  const handleSelectTab = (tabId) => {
+    setActiveTabId(tabId);
+    setInteractionTick((n) => n + 1);
+  };
 
   return (
     <div className="sandbox-wrapper" aria-label="Interactive Quick Pill Simulator">
@@ -163,12 +193,14 @@ export default function InteractiveSandbox() {
               type="button"
               role="tab"
               className={`sandbox-tab-pill ${isActive ? 'is-active' : ''}`}
-              onClick={() => setActiveTabId(tab.id)}
+              style={isActive ? { '--sandbox-cycle-ms': `${cycleDurationMs}ms` } : undefined}
+              onClick={() => handleSelectTab(tab.id)}
               aria-selected={isActive}
             >
               <Icon size={14} strokeWidth={isActive ? 2 : 1.5} className="tab-pill-icon" />
               <span className="tab-pill-label">{tab.label}</span>
               {tab.type === 'video' && <span className="tab-pill-dot" title="Video clip" />}
+              {isActive && <span key={interactionTick} className="tab-pill-progress" aria-hidden="true" />}
             </button>
           );
         })}

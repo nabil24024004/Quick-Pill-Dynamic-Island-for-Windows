@@ -9,8 +9,8 @@ Welcome to the **Quick Pill** project codebase! This file serves as the referenc
 **Quick Pill** is a native Windows desktop application that brings an Apple Dynamic Island experience to **Windows 10 & 11**. It floats above all desktop windows with minimal memory overhead, offering notifications, per-app WASAPI audio mixing, media playback control, a persistent drag-and-drop file shelf, prayer times, quick notes, an app launcher, and customizable widgets.
 
 - **Product Name**: Quick Pill
-- **Current Version**: 6.0.0
-- **Architecture**: Tauri v2 + Rust native backend + Edge WebView2 (React 19)
+- **Current Version**: 6.1.0
+- **Architecture**: Tauri v2 + Rust native backend + Edge WebView2 / WebKitGTK (React 19)
 - **License**: MIT
 - **Author**: Abrar Nabil / NeoSparkX
 
@@ -36,7 +36,9 @@ Quick pill/
 ├── .github/workflows/       # GitHub Actions CI/CD (Windows x64 Tauri v2 + NSIS + signing)
 ├── assets/                  # Logos, icons, and README media assets
 ├── scripts/
+│   ├── build-linux.sh       # Stages & builds AppImage / .deb / .rpm on Linux VM/host + SHA-256
 │   ├── build-msix.ps1       # Packages release binary into Microsoft Store MSIX bundle
+│   ├── build-windows.ps1    # Tests, builds NSIS setup + Store MSIX, stages release-artifacts & manifest
 │   ├── generate-manifest.js # Computes SHA-256, byte size & Store links -> web app/public/version.json
 │   └── sign-windows.ps1     # Authenticode signing hook (PFX, Cert Store, Azure Trusted Signing)
 ├── src/                     # React frontend
@@ -98,6 +100,12 @@ npm run build
 
 # Build Microsoft Store MSIX package (src-tauri/target/release/bundle/msix/)
 npm run build:msix
+
+# Full Windows release bundle (tests + NSIS Setup + Store MSIX + version.json -> release-artifacts/)
+npm run build:windows
+
+# Full Linux release bundle on Ubuntu/Fedora/Arch (AppImage, .deb, .rpm + SHA-256 + version.json)
+npm run build:linux
 
 # Generate web app/public/version.json manifest with real SHA-256, byte size & Store URL
 npm run generate-manifest

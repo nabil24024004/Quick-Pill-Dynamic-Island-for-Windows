@@ -207,7 +207,7 @@ export const CtaResolveScene = Interactive.create({
     },
     versionLabel: {
       type: 'string',
-      default: 'v6.0.0',
+      default: 'v6.1.0',
       description: 'Version string',
     },
     ctaUrl: {

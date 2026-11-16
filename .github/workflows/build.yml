@@ -1,4 +1,4 @@
-name: Windows Build & Release
+name: Build & Release
 
 on:
   push:
@@ -56,7 +56,7 @@ jobs:
           AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-        run: npm run build
+        run: npm run build -- --bundles nsis
 
       - name: Stage Release Installer & Package MSIX
         env:
@@ -95,4 +95,110 @@ jobs:
             release-artifacts/*
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msix/*.msix
+          if-no-files-found: error
+
+  build-linux:
+    name: Build Quick Pill (Linux x64 - AppImage / deb / rpm)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Setup Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust Build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Linux System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            rpm \
+            pulseaudio-utils \
+            xdg-utils
+
+      - name: Get version from package.json
+        id: pkg
+        run: |
+          v=$(node -p "require('./package.json').version")
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Run Rust Unit Tests
+        run: npm test
+
+      - name: Build Tauri v2 Linux Bundles (AppImage, deb, rpm)
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: '1'
+        run: npm run build -- --bundles appimage,deb,rpm
+
+      - name: Stage Linux Packages & Generate Manifest
+        run: |
+          set -euo pipefail
+          version="${{ steps.pkg.outputs.version }}"
+          mkdir -p release-artifacts
+
+          appimage=$(find src-tauri/target/release/bundle/appimage -maxdepth 2 -type f -name '*.AppImage' | head -n1 || true)
+          deb=$(find src-tauri/target/release/bundle/deb -maxdepth 2 -type f -name '*.deb' | head -n1 || true)
+          rpm=$(find src-tauri/target/release/bundle/rpm -maxdepth 2 -type f -name '*.rpm' | head -n1 || true)
+
+          if [ -z "$appimage" ] && [ -z "$deb" ] && [ -z "$rpm" ]; then
+            echo "No Linux bundle packages produced." >&2
+            exit 1
+          fi
+
+          args=()
+          if [ -n "$appimage" ]; then
+            dest_ai="release-artifacts/QuickPill-Linux-v${version}.AppImage"
+            cp -f "$appimage" "$dest_ai"
+            sha256sum "$dest_ai" | awk '{print $1 "  QuickPill-Linux-v'"${version}"'.AppImage"}' > "${dest_ai}.sha256"
+            args+=(--linux-appimage "$dest_ai")
+          fi
+          if [ -n "$deb" ]; then
+            dest_deb="release-artifacts/QuickPill-Linux-v${version}.deb"
+            cp -f "$deb" "$dest_deb"
+            sha256sum "$dest_deb" | awk '{print $1 "  QuickPill-Linux-v'"${version}"'.deb"}' > "${dest_deb}.sha256"
+            args+=(--linux-deb "$dest_deb")
+          fi
+          if [ -n "$rpm" ]; then
+            dest_rpm="release-artifacts/QuickPill-Linux-v${version}.rpm"
+            cp -f "$rpm" "$dest_rpm"
+            sha256sum "$dest_rpm" | awk '{print $1 "  QuickPill-Linux-v'"${version}"'.rpm"}' > "${dest_rpm}.sha256"
+            args+=(--linux-rpm "$dest_rpm")
+          fi
+
+          node scripts/generate-manifest.js "${args[@]}"
+          cp -f "web app/public/version.json" "release-artifacts/version.json"
+
+      - name: Upload Linux Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuickPill-Linux-v${{ steps.pkg.outputs.version }}
+          path: |
+            release-artifacts/*
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+            src-tauri/target/release/bundle/rpm/*.rpm
           if-no-files-found: error

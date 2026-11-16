@@ -19,8 +19,8 @@
       </picture>
     </a>
     &nbsp;&nbsp;
-    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe">
-      <img src="assets/download-button.svg" alt="Download for Desktop Setup (v6.0.0)" width="250" />
+    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.0-Setup.exe">
+      <img src="assets/download-button.svg" alt="Download for Desktop Setup (v6.1.0)" width="250" />
     </a>
   </p>
 
@@ -34,8 +34,8 @@
   <!-- Status & Action Badges (Image 2 Style - for-the-badge) -->
   <p align="center">
     <a href="https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct"><img src="https://img.shields.io/badge/MICROSOFT_STORE-9N371MQB4BS7-0078D7?style=for-the-badge&logo=microsoftstore&logoColor=white" alt="Microsoft Store" /></a>
-    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe"><img src="https://img.shields.io/badge/DESKTOP_APP-DOWNLOAD_NOW-0078D7?style=for-the-badge&logo=windows&logoColor=white" alt="Desktop App Download Now" /></a>
-    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><img src="https://img.shields.io/badge/RELEASE-V6.0.0-0078D7?style=for-the-badge&logo=github&logoColor=white" alt="Release v6.0.0" /></a>
+    <a href="https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.0-Setup.exe"><img src="https://img.shields.io/badge/DESKTOP_APP-DOWNLOAD_NOW-0078D7?style=for-the-badge&logo=windows&logoColor=white" alt="Desktop App Download Now" /></a>
+    <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases"><img src="https://img.shields.io/badge/RELEASE-V6.1.0-0078D7?style=for-the-badge&logo=github&logoColor=white" alt="Release v6.1.0" /></a>
     <a href="https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/pulls"><img src="https://img.shields.io/badge/PRS-WELCOME-2ea44f?style=for-the-badge&logo=github&logoColor=white" alt="PRs Welcome" /></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/LICENSE-MIT-f08236?style=for-the-badge" alt="MIT License" /></a>
   </p>
@@ -45,7 +45,7 @@
     <a href="https://v2.tauri.app/"><img src="https://img.shields.io/badge/Desktop-Tauri_v2_+_Rust-FFC131?style=for-the-badge&logo=tauri&logoColor=black" alt="Tauri v2 + Rust" /></a>
     <a href="https://react.dev/"><img src="https://img.shields.io/badge/UI-React_19_+_Framer_Motion_12-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React 19 + Framer Motion 12" /></a>
     <a href="https://learn.microsoft.com/en-us/windows/win32/coreaudio/wasapi"><img src="https://img.shields.io/badge/Native-Win32_%2F_WinRT_%2F_WASAPI-22c55e?style=for-the-badge&logo=windows&logoColor=white" alt="Win32 / WinRT / WASAPI" /></a>
-    <img src="https://img.shields.io/badge/Platform-Windows_10_%2F_11-00A4EF?style=for-the-badge&logo=windows&logoColor=white" alt="Windows 10 / 11" />
+    <img src="https://img.shields.io/badge/Platform-Windows_10_%2F_11_%7C_Linux-00A4EF?style=for-the-badge&logo=windows&logoColor=white" alt="Windows 10 / 11 | Linux" />
     <img src="https://img.shields.io/badge/Arch-x64-475569?style=for-the-badge" alt="x64 Architecture" />
   </p>
 
@@ -53,27 +53,27 @@
 
 ---
 
-## 🌟 What's New in v6.0.0
+## 🌟 What's New in v6.1.0
 
 <table>
   <tr>
     <td width="50%">
-      <h3>🦀 Native Rust + Tauri v2 Architecture</h3>
-      <p>Completely rebuilt from Electron to a lightweight native Rust backend with Microsoft Edge WebView2 — preserving the exact UI while delivering instant startup, lower memory usage, and a fraction of the installer size.</p>
+      <h3>🐧 Cross-Platform Linux (X11 &amp; Wayland)</h3>
+      <p>Brings Quick Pill natively to Linux desktops (GNOME, KDE, Hyprland, Sway, i3) with PipeWire/PulseAudio audio mixing, MPRIS2 media controls, D-Bus notifications, XDG app discovery, and <code>.AppImage</code>, <code>.deb</code>, and <code>.rpm</code> bundles.</p>
     </td>
     <td width="50%">
-      <h3>⚡ Zero-Shell Win32, WinRT &amp; WASAPI</h3>
-      <p>Replaces external PowerShell bridges with direct native Rust calls for SMTC media controls, Windows toast notifications, per-app WASAPI audio mixing, topmost overlay bounds, and global <code>Alt+Key</code> shortcuts.</p>
+      <h3>📁 Upgraded Drop Shelf &amp; Portal Drag-Out</h3>
+      <p>Added cross-app Linux drop-in/drag-out support with <code>org.freedesktop.portal.FileTransfer</code> for Snap/Flatpak browsers, isolated clean-filename exports, and faster pill transition physics.</p>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <h3>🔐 Authenticode Signing &amp; SAC Protection</h3>
-      <p>Added Windows code-signing pipeline support (<code>sign-windows.ps1</code>) and Smart App Control policy error detection in the in-app updater so blocked launches fail safely with clear recovery guidance.</p>
+      <h3>🦀 Native Rust + Tauri v2 Architecture</h3>
+      <p>Lightweight native Rust backend with Microsoft Edge WebView2 (Windows) and WebKitGTK (Linux) — instant launch speed, low memory footprint, and compact installers.</p>
     </td>
     <td width="50%">
-      <h3>📁 Drop Shelf, Prayer Times &amp; Full Suite</h3>
-      <p>Full parity across all 16+ tabs including persistent Drop Shelf previews &amp; native drag-out (<code>Alt+F</code>), Prayer Times celestial arc (<code>Alt+P</code>), Weather Pod, Quick Notes, App Launcher, and Audio Mixer.</p>
+      <h3>🔐 Microsoft Store MSIX &amp; Code Signing</h3>
+      <p>Ships Dual-Mode Microsoft Store MSIX (<code>9N371MQB4BS7</code>) plus Authenticode signing hooks (<code>sign-windows.ps1</code>) and Smart App Control error handling in the auto-updater.</p>
     </td>
   </tr>
 </table>
@@ -153,11 +153,16 @@ Quick Pill features zero-latency global keyboard navigation. All shortcuts use `
 3. Updates and launch-on-startup are managed natively through Windows & Microsoft Store.
 
 ### Option 2: Direct Windows Installer (`.exe`)
-1. Download **[QuickPill-Windows-v6.0.0-Setup.exe](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe)**.
+1. Download **[QuickPill-Windows-v6.1.0-Setup.exe](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.0-Setup.exe)**.
 2. Run the installer. Quick Pill installs silently per-user and automatically launches.
 3. Built-in auto-updates keep your installation fresh with SHA-256 verification.
 
-### Option 3: GitHub Releases
+### Option 3: Linux Packages (`.AppImage`, `.deb`, `.rpm`)
+- **Universal AppImage:** Download **[QuickPill-Linux-v6.1.0.AppImage](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Linux-v6.1.0.AppImage)**, mark executable (`chmod +x`), and run directly.
+- **Ubuntu / Debian (`.deb`):** `sudo apt install ./QuickPill-Linux-v6.1.0.deb`
+- **Fedora / RHEL (`.rpm`):** `sudo dnf install ./QuickPill-Linux-v6.1.0.rpm`
+
+### Option 4: GitHub Releases
 Download installers from the **[GitHub Releases](https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases)** page.
 
 > **Note on Windows SmartScreen & Smart App Control:** Installers from Microsoft Store (`.msix`) are automatically trusted by Windows 11 Smart App Control. For direct `.exe` distribution, maintainers can also configure CI signing secrets via `scripts/sign-windows.ps1` (PFX, Cert Store thumbprints, or Azure Trusted Signing).
@@ -168,10 +173,10 @@ Download installers from the **[GitHub Releases](https://github.com/nabil2402400
 
 ```
 Frontend:     React 19 • Framer Motion 12 • Lucide React • Vite 5
-Desktop:      Tauri v2 • Rust Native Backend • Microsoft Edge WebView2
-Native APIs:  Win32 Shell & Overlay • WinRT (SMTC, Toasts, UWP) • WASAPI Audio
-Packaging:    Tauri Bundler • NSIS Installer • Authenticode Hook Support
-Platform:     Windows 10 & 11 (x64)
+Desktop:      Tauri v2 • Rust Native Backend • WebView2 / WebKitGTK
+Native APIs:  Windows (Win32, WinRT, WASAPI) • Linux (GTK3, XDG, MPRIS2, PipeWire/PulseAudio)
+Packaging:    NSIS Setup (.exe) • Microsoft Store (.msix) • AppImage / .deb / .rpm
+Platform:     Windows 10 & 11 (x64) • Linux (X11 & Wayland)
 ```
 
 ---
@@ -209,6 +214,12 @@ npm run build
 
 # Package Microsoft Store MSIX (uses src-tauri/msix/store.config.json)
 npm run build:msix
+
+# Full Windows release bundle (tests + NSIS Setup + MSIX + version.json)
+npm run build:windows
+
+# Build Linux bundles on Ubuntu/Fedora/Arch VM or host (.AppImage, .deb, .rpm)
+npm run build:linux
 
 # Update web app/public/version.json with installer size, SHA-256 & Store metadata
 npm run generate-manifest

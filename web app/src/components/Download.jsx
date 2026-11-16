@@ -1,8 +1,10 @@
 import { useRef, useEffect } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { Download as DownloadIcon, Github, ExternalLink } from 'lucide-react';
+import { Github, ExternalLink } from 'lucide-react';
+import LinuxDownloadCta from './LinuxDownloadCta';
 import MicrosoftStoreBadge from './MicrosoftStoreBadge';
+import WindowsLogo from './WindowsLogo';
 import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -13,7 +15,7 @@ const HEADLINE = 'Download.';
 export default function Download({ onDownloadClick }) {
   const sectionRef  = useRef(null);
   const headlineRef = useRef(null);
-  const { version, windowsUrl, msStoreUrl } = useReleaseInfo();
+  const { version, msStoreUrl, releaseInfo } = useReleaseInfo();
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -52,10 +54,10 @@ export default function Download({ onDownloadClick }) {
     return () => ctx.revert();
   }, []);
 
-  const handleDownload = (e) => {
+  const handleDownload = (e, opts) => {
     if (onDownloadClick) {
       e.preventDefault();
-      onDownloadClick();
+      onDownloadClick(opts);
     }
   };
 
@@ -74,20 +76,20 @@ export default function Download({ onDownloadClick }) {
         </h2>
 
         <p className="download-subtitle">
-          Free and open-source. Built for Windows 10 &amp; 11. No account required.
+          Free and open-source. Built for Windows 10 &amp; 11 and Linux (X11 &amp; Wayland). No account required.
         </p>
 
-        {/* Windows & Microsoft Store Download buttons */}
+        {/* Windows, Microsoft Store & Linux Download buttons */}
         <div className="download-platforms">
           <a
             href="#/thank-you"
-            onClick={handleDownload}
+            onClick={(e) => handleDownload(e, { os: 'windows' })}
             className="btn btn--primary"
             id="dl-windows"
             title={`Download Quick Pill v${version} Setup for Windows 10/11 (.exe)`}
             aria-label={`Download Quick Pill v${version} Setup for Windows 10/11 64-bit installer`}
           >
-            <DownloadIcon size={15} strokeWidth={2} aria-hidden="true" />
+            <WindowsLogo size={26} />
             Download for Windows (.exe)
           </a>
           <MicrosoftStoreBadge
@@ -96,6 +98,39 @@ export default function Download({ onDownloadClick }) {
             title={`Get Quick Pill v${version} from Microsoft Store`}
             ariaLabel={`Get Quick Pill v${version} from Microsoft Store`}
           />
+          <LinuxDownloadCta
+            id="dl-linux-appimage"
+            version={version}
+            platforms={releaseInfo.platforms}
+            onSelectDownload={handleDownload}
+          />
+        </div>
+
+        <div className="download-linux-formats" aria-label="Additional Linux packages">
+          <span className="download-linux-label">Linux Packages:</span>
+          <a
+            href="#/thank-you?os=linux&format=appimage"
+            onClick={(e) => handleDownload(e, { os: 'linux', format: 'appimage' })}
+            className="linux-format-chip"
+          >
+            .AppImage (Universal)
+          </a>
+          <a
+            href="#/thank-you?os=linux&format=deb"
+            onClick={(e) => handleDownload(e, { os: 'linux', format: 'deb' })}
+            id="dl-linux-deb"
+            className="linux-format-chip"
+          >
+            .deb (Ubuntu / Debian)
+          </a>
+          <a
+            href="#/thank-you?os=linux&format=rpm"
+            onClick={(e) => handleDownload(e, { os: 'linux', format: 'rpm' })}
+            id="dl-linux-rpm"
+            className="linux-format-chip"
+          >
+            .rpm (Fedora / RHEL)
+          </a>
         </div>
 
         {/* Footer meta row */}

@@ -86,7 +86,7 @@ if ($BuildRelease) {
     try {
         npm run build:frontend
         if ($LASTEXITCODE -ne 0) { throw "Frontend build failed ($LASTEXITCODE)" }
-        cargo build --release --manifest-path (Join-Path $Root 'src-tauri\Cargo.toml')
+        cargo build --release --manifest-path (Join-Path $Root 'src-tauri\Cargo.toml') --features tauri/custom-protocol
         if ($LASTEXITCODE -ne 0) { throw "Cargo release build failed ($LASTEXITCODE)" }
     } finally {
         Pop-Location

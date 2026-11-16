@@ -42,27 +42,92 @@ pub struct UpdateManifest {
 }
 
 impl UpdateManifest {
+    pub fn resolve_platform_keys() -> Vec<&'static str> {
+        #[cfg(windows)]
+        {
+            vec!["win32-x64"]
+        }
+        #[cfg(target_os = "linux")]
+        {
+            if std::env::var_os("APPIMAGE").is_some() {
+                return vec!["linux-x64", "linux-appimage", "linux-deb", "linux-rpm"];
+            }
+            if std::path::Path::new("/etc/debian_version").exists()
+                || std::process::Command::new("dpkg")
+                    .args(["-s", "quick-pill"])
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false)
+            {
+                return vec!["linux-deb", "linux-x64", "linux-appimage"];
+            }
+            if std::path::Path::new("/etc/redhat-release").exists()
+                || std::path::Path::new("/etc/fedora-release").exists()
+                || std::process::Command::new("rpm")
+                    .args(["-q", "quick-pill"])
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false)
+            {
+                return vec!["linux-rpm", "linux-x64", "linux-appimage"];
+            }
+            vec!["linux-x64", "linux-appimage", "linux-deb", "linux-rpm"]
+        }
+        #[cfg(all(not(windows), not(target_os = "linux")))]
+        {
+            vec!["win32-x64"]
+        }
+    }
+
+    pub fn platform_entry_for_keys(&self, keys: &[&str]) -> Option<&PlatformEntry> {
+        keys.iter().find_map(|k| self.platforms.get(*k))
+    }
+
+    pub fn resolved_platform_entry(&self) -> Option<&PlatformEntry> {
+        let keys = Self::resolve_platform_keys();
+        self.platform_entry_for_keys(&keys)
+    }
+
     pub fn resolved_url(&self) -> Option<String> {
-        self.platforms
-            .get("win32-x64")
+        self.resolved_platform_entry()
             .and_then(|p| p.url.clone())
             .or_else(|| self.download_url.clone())
             .filter(|s| !s.trim().is_empty())
     }
 
     pub fn resolved_sha256(&self) -> Option<String> {
-        self.platforms
-            .get("win32-x64")
+        self.resolved_platform_entry()
             .and_then(|p| p.sha256.clone())
             .or_else(|| self.sha256.clone())
             .filter(|s| !s.trim().is_empty())
     }
 
     pub fn resolved_size(&self) -> Option<u64> {
-        self.platforms
-            .get("win32-x64")
+        self.resolved_platform_entry()
             .and_then(|p| p.size)
             .or(self.size)
+    }
+
+    pub fn resolved_file_name(&self, url: &str) -> String {
+        #[cfg(target_os = "linux")]
+        {
+            if let Some(tail) = url.split('?').next().and_then(|u| u.rsplit('/').next()) {
+                let lower = tail.to_lowercase();
+                if lower.ends_with(".appimage") || lower.ends_with(".deb") || lower.ends_with(".rpm") {
+                    return tail.to_string();
+                }
+            }
+            let ver = self.version.trim();
+            return format!("QuickPill-Linux-v{ver}.AppImage");
+        }
+
+        #[cfg(not(target_os = "linux"))]
+        {
+            let _ = url;
+            self.file_name.clone().unwrap_or_else(|| {
+                format!("QuickPill-Windows-v{}-Setup.exe", self.version.trim())
+            })
+        }
     }
 
     pub fn resolved_notes(&self) -> Option<String> {
@@ -82,6 +147,7 @@ fn emit_update(app: &AppHandle, event: &str, data: Value) {
 
 /// Classifies installer spawn/exit failures so Windows Smart App Control and
 /// Device Guard policy blocks surface an actionable message instead of silent exit.
+#[cfg(any(windows, test))]
 pub fn classify_installer_launch_error(raw_os_error: Option<i32>, detail: &str) -> String {
     let lower = detail.to_ascii_lowercase();
     let is_sac_block = matches!(raw_os_error, Some(4551) | Some(1260))
@@ -251,9 +317,7 @@ pub async fn start_update_download(app: AppHandle) -> Result<Value, String> {
 
     emit_update(&app, "download-started", json!({}));
 
-    let file_name = manifest.file_name.clone().unwrap_or_else(|| {
-        format!("QuickPill-Windows-v{}-Setup.exe", manifest.version.trim())
-    });
+    let file_name = manifest.resolved_file_name(&url);
 
     let updates_dir = std::env::temp_dir().join("QuickPill-Updates");
     fs::create_dir_all(&updates_dir).map_err(|e| {
@@ -393,31 +457,109 @@ pub fn install_update(app: AppHandle, state: tauri::State<'_, SharedState>) -> R
             msg
         })?;
 
-    let mut child = std::process::Command::new(&installer)
-        .arg("/S")
-        .spawn()
-        .map_err(|e| {
-            let msg = classify_installer_launch_error(e.raw_os_error(), &e.to_string());
-            emit_update(&app, "error", json!({ "message": msg }));
-            msg
-        })?;
+    #[cfg(windows)]
+    {
+        let mut child = std::process::Command::new(&installer)
+            .arg("/S")
+            .spawn()
+            .map_err(|e| {
+                let msg = classify_installer_launch_error(e.raw_os_error(), &e.to_string());
+                emit_update(&app, "error", json!({ "message": msg }));
+                msg
+            })?;
 
-    // Give Windows Smart App Control / policy enforcement a moment to reject the child process
-    // before closing Quick Pill so policy blocks can still be surfaced in the Settings UI.
-    std::thread::sleep(Duration::from_millis(250));
-    if let Ok(Some(status)) = child.try_wait() {
-        if !status.success() {
-            let msg = classify_installer_launch_error(
-                status.code(),
-                &format!("Installer exited early with status {status}"),
+        // Give Windows Smart App Control / policy enforcement a moment to reject the child process
+        // before closing Quick Pill so policy blocks can still be surfaced in the Settings UI.
+        std::thread::sleep(Duration::from_millis(250));
+        if let Ok(Some(status)) = child.try_wait() {
+            if !status.success() {
+                let msg = classify_installer_launch_error(
+                    status.code(),
+                    &format!("Installer exited early with status {status}"),
+                );
+                emit_update(&app, "error", json!({ "message": msg }));
+                return Err(msg);
+            }
+        }
+
+        app.exit(0);
+        return Ok(true);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::PermissionsExt;
+
+        let lower_name = installer
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+
+        if lower_name.ends_with(".appimage") {
+            let _ = fs::set_permissions(&installer, fs::Permissions::from_mode(0o755));
+
+            if let Some(appimage_env) = std::env::var_os("APPIMAGE") {
+                let target_appimage = PathBuf::from(&appimage_env);
+                if let Some(parent) = target_appimage.parent() {
+                    let tmp_dest = parent.join(".quickpill-update.AppImage.tmp");
+                    if fs::copy(&installer, &tmp_dest).is_ok() {
+                        let _ = fs::set_permissions(&tmp_dest, fs::Permissions::from_mode(0o755));
+                        if fs::rename(&tmp_dest, &target_appimage).is_ok() {
+                            let _ = std::process::Command::new(&target_appimage)
+                                .stdin(std::process::Stdio::null())
+                                .stdout(std::process::Stdio::null())
+                                .stderr(std::process::Stdio::null())
+                                .spawn();
+                            std::thread::sleep(Duration::from_millis(200));
+                            app.exit(0);
+                            return Ok(true);
+                        }
+                        let _ = fs::remove_file(&tmp_dest);
+                    }
+                }
+            }
+
+            // Fallback when not running via AppImage or target path is not writable: launch downloaded AppImage
+            std::process::Command::new(&installer)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .map_err(|e| {
+                    let msg = format!("Failed to start downloaded AppImage: {e}");
+                    emit_update(&app, "error", json!({ "message": msg }));
+                    msg
+                })?;
+            std::thread::sleep(Duration::from_millis(200));
+            app.exit(0);
+            return Ok(true);
+        }
+
+        // For .deb / .rpm packages, hand off to native desktop software installer via xdg-open
+        let opened = std::process::Command::new("xdg-open")
+            .arg(&installer)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .is_ok();
+        if !opened {
+            let msg = format!(
+                "Downloaded update to {} — please install it with your package manager.",
+                installer.display()
             );
             emit_update(&app, "error", json!({ "message": msg }));
             return Err(msg);
         }
+        return Ok(true);
     }
 
-    app.exit(0);
-    Ok(true)
+    #[cfg(all(not(windows), not(target_os = "linux")))]
+    {
+        let _ = installer;
+        Ok(false)
+    }
 }
 
 #[tauri::command]
@@ -448,29 +590,57 @@ mod tests {
 
     #[test]
     fn semver_comparison_works() {
-        assert!(is_newer_version("6.0.1", "6.0.0"));
-        assert!(is_newer_version("v6.1.0", "6.0.0"));
-        assert!(!is_newer_version("6.0.0", "6.0.0"));
-        assert!(!is_newer_version("5.6.1", "6.0.0"));
+        assert!(is_newer_version("6.1.1", "6.1.0"));
+        assert!(is_newer_version("v6.2.0", "6.1.0"));
+        assert!(!is_newer_version("6.1.0", "6.1.0"));
+        assert!(!is_newer_version("6.0.0", "6.1.0"));
     }
 
     #[test]
     fn manifest_parses_platforms_win32_x64() {
         let raw = r#"{
-            "version": "6.0.0",
+            "version": "6.1.0",
             "changelog": ["Line 1", "Line 2"],
             "platforms": {
                 "win32-x64": {
                     "url": "https://example.com/setup.exe",
                     "sha256": "deadbeef",
                     "size": 12345
+                },
+                "linux-x64": {
+                    "url": "https://example.com/QuickPill-Linux.AppImage",
+                    "sha256": "cafebabe",
+                    "size": 54321
+                },
+                "linux-deb": {
+                    "url": "https://example.com/quick-pill_6.1.0_amd64.deb",
+                    "sha256": "beefcafe",
+                    "size": 43210
+                },
+                "linux-rpm": {
+                    "url": "https://example.com/quick-pill-6.1.0-1.x86_64.rpm",
+                    "sha256": "faceb00c",
+                    "size": 44444
                 }
             }
         }"#;
         let m: UpdateManifest = serde_json::from_str(raw).unwrap();
-        assert_eq!(m.resolved_url().as_deref(), Some("https://example.com/setup.exe"));
-        assert_eq!(m.resolved_sha256().as_deref(), Some("deadbeef"));
-        assert_eq!(m.resolved_size(), Some(12345));
+        let win_entry = m.platform_entry_for_keys(&["win32-x64"]).unwrap();
+        assert_eq!(win_entry.url.as_deref(), Some("https://example.com/setup.exe"));
+        assert_eq!(win_entry.sha256.as_deref(), Some("deadbeef"));
+        assert_eq!(win_entry.size, Some(12345));
+
+        let linux_appimage = m.platform_entry_for_keys(&["linux-x64"]).unwrap();
+        assert_eq!(linux_appimage.url.as_deref(), Some("https://example.com/QuickPill-Linux.AppImage"));
+        assert_eq!(linux_appimage.sha256.as_deref(), Some("cafebabe"));
+
+        let linux_deb = m.platform_entry_for_keys(&["linux-deb", "linux-x64"]).unwrap();
+        assert_eq!(linux_deb.url.as_deref(), Some("https://example.com/quick-pill_6.1.0_amd64.deb"));
+
+        let linux_rpm = m.platform_entry_for_keys(&["linux-rpm", "linux-x64"]).unwrap();
+        assert_eq!(linux_rpm.url.as_deref(), Some("https://example.com/quick-pill-6.1.0-1.x86_64.rpm"));
+
+        assert!(m.resolved_url().is_some());
         assert_eq!(m.resolved_notes().as_deref(), Some("Line 1\nLine 2"));
     }
 

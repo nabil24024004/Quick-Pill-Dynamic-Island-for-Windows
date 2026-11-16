@@ -40,7 +40,14 @@ let _memoryWorkspacesCache = null;
 // Strictly validates that an entity is a workspace and not a leaked application or window
 const isStrictWorkspace = (item) => {
   if (!item || typeof item !== "object") return false;
-  if (item.source || item.launch || item.iconLocation || item.type === "win32" || item.type === "uwp") {
+  if (
+    item.source ||
+    item.launch ||
+    item.iconLocation ||
+    item.type === "win32" ||
+    item.type === "uwp" ||
+    item.type === "desktop"
+  ) {
     return false;
   }
   return Boolean(

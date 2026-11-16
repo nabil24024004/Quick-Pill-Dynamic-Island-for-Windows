@@ -1,59 +1,48 @@
-# Quick Pill v6.0.0 — Release Notes
+# Quick Pill v6.1.0 — Release Notes
 
-> **Release Date:** November 14, 2026  
-> **Target OS:** Windows 10 & 11 (64-bit)  
+> **Release Date:** November 16, 2026  
+> **Target OS:** Windows 10 & 11 (64-bit) · Linux x64 (X11 & Wayland)  
 > **Microsoft Store ID:** `9N371MQB4BS7` ([Store Listing](https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct))  
-> **NSIS Installer:** `QuickPill-Windows-v6.0.0-Setup.exe` *(NSIS bundle output: `Quick Pill_6.0.0_x64-setup.exe`)*  
-> **Download Link:** [Download Setup (v6.0.0)](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe)  
+> **NSIS Installer:** `QuickPill-Windows-v6.1.0-Setup.exe` *(NSIS bundle output: `Quick Pill_6.1.0_x64-setup.exe`)*  
+> **Microsoft Store Package:** `QuickPill_6.1.0_x64.msix`  
+> **Linux Packages (via VM / `scripts/build-linux.sh`):** `QuickPill-Linux-v6.1.0.AppImage`, `QuickPill-Linux-v6.1.0.deb`, `QuickPill-Linux-v6.1.0.rpm`  
+> **Download Link:** [Download Setup (v6.1.0)](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.0-Setup.exe)  
 > **Official Web App:** [quickpill.neosparkx.com](https://quickpill.neosparkx.com/) · [Privacy Policy](https://quickpill.neosparkx.com/#/privacy)
 
 ---
 
-## 🌟 Highlights & Major Improvements
+## 🌟 Highlights & Improvements in v6.1.0
 
-### 1. 🦀 Native Rust + Tauri v2 Rewrite
-* **Lightweight Runtime:** Replaced Electron with a native Rust backend and Microsoft Edge WebView2 frontend while preserving the exact React 19 UI, animations, and 16+ tab layout.
-* **Dramatically Smaller Installer:** Installer size drops from `135,202,987 bytes` (`~128.9 MiB` in v5.6.1) down to **`4,124,348 bytes` (`3.93 MiB`)** for the NSIS setup (`.exe`).
-* **Instant Asynchronous Startup:** Backgrounded app catalog indexing (`launcher::init_launcher`) so the overlay window appears immediately on launch without blocking UI responsiveness.
+### 1. 🐧 Cross-Platform Linux Support (X11 & Wayland)
+* **Native Desktop Integration:** Added Linux support across X11, GNOME Wayland, KDE Plasma, Hyprland, Sway, and i3 with GTK3/GDK overlay positioning (`window_overlay.rs`), PipeWire/PulseAudio per-app audio mixer (`audio_mixer.rs`), MPRIS2 media controls (`media.rs`), D-Bus notifications (`notifications.rs`), and XDG `.desktop` app discovery (`launcher.rs`).
+* **Native Linux Bundles & Self-Update Routing:** Supports `.AppImage`, `.deb`, and `.rpm` distributions (`updater.rs`, `tauri.conf.json`) plus automated ext4-staged VM bundling via `scripts/build-linux.sh`.
 
-### 2. ⚡ Direct Win32, WinRT & WASAPI Integrations
-* **Overlay & Click-Through Engine:** `window_overlay.rs` directly manages Win32 `WS_EX_LAYERED` / `WS_EX_TRANSPARENT` click-through passthrough when holding `Ctrl`, topmost positioning, display bounds, and tray interactions.
-* **Zero-Shell Native APIs:** Native Rust WinRT bindings power System Media Transport Controls (SMTC), Windows notification listeners, and UWP app discovery; native WASAPI powers per-app Audio Mixer metering and controls.
-* **Global `Alt + <Key>` Shortcuts:** Registered natively via `tauri-plugin-global-shortcut` with Settings persistence.
+### 2. 📁 Drop Shelf Portal Transfer & Drag-Out Improvements
+* **Cross-App Linux Drag-Out (`shelf.rs`):** Integrated `org.freedesktop.portal.FileTransfer` (`application/vnd.portal.filetransfer`) for sandboxed apps (Snap/Flatpak browsers), per-drag isolated hardlink exports with clean filenames (safe `COPY | MOVE | LINK` negotiation), inline `<= 3` XDND target lists, and native drag-in/drop handling.
+* **Snappier UI & Scroll Navigation (`Island.jsx`):** Faster transition timing and improved mouse-wheel tab switching responsiveness in Large Mode.
 
-### 3. 🔐 Microsoft Store MSIX, Code Signing & Smart App Control Protection
-* **Microsoft Store Dual-Mode Package (`QuickPill_6.0.0_x64.msix`):** Added `src-tauri/msix/` and `scripts/build-msix.ps1` targeting `NeoSparkX.QuickPill` (`9N371MQB4BS7`). At runtime, `state::is_store_packaged()` checks `GetCurrentPackageFullName` so Store installs manage auto-launch via WinRT `StartupTask` and rely strictly on Microsoft Store updates (Policy 10.2 compliant), eliminating Smart App Control warnings.
-* **Windows Code-Signing Hook (`scripts/sign-windows.ps1`):** Integrated Tauri `bundle.windows.signCommand` (`sha256` + RFC 3161 timestamping) supporting PFX secrets, Windows Certificate Store thumbprints, and Azure Trusted Signing across app binaries, NSIS plugins, uninstaller, and final setup executable.
-* **Auto-Updater Contract Sync & SAC Error Handling:** Aligned Rust `updater.rs` event names/payloads with Settings UI (`Island.jsx`), added cancellation/progress telemetry sync, and added Windows Smart App Control / Device Guard (`4551` / `1260`) launch error detection so blocked direct `.exe` auto-updates keep the app open and surface a clear browser download prompt instead of failing silently.
+### 3. 🔐 Microsoft Store MSIX, NSIS Setup & Release Tooling
+* **Dual-Mode Microsoft Store MSIX (`QuickPill_6.1.0_x64.msix`):** Built against identity `NeoSparkX.QuickPill` (`9N371MQB4BS7`, manifest version `6.1.0.0`).
+* **One-Command Release Builders (`scripts/`):** Added `scripts/build-windows.ps1` (runs Rust tests, NSIS setup, Store MSIX, SHA-256 checksums, and manifest), upgraded `scripts/build-linux.sh` to clear cached older bundles and sync `version.json`, and updated `scripts/generate-manifest.js` to validate platform versions automatically.
 
 ---
 
-## 🛠️ Detailed Changelog & Verification
-
-| Area | Type | Description |
-| :--- | :---: | :--- |
-| **Runtime** | `Feat` | Full migration from Electron 38 to Tauri v2 + Rust native backend with Edge WebView2. |
-| **Installer & Store** | `Perf` | NSIS setup shrunk to `4,124,348 bytes` (`3.93 MiB`); added Store MSIX package (`5,580,488 bytes`, `9N371MQB4BS7`). |
-| **Signing & CI** | `Build` | Added `scripts/sign-windows.ps1`, `scripts/build-msix.ps1`, Tauri `bundle.windows.signCommand`, and GitHub Actions CI (`windows-latest` + Rust cache + `.exe`/`.msix` staging). |
-| **Auto-Updater** | `Fix` | Aligned `updater.rs` events/payloads with `Island.jsx`, added `store-managed` compliance for MSIX, and handled Windows Smart App Control policy blocks (`4551` / `1260`). |
-| **Repo Cleanup** | `Chore` | Removed legacy Electron stubs, C++ hook experiments, JS test scripts, runtime root JSON caches, and obsolete agent notes. |
-| **Tests** | `Tests` | Native Rust unit test suite (`cargo test`): `14 passed, 0 failed`. |
-
----
-
-## 🔒 Verification & Checksums
+## 🔒 Verification & Checksums (Windows x64)
 
 | Property | NSIS Setup (`.exe`) | Microsoft Store Package (`.msix`) |
 | :--- | :--- | :--- |
-| **Distribution File** | `QuickPill-Windows-v6.0.0-Setup.exe` | `QuickPill_6.0.0_x64.msix` |
+| **Distribution File** | `QuickPill-Windows-v6.1.0-Setup.exe` | `QuickPill_6.1.0_x64.msix` |
 | **Architecture** | Windows x64 (10 / 11) | Windows x64 (10 / 11 Desktop) |
-| **File Size** | `4,124,348 bytes` (`3.93 MiB`) | `5,580,488 bytes` (`5.32 MiB`) |
-| **SHA-256 Hash** | `6c7a3216fe125efd42ad28b4301829387f19f98a60f1b9fccec79408fa950366` | `a2dabcc9031fd84a3e4a755fc157a9a3195e11333a0fc2c139cfecfff325f484` |
-| **Test Suite** | `14 passed, 0 failed` (`cargo test --manifest-path src-tauri/Cargo.toml`) | `14 passed, 0 failed` |
+| **File Size** | `4,245,513 bytes` (`4.05 MiB`) | `5,771,144 bytes` (`5.50 MiB`) |
+| **SHA-256 Hash** | `609893ce0372bde2e08a405ed211e8f49da74892480d544d1a19191f043e5e63` | `9caca888999ae1c93f95fb3b1ff362c0c50119022818e7cce12a44532004d9fb` |
+| **Test Suite** | `17 passed, 0 failed` (`cargo test --manifest-path src-tauri/Cargo.toml`) | `17 passed, 0 failed` |
+
+> **Linux Checksums (`.AppImage`, `.deb`, `.rpm`):** Generated with `.sha256` files and merged into `web app/public/version.json` when running `bash scripts/build-linux.sh` inside your Linux VM or on GitHub Actions (`ubuntu-22.04`).
 
 ---
 
 ## 📥 Installation & Upgrade
 
 1. **Microsoft Store (Recommended — Smart App Control Ready):** Install directly from the **[Microsoft Store (`9N371MQB4BS7`)](https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct)**.
-2. **Direct Setup (`.exe`):** Download **`QuickPill-Windows-v6.0.0-Setup.exe`** from the [Release Asset](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.0.0-Setup.exe) or [GitHub Releases](https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases). Existing settings, pinned workspaces, notes, and preferences migrate cleanly.
+2. **Direct Setup (`.exe`):** Download **`QuickPill-Windows-v6.1.0-Setup.exe`** from the [Release Asset](https://pub-ec47b1fa4cbf4c5ba82408a738fb69d3.r2.dev/QuickPill-Windows-v6.1.0-Setup.exe) or [GitHub Releases](https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases). Existing settings, pinned workspaces, notes, and preferences migrate cleanly.
+3. **Linux (`.AppImage`, `.deb`, `.rpm`):** Build locally in the VM via `bash scripts/build-linux.sh` or download the Linux packages from [GitHub Releases](https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows/releases).

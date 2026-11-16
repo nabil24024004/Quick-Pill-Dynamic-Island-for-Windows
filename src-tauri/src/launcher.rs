@@ -1,4 +1,6 @@
-use crate::state::{atomic_write_bytes, deserialize_null_default, extract_file_icon_data_url, from_wide_slice, to_wide, SharedState};
+use crate::state::{atomic_write_bytes, deserialize_null_default, SharedState};
+#[cfg(windows)]
+use crate::state::{extract_file_icon_data_url, from_wide_slice, to_wide};
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -6,6 +8,7 @@ use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
@@ -151,6 +154,41 @@ pub struct RunningWindow {
 }
 
 static CATALOG: Lazy<Mutex<Vec<AppItem>>> = Lazy::new(|| Mutex::new(Vec::new()));
+static DISCOVERY_RUNNING: AtomicBool = AtomicBool::new(false);
+
+struct ResetDiscoveryFlag;
+impl Drop for ResetDiscoveryFlag {
+    fn drop(&mut self) {
+        DISCOVERY_RUNNING.store(false, Ordering::SeqCst);
+    }
+}
+
+fn current_catalog() -> Vec<AppItem> {
+    CATALOG.lock().map(|g| g.clone()).unwrap_or_default()
+}
+
+fn spawn_background_discovery(app: AppHandle) {
+    if DISCOVERY_RUNNING
+        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
+        .is_err()
+    {
+        return;
+    }
+    std::thread::spawn(move || {
+        use tauri::Manager;
+        let _reset = ResetDiscoveryFlag;
+        let st = app.state::<SharedState>();
+        st.log("INFO", "[Launcher] Starting background app discovery", None);
+        let apps = discover_all_apps(&st);
+        let count = apps.len();
+        save_app_cache(&st, &apps);
+        if let Ok(mut guard) = CATALOG.lock() {
+            *guard = apps;
+        }
+        st.log("INFO", &format!("[Launcher] Background discovery indexed {count} apps"), None);
+        let _ = app.emit("launcher:catalog-updated", count);
+    });
+}
 
 fn cache_path(state: &SharedState) -> PathBuf {
     state.data_dir.join("app-cache.json")
@@ -186,20 +224,7 @@ pub fn init_launcher(app: &AppHandle, state: &SharedState) {
         }
     }
 
-    let app_bg = app.clone();
-    std::thread::spawn(move || {
-        use tauri::Manager;
-        let st = app_bg.state::<SharedState>();
-        st.log("INFO", "[Launcher] Starting background app discovery", None);
-        let apps = discover_all_apps(&st);
-        let count = apps.len();
-        save_app_cache(&st, &apps);
-        if let Ok(mut guard) = CATALOG.lock() {
-            *guard = apps;
-        }
-        st.log("INFO", &format!("[Launcher] Background discovery indexed {count} apps"), None);
-        let _ = app_bg.emit("launcher:catalog-updated", count);
-    });
+    spawn_background_discovery(app.clone());
 }
 
 fn save_app_cache(state: &SharedState, apps: &[AppItem]) {
@@ -214,6 +239,7 @@ fn save_app_cache(state: &SharedState, apps: &[AppItem]) {
     }
 }
 
+#[cfg(windows)]
 fn expand_env_vars(input: &str) -> String {
     let mut out = input.to_string();
     for (var, val) in std::env::vars() {
@@ -320,6 +346,7 @@ fn resolve_lnk(lnk_path: &Path) -> Option<(String, String, String)> {
     }
 }
 
+#[cfg(windows)]
 fn scan_start_menu(dir: &Path, depth: usize, out: &mut Vec<AppItem>) {
     if depth > 5 || !dir.exists() {
         return;
@@ -578,18 +605,22 @@ fn scan_uwp_apps(out: &mut Vec<AppItem>) {
 fn discover_all_apps(_state: &SharedState) -> Vec<AppItem> {
     let mut raw: Vec<AppItem> = Vec::new();
 
-    if let Ok(prog_data) = std::env::var("ProgramData") {
-        scan_start_menu(&PathBuf::from(prog_data).join(r"Microsoft\Windows\Start Menu\Programs"), 0, &mut raw);
-    }
-    if let Some(roaming) = dirs::data_dir() {
-        scan_start_menu(&roaming.join(r"Microsoft\Windows\Start Menu\Programs"), 0, &mut raw);
-    }
-
     #[cfg(windows)]
     {
+        if let Ok(prog_data) = std::env::var("ProgramData") {
+            scan_start_menu(&PathBuf::from(prog_data).join(r"Microsoft\Windows\Start Menu\Programs"), 0, &mut raw);
+        }
+        if let Some(roaming) = dirs::data_dir() {
+            scan_start_menu(&roaming.join(r"Microsoft\Windows\Start Menu\Programs"), 0, &mut raw);
+        }
         scan_app_paths(HKEY_LOCAL_MACHINE, &mut raw);
         scan_app_paths(HKEY_CURRENT_USER, &mut raw);
         scan_uwp_apps(&mut raw);
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        linux_desktop::scan_xdg_applications(&mut raw);
     }
 
     // Deduplicate preferring Start Menu win32 entries with real icons
@@ -641,23 +672,43 @@ fn record_launch_history(state: &SharedState, target_key: &str) {
 }
 
 #[tauri::command]
-pub fn launcher_get_catalog() -> Vec<AppItem> {
-    CATALOG.lock().map(|g| g.clone()).unwrap_or_default()
+pub async fn launcher_get_catalog(
+    app: AppHandle,
+    state: tauri::State<'_, SharedState>,
+) -> Result<Vec<AppItem>, String> {
+    let existing = current_catalog();
+    if !existing.is_empty() {
+        return Ok(existing);
+    }
+    if let Ok(raw) = fs::read_to_string(cache_path(&state)) {
+        if let Ok(cache) = serde_json::from_str::<AppCacheFile>(&raw) {
+            if !cache.apps.is_empty() {
+                if let Ok(mut guard) = CATALOG.lock() {
+                    *guard = cache.apps.clone();
+                }
+                return Ok(cache.apps);
+            }
+        }
+    }
+    spawn_background_discovery(app);
+    Ok(Vec::new())
 }
 
 #[tauri::command]
-pub fn launcher_reindex_catalog(state: tauri::State<'_, SharedState>) -> Value {
+pub async fn launcher_reindex_catalog(
+    state: tauri::State<'_, SharedState>,
+) -> Result<Value, String> {
     let apps = discover_all_apps(&state);
     let count = apps.len();
     save_app_cache(&state, &apps);
     if let Ok(mut guard) = CATALOG.lock() {
         *guard = apps.clone();
     }
-    json!({
+    Ok(json!({
         "success": true,
         "count": count,
         "catalog": apps
-    })
+    }))
 }
 
 fn score_app(app: &AppItem, query_lower: &str, fav_set: &HashSet<String>, history: &HashMap<String, LaunchStat>) -> i64 {
@@ -704,12 +755,12 @@ fn score_app(app: &AppItem, query_lower: &str, fav_set: &HashSet<String>, histor
 }
 
 #[tauri::command]
-pub fn launcher_search_apps(
+pub async fn launcher_search_apps(
     state: tauri::State<'_, SharedState>,
     query: String,
     _options: Option<Value>,
-) -> Vec<AppItem> {
-    let catalog = launcher_get_catalog();
+) -> Result<Vec<AppItem>, String> {
+    let catalog = current_catalog();
     let fav_file = load_favorites_file(&state);
     let fav_set: HashSet<String> = fav_file
         .favorites
@@ -726,7 +777,7 @@ pub fn launcher_search_apps(
             bf.cmp(&af).then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
         });
         items.truncate(40);
-        return items;
+        return Ok(items);
     }
 
     let mut scored: Vec<(i64, AppItem)> = catalog
@@ -739,7 +790,7 @@ pub fn launcher_search_apps(
 
     scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.name.to_lowercase().cmp(&b.1.name.to_lowercase())));
     scored.truncate(25);
-    scored.into_iter().map(|(_, a)| a).collect()
+    Ok(scored.into_iter().map(|(_, a)| a).collect())
 }
 
 pub fn launch_app_internal(target_str: &str) -> Result<(), String> {
@@ -748,38 +799,72 @@ pub fn launch_app_internal(target_str: &str) -> Result<(), String> {
         return Err("Empty launch target".to_string());
     }
 
-    // Look up matching app inside discovered catalog (exact id/name/launch/target or alias)
     let catalog = CATALOG.lock().map(|g| g.clone()).unwrap_or_default();
-    if let Some(app) = catalog.iter().find(|a| {
-        a.id == clean
-            || a.name.eq_ignore_ascii_case(clean)
-            || a.launch.eq_ignore_ascii_case(clean)
-            || a.target.eq_ignore_ascii_case(clean)
-            || a.aliases.iter().any(|al| al.eq_ignore_ascii_case(clean))
-    }) {
-        if app.app_type == "uwp" {
-            std::process::Command::new("explorer.exe")
-                .arg(format!("shell:AppsFolder\\{}", app.launch))
-                .spawn()
-                .map_err(|e| format!("Failed to launch UWP app: {e}"))?;
-            return Ok(());
+
+    #[cfg(target_os = "linux")]
+    {
+        let matched = catalog.iter().find(|a| {
+            a.id == clean
+                || a.name.eq_ignore_ascii_case(clean)
+                || a.launch.eq_ignore_ascii_case(clean)
+                || a.target.eq_ignore_ascii_case(clean)
+                || a.aliases.iter().any(|al| al.eq_ignore_ascii_case(clean))
+        });
+        return linux_desktop::launch_app(clean, matched);
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        // Look up matching app inside discovered catalog (exact id/name/launch/target or alias)
+        if let Some(app) = catalog.iter().find(|a| {
+            a.id == clean
+                || a.name.eq_ignore_ascii_case(clean)
+                || a.launch.eq_ignore_ascii_case(clean)
+                || a.target.eq_ignore_ascii_case(clean)
+                || a.aliases.iter().any(|al| al.eq_ignore_ascii_case(clean))
+        }) {
+            if app.app_type == "uwp" {
+                std::process::Command::new("explorer.exe")
+                    .arg(format!("shell:AppsFolder\\{}", app.launch))
+                    .spawn()
+                    .map_err(|e| format!("Failed to launch UWP app: {e}"))?;
+                return Ok(());
+            }
+
+            #[cfg(windows)]
+            unsafe {
+                let op = to_wide("open");
+                let file = to_wide(&app.launch);
+                let params = to_wide(&app.args);
+                let params_ptr = if app.args.trim().is_empty() {
+                    PCWSTR::null()
+                } else {
+                    PCWSTR(params.as_ptr())
+                };
+                let res = ShellExecuteW(
+                    HWND::default(),
+                    PCWSTR(op.as_ptr()),
+                    PCWSTR(file.as_ptr()),
+                    params_ptr,
+                    PCWSTR::null(),
+                    SW_SHOWNORMAL,
+                );
+                if (res.0 as isize) > 32 {
+                    return Ok(());
+                }
+            }
         }
 
+        // Direct URL, URI scheme, exe alias, or ShellExecuteW fallback
         #[cfg(windows)]
         unsafe {
             let op = to_wide("open");
-            let file = to_wide(&app.launch);
-            let params = to_wide(&app.args);
-            let params_ptr = if app.args.trim().is_empty() {
-                PCWSTR::null()
-            } else {
-                PCWSTR(params.as_ptr())
-            };
+            let file = to_wide(clean);
             let res = ShellExecuteW(
                 HWND::default(),
                 PCWSTR(op.as_ptr()),
                 PCWSTR(file.as_ptr()),
-                params_ptr,
+                PCWSTR::null(),
                 PCWSTR::null(),
                 SW_SHOWNORMAL,
             );
@@ -787,31 +872,16 @@ pub fn launch_app_internal(target_str: &str) -> Result<(), String> {
                 return Ok(());
             }
         }
-    }
 
-    // Direct URL, URI scheme, exe alias, or ShellExecuteW fallback
-    #[cfg(windows)]
-    unsafe {
-        let op = to_wide("open");
-        let file = to_wide(clean);
-        let res = ShellExecuteW(
-            HWND::default(),
-            PCWSTR(op.as_ptr()),
-            PCWSTR(file.as_ptr()),
-            PCWSTR::null(),
-            PCWSTR::null(),
-            SW_SHOWNORMAL,
-        );
-        if (res.0 as isize) > 32 {
-            return Ok(());
-        }
+        Err(format!("Unable to launch '{clean}'"))
     }
-
-    Err(format!("Unable to launch '{clean}'"))
 }
 
 #[tauri::command]
-pub fn launcher_launch_app(state: tauri::State<'_, SharedState>, target: Value) -> Value {
+pub async fn launcher_launch_app(
+    state: tauri::State<'_, SharedState>,
+    target: Value,
+) -> Result<Value, String> {
     let (launch_str, history_key) = if let Some(s) = target.as_str() {
         (s.to_string(), s.to_string())
     } else {
@@ -834,17 +904,17 @@ pub fn launcher_launch_app(state: tauri::State<'_, SharedState>, target: Value) 
     match launch_app_internal(&launch_str) {
         Ok(()) => {
             record_launch_history(&state, &history_key);
-            json!({ "success": true })
+            Ok(json!({ "success": true }))
         }
-        Err(err) => json!({ "success": false, "error": err }),
+        Err(err) => Ok(json!({ "success": false, "error": err })),
     }
 }
 
 #[tauri::command]
-pub fn launcher_get_running_windows(
+pub async fn launcher_get_running_windows(
     state: tauri::State<'_, SharedState>,
     _options: Option<Value>,
-) -> Vec<RunningWindow> {
+) -> Result<Vec<RunningWindow>, String> {
     #[cfg(windows)]
     unsafe {
         let own_pid = std::process::id();
@@ -880,7 +950,8 @@ pub fn launcher_get_running_windows(
 
         let _ = EnumWindows(Some(cb), LPARAM(&mut raw as *mut _ as isize));
 
-        raw.into_iter()
+        let windows_list = raw
+            .into_iter()
             .filter(|(_, pid, _, _)| *pid != own_pid)
             .map(|(h_wnd, pid, title, is_minimized)| {
                 let mut exe_path = String::new();
@@ -938,10 +1009,14 @@ pub fn launcher_get_running_windows(
                     is_minimized,
                 }
             })
-            .collect()
+            .collect();
+        return Ok(windows_list);
     }
-    #[cfg(not(windows))]
-    Vec::new()
+    #[cfg(target_os = "linux")]
+    return Ok(linux_desktop::get_running_windows(&state));
+
+    #[cfg(all(not(windows), not(target_os = "linux")))]
+    Ok(Vec::new())
 }
 
 #[cfg(windows)]
@@ -1030,20 +1105,26 @@ pub fn activate_window_by_query(query: &str) -> bool {
             return focus_hwnd_force(matched);
         }
     }
+    #[cfg(target_os = "linux")]
+    return linux_desktop::activate_window_by_query(query);
+
+    #[cfg(not(target_os = "linux"))]
     false
 }
 
 #[tauri::command]
-pub fn launcher_activate_window(app: AppHandle, h_wnd: isize) -> Value {
+pub async fn launcher_activate_window(app: AppHandle, h_wnd: isize) -> Result<Value, String> {
     #[cfg(windows)]
     let ok = focus_hwnd_force(h_wnd);
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    let ok = linux_desktop::activate_window_by_handle(h_wnd);
+    #[cfg(all(not(windows), not(target_os = "linux")))]
     let ok = false;
 
     if ok {
         let _ = app.emit("launcher:window-activated", h_wnd);
     }
-    json!({ "success": ok })
+    Ok(json!({ "success": ok }))
 }
 
 #[tauri::command]
@@ -1151,14 +1232,14 @@ pub fn workspaces_delete(
 }
 
 #[tauri::command]
-pub fn workspaces_launch(
+pub async fn workspaces_launch(
     state: tauri::State<'_, SharedState>,
     id: String,
     _options: Option<Value>,
-) -> Value {
+) -> Result<Value, String> {
     let list = load_workspaces_list(&state);
     let Some(ws) = list.into_iter().find(|w| w.id == id) else {
-        return json!({ "success": false, "launchedCount": 0, "results": [] });
+        return Ok(json!({ "success": false, "launchedCount": 0, "results": [] }));
     };
 
     let mut launched_count = 0usize;
@@ -1180,11 +1261,897 @@ pub fn workspaces_launch(
         }));
     }
 
-    json!({
+    Ok(json!({
         "success": true,
         "launchedCount": launched_count,
         "results": results
-    })
+    }))
+}
+
+#[cfg(target_os = "linux")]
+pub use linux_desktop::{get_active_window_metadata, resolve_linux_app_icon};
+
+#[cfg(target_os = "linux")]
+mod linux_desktop {
+    use super::{add_alias_hints, default_svg_icon, is_ignored_helper, make_app_id, AppItem, RunningWindow};
+    use crate::state::SharedState;
+    use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
+    use chrono::Utc;
+    use once_cell::sync::Lazy;
+    use serde_json::Value;
+    use std::collections::{HashMap, HashSet};
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::process::{Command, Stdio};
+    use std::sync::Mutex;
+
+    #[derive(Debug, Clone)]
+    enum WinBackend {
+        Hyprland,
+        Sway,
+        I3,
+        X11,
+    }
+
+    static WIN_HANDLES: Lazy<Mutex<HashMap<isize, (WinBackend, String)>>> =
+        Lazy::new(|| Mutex::new(HashMap::new()));
+
+    static ICON_INDEX: Lazy<HashMap<String, PathBuf>> = Lazy::new(build_icon_index);
+
+    fn icon_priority(path: &Path) -> i32 {
+        let s = path.to_string_lossy().to_lowercase();
+        let ext_score = if s.ends_with(".svg") {
+            30
+        } else if s.ends_with(".png") {
+            25
+        } else if s.ends_with(".webp") {
+            20
+        } else {
+            5
+        };
+        let size_score = if s.contains("128x128") || s.contains("256x256") {
+            40
+        } else if s.contains("64x64") || s.contains("scalable") {
+            35
+        } else if s.contains("48x48") || s.contains("96x96") {
+            30
+        } else if s.contains("32x32") {
+            15
+        } else if s.contains("/pixmaps/") {
+            20
+        } else {
+            10
+        };
+        let cat_score = if s.contains("/apps/") || s.contains("/pixmaps/") {
+            20
+        } else {
+            0
+        };
+        ext_score + size_score + cat_score
+    }
+
+    fn walk_icon_dir(dir: &Path, depth: usize, best: &mut HashMap<String, (i32, PathBuf)>) {
+        if depth > 4 || !dir.exists() {
+            return;
+        }
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                let skip = p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|n| {
+                        matches!(
+                            n.to_ascii_lowercase().as_str(),
+                            "cursors"
+                                | "animations"
+                                | "emotes"
+                                | "mimetypes"
+                                | "devices"
+                                | "places"
+                                | "status"
+                                | "categories"
+                                | "actions"
+                                | "intl"
+                                | "emblems"
+                                | "stock"
+                        )
+                    })
+                    .unwrap_or(false);
+                if !skip {
+                    walk_icon_dir(&p, depth + 1, best);
+                }
+                continue;
+            }
+            let ext = p
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if !matches!(ext.as_str(), "png" | "svg" | "webp" | "jpg" | "jpeg") {
+                continue;
+            }
+            let Some(stem) = p.file_stem().and_then(|s| s.to_str()) else {
+                continue;
+            };
+            let key = stem.to_lowercase();
+            let score = icon_priority(&p);
+            let replace = best.get(&key).map(|(prev, _)| score > *prev).unwrap_or(true);
+            if replace {
+                best.insert(key, (score, p));
+            }
+        }
+    }
+
+    fn build_icon_index() -> HashMap<String, PathBuf> {
+        let mut best: HashMap<String, (i32, PathBuf)> = HashMap::new();
+        let mut dirs_to_scan: Vec<PathBuf> = Vec::new();
+        if let Some(home) = dirs::home_dir() {
+            dirs_to_scan.push(home.join(".local/share/icons/hicolor"));
+            dirs_to_scan.push(home.join(".icons"));
+            dirs_to_scan.push(home.join(".local/share/flatpak/exports/share/icons/hicolor"));
+        }
+        dirs_to_scan.push(PathBuf::from("/var/lib/flatpak/exports/share/icons/hicolor"));
+        dirs_to_scan.push(PathBuf::from("/var/lib/snapd/desktop/icons"));
+
+        let data_dirs = std::env::var("XDG_DATA_DIRS")
+            .unwrap_or_else(|_| "/usr/local/share:/usr/share".to_string());
+        for d in data_dirs.split(':').filter(|s| !s.is_empty()) {
+            let base = Path::new(d).join("icons");
+            dirs_to_scan.push(base.join("hicolor"));
+            dirs_to_scan.push(base.join("Papirus"));
+            dirs_to_scan.push(base.join("breeze"));
+            dirs_to_scan.push(base.join("Adwaita"));
+        }
+        dirs_to_scan.push(PathBuf::from("/usr/share/pixmaps"));
+
+        for d in dirs_to_scan {
+            walk_icon_dir(&d, 0, &mut best);
+        }
+        best.into_iter().map(|(k, (_, p))| (k, p)).collect()
+    }
+
+    fn encode_icon_file(path: &Path) -> Option<String> {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_lowercase();
+        let mime = match ext.as_str() {
+            "svg" => "image/svg+xml",
+            "png" => "image/png",
+            "webp" => "image/webp",
+            "jpg" | "jpeg" => "image/jpeg",
+            _ => return None,
+        };
+        let bytes = fs::read(path).ok()?;
+        if bytes.is_empty() || bytes.len() > 2 * 1024 * 1024 {
+            return None;
+        }
+        Some(format!("data:{mime};base64,{}", BASE64.encode(&bytes)))
+    }
+
+    pub fn resolve_linux_app_icon(icon_key: &str, fallback_name: &str) -> Option<String> {
+        let key = icon_key.trim();
+        if !key.is_empty() {
+            let direct = Path::new(key);
+            if direct.is_absolute() && direct.exists() {
+                if let Some(encoded) = encode_icon_file(direct) {
+                    return Some(encoded);
+                }
+            }
+        }
+
+        let mut candidates: Vec<String> = Vec::new();
+        for raw in [key, fallback_name.trim()] {
+            if raw.is_empty() {
+                continue;
+            }
+            let lower = raw.to_lowercase();
+            let stem = Path::new(&lower)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or(&lower)
+                .to_string();
+            candidates.push(lower.clone());
+            candidates.push(stem.clone());
+            candidates.push(stem.replace(' ', "-"));
+            if let Some(last) = stem.rsplit('.').next() {
+                candidates.push(last.to_string());
+            }
+        }
+
+        for cand in candidates {
+            if let Some(path) = ICON_INDEX.get(&cand) {
+                if let Some(encoded) = encode_icon_file(path) {
+                    return Some(encoded);
+                }
+            }
+        }
+        None
+    }
+
+    fn exists_in_path(cmd: &str) -> bool {
+        let clean = cmd.trim();
+        if clean.is_empty() {
+            return false;
+        }
+        let p = Path::new(clean);
+        if p.components().count() > 1 {
+            return p.exists();
+        }
+        std::env::var_os("PATH")
+            .map(|paths| std::env::split_paths(&paths).any(|dir| dir.join(clean).exists()))
+            .unwrap_or(false)
+    }
+
+    fn clean_exec_field(raw: &str) -> String {
+        let mut tokens = Vec::new();
+        for tok in raw.split_whitespace() {
+            if matches!(
+                tok,
+                "%u" | "%U" | "%f" | "%F" | "%i" | "%c" | "%k" | "%d" | "%D" | "%n" | "%N" | "%v" | "%m"
+            ) {
+                continue;
+            }
+            tokens.push(tok);
+        }
+        tokens.join(" ")
+    }
+
+    fn scan_desktop_dir(
+        root: &Path,
+        dir: &Path,
+        depth: usize,
+        seen_ids: &mut HashSet<String>,
+        out: &mut Vec<AppItem>,
+    ) {
+        if depth > 3 || !dir.exists() {
+            return;
+        }
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
+        let now = Utc::now().timestamp_millis();
+
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                scan_desktop_dir(root, &path, depth + 1, seen_ids, out);
+                continue;
+            }
+            if path.extension().and_then(|e| e.to_str()) != Some("desktop") {
+                continue;
+            }
+            let rel_id = path
+                .strip_prefix(root)
+                .ok()
+                .map(|r| r.to_string_lossy().replace('/', "-"))
+                .unwrap_or_else(|| {
+                    path.file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("app.desktop")
+                        .to_string()
+                });
+            if !seen_ids.insert(rel_id.to_lowercase()) {
+                continue;
+            }
+
+            let Ok(content) = fs::read_to_string(&path) else {
+                continue;
+            };
+
+            let mut in_main = false;
+            let mut entry_type = String::new();
+            let mut name = String::new();
+            let mut generic_name = String::new();
+            let mut exec_raw = String::new();
+            let mut try_exec = String::new();
+            let mut icon_val = String::new();
+            let mut no_display = false;
+            let mut hidden = false;
+            let mut keywords = String::new();
+            let mut wm_class = String::new();
+
+            for line in content.lines() {
+                let t = line.trim();
+                if t.is_empty() || t.starts_with('#') {
+                    continue;
+                }
+                if t.starts_with('[') && t.ends_with(']') {
+                    if in_main {
+                        break;
+                    }
+                    in_main = t == "[Desktop Entry]";
+                    continue;
+                }
+                if !in_main {
+                    continue;
+                }
+                let Some((k, v)) = t.split_once('=') else {
+                    continue;
+                };
+                match k.trim() {
+                    "Type" => entry_type = v.trim().to_string(),
+                    "Name" => name = v.trim().to_string(),
+                    "GenericName" if generic_name.is_empty() => generic_name = v.trim().to_string(),
+                    "Exec" => exec_raw = v.trim().to_string(),
+                    "TryExec" => try_exec = v.trim().to_string(),
+                    "Icon" => icon_val = v.trim().to_string(),
+                    "NoDisplay" => no_display = v.trim().eq_ignore_ascii_case("true"),
+                    "Hidden" => hidden = v.trim().eq_ignore_ascii_case("true"),
+                    "Keywords" => keywords = v.trim().to_string(),
+                    "StartupWMClass" => wm_class = v.trim().to_string(),
+                    _ => {}
+                }
+            }
+
+            if entry_type != "Application" || no_display || hidden || exec_raw.is_empty() {
+                continue;
+            }
+            if !try_exec.is_empty() && !exists_in_path(&try_exec) {
+                continue;
+            }
+            let app_name = if !name.is_empty() { name } else { generic_name };
+            if app_name.is_empty() {
+                continue;
+            }
+            let exec_clean = clean_exec_field(&exec_raw);
+            if exec_clean.is_empty() || is_ignored_helper(&app_name, &exec_clean) {
+                continue;
+            }
+
+            let mut aliases = vec![app_name.to_lowercase()];
+            let stem = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("")
+                .to_lowercase();
+            if !stem.is_empty() && !aliases.contains(&stem) {
+                aliases.push(stem.clone());
+            }
+            if !wm_class.is_empty() {
+                let wc = wm_class.to_lowercase();
+                if !aliases.contains(&wc) {
+                    aliases.push(wc);
+                }
+            }
+            if let Some(first_bin) = exec_clean.split_whitespace().next() {
+                add_alias_hints(&app_name, first_bin.trim_matches('"'), &mut aliases);
+            }
+            for kw in keywords.split(';').map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty()).take(6) {
+                if !aliases.contains(&kw) {
+                    aliases.push(kw);
+                }
+            }
+
+            let icon = resolve_linux_app_icon(&icon_val, &app_name)
+                .or_else(|| Some(default_svg_icon()));
+
+            out.push(AppItem {
+                id: make_app_id("desktop", if !stem.is_empty() { &stem } else { &app_name }),
+                name: app_name.clone(),
+                raw_name: app_name,
+                app_type: "desktop".to_string(),
+                launch: path.to_string_lossy().to_string(),
+                target: exec_clean,
+                args: String::new(),
+                icon_location: icon_val,
+                publisher: String::new(),
+                version: String::new(),
+                aliases,
+                source: "xdg-desktop".to_string(),
+                last_discovered: now,
+                icon,
+            });
+        }
+    }
+
+    pub fn scan_xdg_applications(out: &mut Vec<AppItem>) {
+        let mut app_dirs: Vec<PathBuf> = Vec::new();
+        if let Some(home) = dirs::home_dir() {
+            app_dirs.push(home.join(".local/share/applications"));
+            app_dirs.push(home.join(".local/share/flatpak/exports/share/applications"));
+        }
+        app_dirs.push(PathBuf::from("/var/lib/flatpak/exports/share/applications"));
+        app_dirs.push(PathBuf::from("/var/lib/snapd/desktop/applications"));
+
+        let data_dirs = std::env::var("XDG_DATA_DIRS")
+            .unwrap_or_else(|_| "/usr/local/share:/usr/share".to_string());
+        for d in data_dirs.split(':').filter(|s| !s.is_empty()) {
+            app_dirs.push(Path::new(d).join("applications"));
+        }
+
+        let mut seen_ids = HashSet::new();
+        for dir in app_dirs {
+            scan_desktop_dir(&dir, &dir, 0, &mut seen_ids, out);
+        }
+    }
+
+    fn spawn_detached(mut cmd: Command) -> Result<(), String> {
+        cmd.stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| format!("{e}"))
+    }
+
+    fn launch_desktop_file(desktop_path: &str, fallback_exec: &str) -> Result<(), String> {
+        if Path::new(desktop_path).exists() {
+            if spawn_detached({
+                let mut c = Command::new("gio");
+                c.args(["launch", desktop_path]);
+                c
+            })
+            .is_ok()
+            {
+                return Ok(());
+            }
+            if let Some(stem) = Path::new(desktop_path).file_stem().and_then(|s| s.to_str()) {
+                if spawn_detached({
+                    let mut c = Command::new("gtk-launch");
+                    c.arg(stem);
+                    c
+                })
+                .is_ok()
+                {
+                    return Ok(());
+                }
+            }
+        }
+        if !fallback_exec.trim().is_empty() {
+            return spawn_detached({
+                let mut c = Command::new("sh");
+                c.args(["-c", fallback_exec]);
+                c
+            });
+        }
+        Err(format!("Failed to launch {desktop_path}"))
+    }
+
+    pub fn launch_app(clean: &str, matched: Option<&AppItem>) -> Result<(), String> {
+        if let Some(app) = matched {
+            if app.launch.ends_with(".desktop") {
+                return launch_desktop_file(&app.launch, &app.target);
+            }
+            let target_cmd = if !app.target.trim().is_empty() {
+                &app.target
+            } else {
+                &app.launch
+            };
+            if !target_cmd.trim().is_empty() {
+                return spawn_detached({
+                    let mut c = Command::new("sh");
+                    c.args(["-c", target_cmd]);
+                    c
+                });
+            }
+        }
+
+        if clean.contains("://") || clean.starts_with("mailto:") || Path::new(clean).exists() {
+            if spawn_detached({
+                let mut c = Command::new("xdg-open");
+                c.arg(clean);
+                c
+            })
+            .is_ok()
+            {
+                return Ok(());
+            }
+        }
+
+        if clean.ends_with(".desktop") {
+            return launch_desktop_file(clean, "");
+        }
+
+        if let Some(first_tok) = clean.split_whitespace().next() {
+            if exists_in_path(first_tok) {
+                return spawn_detached({
+                    let mut c = Command::new("sh");
+                    c.args(["-c", clean]);
+                    c
+                });
+            }
+        }
+
+        spawn_detached({
+            let mut c = Command::new("xdg-open");
+            c.arg(clean);
+            c
+        })
+        .map_err(|_| format!("Unable to launch '{clean}'"))
+    }
+
+    fn deterministic_handle(tag: &str) -> isize {
+        let mut h: u64 = 0xcbf29ce484222325;
+        for b in tag.as_bytes() {
+            h ^= *b as u64;
+            h = h.wrapping_mul(0x100000001b3);
+        }
+        let val = (h & 0x7fff_ffff_ffff_ffff) as i64;
+        (if val == 0 { 1 } else { val }) as isize
+    }
+
+    struct RawLinuxWindow {
+        backend: WinBackend,
+        native_id: String,
+        pid: u32,
+        title: String,
+        app_id: String,
+        is_minimized: bool,
+        focused: bool,
+    }
+
+    fn run_cmd_stdout(bin: &str, args: &[&str]) -> Option<String> {
+        let out = Command::new(bin).args(args).output().ok()?;
+        if out.status.success() {
+            Some(String::from_utf8_lossy(&out.stdout).to_string())
+        } else {
+            None
+        }
+    }
+
+    fn collect_sway_nodes(node: &Value, backend: &WinBackend, out: &mut Vec<RawLinuxWindow>) {
+        if let Some(pid) = node.get("pid").and_then(|v| v.as_u64()).filter(|p| *p > 0) {
+            let title = node
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let con_id = node.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+            if con_id != 0 && !title.is_empty() {
+                let app_id = node
+                    .get("app_id")
+                    .and_then(|v| v.as_str())
+                    .or_else(|| {
+                        node.get("window_properties")
+                            .and_then(|w| w.get("class"))
+                            .and_then(|v| v.as_str())
+                    })
+                    .unwrap_or("")
+                    .to_string();
+                let visible = node.get("visible").and_then(|v| v.as_bool()).unwrap_or(true);
+                let focused = node.get("focused").and_then(|v| v.as_bool()).unwrap_or(false);
+                out.push(RawLinuxWindow {
+                    backend: backend.clone(),
+                    native_id: con_id.to_string(),
+                    pid: pid as u32,
+                    title,
+                    app_id,
+                    is_minimized: !visible,
+                    focused,
+                });
+            }
+        }
+        for key in ["nodes", "floating_nodes"] {
+            if let Some(arr) = node.get(key).and_then(|v| v.as_array()) {
+                for child in arr {
+                    collect_sway_nodes(child, backend, out);
+                }
+            }
+        }
+    }
+
+    fn collect_raw_windows() -> Vec<RawLinuxWindow> {
+        let own_pid = std::process::id();
+
+        if std::env::var_os("HYPRLAND_INSTANCE_SIGNATURE").is_some() {
+            if let Some(raw_json) = run_cmd_stdout("hyprctl", &["clients", "-j"]) {
+                if let Ok(arr) = serde_json::from_str::<Vec<Value>>(&raw_json) {
+                    let active_addr = run_cmd_stdout("hyprctl", &["activewindow", "-j"])
+                        .and_then(|s| serde_json::from_str::<Value>(&s).ok())
+                        .and_then(|v| v.get("address").and_then(|a| a.as_str()).map(|s| s.to_string()))
+                        .unwrap_or_default();
+
+                    let mut list = Vec::new();
+                    for c in arr {
+                        let pid = c.get("pid").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
+                        let title = c
+                            .get("title")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .trim()
+                            .to_string();
+                        let addr = c
+                            .get("address")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if pid == own_pid || title.is_empty() || title == "Quick Pill" || addr.is_empty() {
+                            continue;
+                        }
+                        let class_name = c
+                            .get("class")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let ws_id = c
+                            .get("workspace")
+                            .and_then(|w| w.get("id"))
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(1);
+                        let mapped = c.get("mapped").and_then(|v| v.as_bool()).unwrap_or(true);
+                        list.push(RawLinuxWindow {
+                            backend: WinBackend::Hyprland,
+                            native_id: addr.clone(),
+                            pid,
+                            title,
+                            app_id: class_name,
+                            is_minimized: !mapped || ws_id < 0,
+                            focused: !active_addr.is_empty() && addr == active_addr,
+                        });
+                    }
+                    if !list.is_empty() {
+                        return list;
+                    }
+                }
+            }
+        }
+
+        if std::env::var_os("SWAYSOCK").is_some() {
+            if let Some(tree_str) = run_cmd_stdout("swaymsg", &["-t", "get_tree"]) {
+                if let Ok(tree) = serde_json::from_str::<Value>(&tree_str) {
+                    let mut list = Vec::new();
+                    collect_sway_nodes(&tree, &WinBackend::Sway, &mut list);
+                    list.retain(|w| w.pid != own_pid && w.title != "Quick Pill");
+                    if !list.is_empty() {
+                        return list;
+                    }
+                }
+            }
+        }
+
+        if std::env::var_os("I3SOCK").is_some() {
+            if let Some(tree_str) = run_cmd_stdout("i3-msg", &["-t", "get_tree"]) {
+                if let Ok(tree) = serde_json::from_str::<Value>(&tree_str) {
+                    let mut list = Vec::new();
+                    collect_sway_nodes(&tree, &WinBackend::I3, &mut list);
+                    list.retain(|w| w.pid != own_pid && w.title != "Quick Pill");
+                    if !list.is_empty() {
+                        return list;
+                    }
+                }
+            }
+        }
+
+        // X11 / XWayland via wmctrl -lp
+        let active_x11_dec = run_cmd_stdout("xdotool", &["getactivewindow"])
+            .map(|s| s.trim().to_string())
+            .unwrap_or_default();
+
+        if let Some(wm_out) = run_cmd_stdout("wmctrl", &["-lp"]) {
+            let mut list = Vec::new();
+            for line in wm_out.lines() {
+                let mut parts = line.split_whitespace();
+                let Some(hex_id) = parts.next() else { continue; };
+                let Some(desktop_str) = parts.next() else { continue; };
+                let Some(pid_str) = parts.next() else { continue; };
+                let Some(_host) = parts.next() else { continue; };
+                let title = parts.collect::<Vec<_>>().join(" ").trim().to_string();
+                let pid = pid_str.parse::<u32>().unwrap_or(0);
+                if pid == own_pid || title.is_empty() || title == "Quick Pill" {
+                    continue;
+                }
+                let dec_id = u64::from_str_radix(hex_id.trim_start_matches("0x"), 16)
+                    .map(|n| n.to_string())
+                    .unwrap_or_default();
+                list.push(RawLinuxWindow {
+                    backend: WinBackend::X11,
+                    native_id: hex_id.to_string(),
+                    pid,
+                    title,
+                    app_id: String::new(),
+                    is_minimized: desktop_str == "-1",
+                    focused: !active_x11_dec.is_empty() && dec_id == active_x11_dec,
+                });
+            }
+            if !list.is_empty() {
+                return list;
+            }
+        }
+
+        // Fallback via xdotool search
+        if let Some(ids_out) = run_cmd_stdout("xdotool", &["search", "--onlyvisible", "--name", ""]) {
+            let mut list = Vec::new();
+            for id in ids_out.lines().map(|l| l.trim()).filter(|l| !l.is_empty()).take(40) {
+                let title = run_cmd_stdout("xdotool", &["getwindowname", id])
+                    .map(|s| s.trim().to_string())
+                    .unwrap_or_default();
+                let pid = run_cmd_stdout("xdotool", &["getwindowpid", id])
+                    .and_then(|s| s.trim().parse::<u32>().ok())
+                    .unwrap_or(0);
+                if pid == own_pid || title.is_empty() || title == "Quick Pill" {
+                    continue;
+                }
+                list.push(RawLinuxWindow {
+                    backend: WinBackend::X11,
+                    native_id: id.to_string(),
+                    pid,
+                    title,
+                    app_id: String::new(),
+                    is_minimized: false,
+                    focused: !active_x11_dec.is_empty() && id == active_x11_dec,
+                });
+            }
+            return list;
+        }
+
+        Vec::new()
+    }
+
+    pub fn get_running_windows(state: &SharedState) -> Vec<RunningWindow> {
+        let raw = collect_raw_windows();
+        let mut handle_map = WIN_HANDLES.lock().ok();
+        let mut result = Vec::with_capacity(raw.len());
+
+        for w in raw {
+            let h_wnd = deterministic_handle(&format!("{:?}:{}", w.backend, w.native_id));
+            if let Some(ref mut map) = handle_map {
+                map.insert(h_wnd, (w.backend.clone(), w.native_id.clone()));
+            }
+            let exe_path = if w.pid > 0 {
+                fs::read_link(format!("/proc/{}/exe", w.pid))
+                    .ok()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+            let process_name = if !exe_path.is_empty() {
+                Path::new(&exe_path)
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or("App")
+                    .to_string()
+            } else if !w.app_id.is_empty() {
+                w.app_id.clone()
+            } else {
+                "App".to_string()
+            };
+            let icon_hint = if !w.app_id.is_empty() {
+                w.app_id.clone()
+            } else {
+                process_name.clone()
+            };
+            let cache_key = format!("linux_win:{}", icon_hint.to_lowercase());
+            let cached = state
+                .icon_cache
+                .lock()
+                .ok()
+                .and_then(|c| c.get(&cache_key).cloned());
+            let icon = if cached.is_some() {
+                cached
+            } else {
+                let resolved = resolve_linux_app_icon(&icon_hint, &process_name);
+                if let Some(ref url) = resolved {
+                    if let Ok(mut c) = state.icon_cache.lock() {
+                        c.insert(cache_key, url.clone());
+                    }
+                }
+                resolved
+            };
+
+            result.push(RunningWindow {
+                h_wnd,
+                pid: w.pid,
+                title: w.title,
+                process_name,
+                exe_path,
+                icon,
+                is_minimized: w.is_minimized,
+            });
+        }
+        result
+    }
+
+    fn activate_native(backend: &WinBackend, native_id: &str) -> bool {
+        match backend {
+            WinBackend::Hyprland => Command::new("hyprctl")
+                .args(["dispatch", "focuswindow", &format!("address:{native_id}")])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false),
+            WinBackend::Sway => Command::new("swaymsg")
+                .args([&format!("[con_id={native_id}]"), "focus"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false),
+            WinBackend::I3 => Command::new("i3-msg")
+                .args([&format!("[con_id={native_id}]"), "focus"])
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false),
+            WinBackend::X11 => {
+                if native_id.starts_with("0x") {
+                    if Command::new("wmctrl")
+                        .args(["-ia", native_id])
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false)
+                    {
+                        return true;
+                    }
+                }
+                Command::new("xdotool")
+                    .args(["windowactivate", native_id])
+                    .status()
+                    .map(|s| s.success())
+                    .unwrap_or(false)
+            }
+        }
+    }
+
+    pub fn activate_window_by_handle(h_wnd: isize) -> bool {
+        let entry = WIN_HANDLES.lock().ok().and_then(|m| m.get(&h_wnd).cloned());
+        if let Some((backend, native_id)) = entry {
+            return activate_native(&backend, &native_id);
+        }
+        false
+    }
+
+    pub fn activate_window_by_query(query: &str) -> bool {
+        let q = query.trim().to_lowercase();
+        if q.is_empty() {
+            return false;
+        }
+        for w in collect_raw_windows() {
+            let exe = if w.pid > 0 {
+                fs::read_link(format!("/proc/{}/exe", w.pid))
+                    .ok()
+                    .map(|p| p.to_string_lossy().to_lowercase())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+            if w.title.to_lowercase().contains(&q)
+                || w.app_id.to_lowercase().contains(&q)
+                || exe.contains(&q)
+            {
+                return activate_native(&w.backend, &w.native_id);
+            }
+        }
+        false
+    }
+
+    pub fn get_active_window_metadata() -> (Option<String>, Option<String>, Option<String>, u32) {
+        let own_pid = std::process::id();
+        let active = collect_raw_windows()
+            .into_iter()
+            .find(|w| w.focused && w.pid != own_pid);
+        if let Some(w) = active {
+            let exe = if w.pid > 0 {
+                fs::read_link(format!("/proc/{}/exe", w.pid))
+                    .ok()
+                    .map(|p| p.to_string_lossy().to_string())
+                    .unwrap_or_default()
+            } else {
+                String::new()
+            };
+            let proc_name = if !exe.is_empty() {
+                Path::new(&exe)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .map(|s| s.to_string())
+            } else if !w.app_id.is_empty() {
+                Some(w.app_id.clone())
+            } else {
+                None
+            };
+            let app_name = if !w.app_id.is_empty() {
+                Some(w.app_id)
+            } else {
+                proc_name.clone()
+            };
+            let title = if w.title.is_empty() { None } else { Some(w.title) };
+            return (app_name, title, proc_name, w.pid);
+        }
+        (None, None, None, 0)
+    }
 }
 
 #[cfg(test)]

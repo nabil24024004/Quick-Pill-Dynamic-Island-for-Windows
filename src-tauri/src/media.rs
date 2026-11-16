@@ -1,8 +1,10 @@
+#[cfg(windows)]
 use crate::state::from_wide_slice;
 use base64::{engine::general_purpose::STANDARD as BASE64, Engine};
 use once_cell::sync::Lazy;
 use serde::Serialize;
 use std::sync::Mutex;
+#[cfg(windows)]
 use std::time::{SystemTime, UNIX_EPOCH};
 
 #[cfg(windows)]
@@ -44,8 +46,10 @@ pub struct SystemMediaInfo {
 static ARTWORK_CACHE: Lazy<Mutex<(String, Option<String>)>> =
     Lazy::new(|| Mutex::new((String::new(), None)));
 
+#[cfg(windows)]
 const EPOCH_DIFF_100NS: i64 = 116_444_736_000_000_000;
 
+#[cfg(windows)]
 fn now_filetime_100ns() -> i64 {
     let unix_ns = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -201,7 +205,7 @@ fn find_spotify_window_fallback() -> Option<SystemMediaInfo> {
 }
 
 #[tauri::command]
-pub fn get_system_media() -> Option<SystemMediaInfo> {
+pub async fn get_system_media() -> Option<SystemMediaInfo> {
     #[cfg(windows)]
     {
         if let Some(session) = get_best_session() {
@@ -271,7 +275,12 @@ pub fn get_system_media() -> Option<SystemMediaInfo> {
         return find_spotify_window_fallback();
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        return linux_mpris::get_system_media();
+    }
+
+    #[cfg(all(not(windows), not(target_os = "linux")))]
     None
 }
 
@@ -284,7 +293,7 @@ fn send_media_vk(vk: u16) {
 }
 
 #[tauri::command]
-pub fn control_system_media(command: String, seek_seconds: f64) -> bool {
+pub async fn control_system_media(command: String, seek_seconds: f64) -> bool {
     #[cfg(windows)]
     {
         let cmd = command.trim().to_lowercase();
@@ -359,6 +368,421 @@ pub fn control_system_media(command: String, seek_seconds: f64) -> bool {
         }
     }
 
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    {
+        return linux_mpris::control_system_media(&command, seek_seconds);
+    }
+
+    #[cfg(all(not(windows), not(target_os = "linux")))]
     false
+}
+
+#[cfg(target_os = "linux")]
+mod linux_mpris {
+    use super::{Engine, SystemMediaInfo, ARTWORK_CACHE, BASE64};
+    use once_cell::sync::Lazy;
+    use std::collections::HashMap;
+    use std::sync::Mutex;
+    use zbus::blocking::{fdo::DBusProxy, Connection, Proxy};
+    use zbus::zvariant::{ObjectPath, OwnedValue, Value};
+
+    static LAST_MPRIS_BUS: Lazy<Mutex<String>> = Lazy::new(|| Mutex::new(String::new()));
+
+    fn value_to_string(v: &Value<'_>) -> String {
+        match v {
+            Value::Str(s) => s.as_str().to_string(),
+            Value::ObjectPath(p) => p.as_str().to_string(),
+            _ => String::new(),
+        }
+    }
+
+    fn meta_str(meta: &HashMap<String, OwnedValue>, key: &str) -> String {
+        meta.get(key).map(|v| value_to_string(&**v)).unwrap_or_default()
+    }
+
+    fn meta_artist(meta: &HashMap<String, OwnedValue>) -> String {
+        let Some(v) = meta.get("xesam:artist") else {
+            return String::new();
+        };
+        match &**v {
+            Value::Str(s) => s.as_str().trim().to_string(),
+            Value::Array(arr) => arr
+                .iter()
+                .filter_map(|item| match item {
+                    Value::Str(s) => {
+                        let t = s.as_str().trim();
+                        if t.is_empty() { None } else { Some(t.to_string()) }
+                    }
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+                .join(", "),
+            _ => String::new(),
+        }
+    }
+
+    fn meta_length_seconds(meta: &HashMap<String, OwnedValue>) -> f64 {
+        let Some(v) = meta.get("mpris:length") else {
+            return 0.0;
+        };
+        let us = match &**v {
+            Value::I64(n) => (*n).max(0) as f64,
+            Value::U64(n) => *n as f64,
+            Value::I32(n) => (*n).max(0) as f64,
+            Value::U32(n) => *n as f64,
+            _ => 0.0,
+        };
+        us / 1_000_000.0
+    }
+
+    fn percent_decode(input: &str) -> String {
+        let bytes = input.as_bytes();
+        let mut out = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'%' && i + 2 < bytes.len() {
+                if let (Some(h), Some(l)) = (
+                    (bytes[i + 1] as char).to_digit(16),
+                    (bytes[i + 2] as char).to_digit(16),
+                ) {
+                    out.push(((h << 4) | l) as u8);
+                    i += 3;
+                    continue;
+                }
+            }
+            out.push(bytes[i]);
+            i += 1;
+        }
+        String::from_utf8_lossy(&out).to_string()
+    }
+
+    fn guess_image_mime(hint: &str, bytes: &[u8]) -> &'static str {
+        if bytes.starts_with(&[0x89, b'P', b'N', b'G']) || hint.ends_with(".png") {
+            "image/png"
+        } else if bytes.starts_with(b"RIFF") && bytes.get(8..12) == Some(b"WEBP") {
+            "image/webp"
+        } else if bytes.starts_with(b"<svg") || hint.ends_with(".svg") {
+            "image/svg+xml"
+        } else {
+            "image/jpeg"
+        }
+    }
+
+    fn resolve_artwork(cache_key: &str, art_url: &str) -> Option<String> {
+        if art_url.trim().is_empty() {
+            return None;
+        }
+        if let Ok(guard) = ARTWORK_CACHE.lock() {
+            if guard.0 == cache_key {
+                return guard.1.clone();
+            }
+        }
+
+        let resolved = if art_url.starts_with("data:") {
+            Some(art_url.to_string())
+        } else if let Some(raw_path) = art_url.strip_prefix("file://") {
+            let decoded = percent_decode(raw_path);
+            let fs_path = if decoded.starts_with("localhost/") {
+                &decoded["localhost".len()..]
+            } else {
+                decoded.as_str()
+            };
+            std::fs::read(fs_path).ok().and_then(|bytes| {
+                if bytes.is_empty() || bytes.len() > 5 * 1024 * 1024 {
+                    return None;
+                }
+                let mime = guess_image_mime(&fs_path.to_lowercase(), &bytes);
+                Some(format!("data:{mime};base64,{}", BASE64.encode(&bytes)))
+            })
+        } else if art_url.starts_with("http://") || art_url.starts_with("https://") {
+            let url_owned = art_url.to_string();
+            tauri::async_runtime::block_on(async move {
+                let client = reqwest::Client::builder()
+                    .timeout(std::time::Duration::from_secs(3))
+                    .build()
+                    .ok()?;
+                let resp = client.get(&url_owned).send().await.ok()?;
+                if !resp.status().is_success() {
+                    return None;
+                }
+                let bytes = resp.bytes().await.ok()?;
+                if bytes.is_empty() || bytes.len() > 5 * 1024 * 1024 {
+                    return None;
+                }
+                let mime = guess_image_mime(&url_owned.to_lowercase(), &bytes);
+                Some(format!("data:{mime};base64,{}", BASE64.encode(&bytes)))
+            })
+        } else {
+            None
+        };
+
+        if let Ok(mut guard) = ARTWORK_CACHE.lock() {
+            guard.0 = cache_key.to_string();
+            guard.1 = resolved.clone();
+        }
+        resolved
+    }
+
+    fn friendly_bus_source(conn: &Connection, bus: &str) -> String {
+        if let Ok(root_proxy) = Proxy::new(
+            conn,
+            bus,
+            "/org/mpris/MediaPlayer2",
+            "org.mpris.MediaPlayer2",
+        ) {
+            if let Ok(id) = root_proxy.get_property::<String>("Identity") {
+                if !id.trim().is_empty() {
+                    return id;
+                }
+            }
+        }
+        let raw = bus
+            .strip_prefix("org.mpris.MediaPlayer2.")
+            .unwrap_or(bus)
+            .split('.')
+            .next()
+            .unwrap_or("Media");
+        let mut chars = raw.chars();
+        match chars.next() {
+            Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
+            None => "Media".to_string(),
+        }
+    }
+
+    fn list_mpris_buses(conn: &Connection) -> Vec<String> {
+        let Ok(dbus) = DBusProxy::new(conn) else {
+            return Vec::new();
+        };
+        let Ok(names) = dbus.list_names() else {
+            return Vec::new();
+        };
+        names
+            .into_iter()
+            .filter_map(|n| {
+                let s = n.as_str();
+                if s.starts_with("org.mpris.MediaPlayer2.") {
+                    Some(s.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect()
+    }
+
+    fn pick_best_bus(conn: &Connection) -> Option<String> {
+        let buses = list_mpris_buses(conn);
+        if buses.is_empty() {
+            return None;
+        }
+
+        let last_bus = LAST_MPRIS_BUS.lock().ok().map(|g| g.clone()).unwrap_or_default();
+        let mut best: Option<(i32, String)> = None;
+
+        for bus in buses {
+            let (status, meta) = {
+                let Ok(player) = Proxy::new(
+                    conn,
+                    bus.as_str(),
+                    "/org/mpris/MediaPlayer2",
+                    "org.mpris.MediaPlayer2.Player",
+                ) else {
+                    continue;
+                };
+                let status = player
+                    .get_property::<String>("PlaybackStatus")
+                    .unwrap_or_default();
+                let meta = player
+                    .get_property::<HashMap<String, OwnedValue>>("Metadata")
+                    .unwrap_or_default();
+                (status, meta)
+            };
+            let has_meta = !meta_str(&meta, "xesam:title").is_empty() || !meta_artist(&meta).is_empty();
+            let mut score = match status.as_str() {
+                "Playing" => 100,
+                "Paused" => 50,
+                _ => 10,
+            };
+            if has_meta {
+                score += 20;
+            }
+            if bus == last_bus {
+                score += 5;
+            }
+            if best.as_ref().map(|(s, _)| score > *s).unwrap_or(true) {
+                best = Some((score, bus));
+            }
+        }
+
+        best.map(|(_, bus)| bus)
+    }
+
+    fn get_media_playerctl_fallback() -> Option<SystemMediaInfo> {
+        let out = std::process::Command::new("playerctl")
+            .args([
+                "metadata",
+                "--format",
+                "{{status}}\t{{title}}\t{{artist}}\t{{album}}\t{{mpris:artUrl}}\t{{mpris:length}}\t{{position}}\t{{playerName}}",
+            ])
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let line = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() < 8 {
+            return None;
+        }
+        let title = parts[1].trim().to_string();
+        let artist = parts[2].trim().to_string();
+        if title.is_empty() && artist.is_empty() {
+            return None;
+        }
+        let album = parts[3].trim().to_string();
+        let art_url = parts[4].trim();
+        let dur_us = parts[5].trim().parse::<f64>().unwrap_or(0.0);
+        let pos_us = parts[6].trim().parse::<f64>().unwrap_or(0.0);
+        let source = parts[7].trim().to_string();
+        let state = match parts[0].trim().to_lowercase().as_str() {
+            "playing" => "playing",
+            "paused" => "paused",
+            _ => "stopped",
+        };
+        let duration = (dur_us / 1_000_000.0).max(0.0);
+        let position = if duration > 0.0 {
+            (pos_us / 1_000_000.0).clamp(0.0, duration)
+        } else {
+            (pos_us / 1_000_000.0).max(0.0)
+        };
+        let cache_key = format!("mpris:{source}|{title}|{artist}|{album}|{art_url}");
+        let artwork_url = resolve_artwork(&cache_key, art_url);
+        Some(SystemMediaInfo {
+            name: title,
+            artist,
+            album,
+            artwork_url,
+            state: state.to_string(),
+            duration,
+            position,
+            source,
+        })
+    }
+
+    pub fn get_system_media() -> Option<SystemMediaInfo> {
+        if let Ok(conn) = Connection::session() {
+            if let Some(bus) = pick_best_bus(&conn) {
+                if let Ok(player) = Proxy::new(
+                    &conn,
+                    bus.as_str(),
+                    "/org/mpris/MediaPlayer2",
+                    "org.mpris.MediaPlayer2.Player",
+                ) {
+                    let meta = player
+                        .get_property::<HashMap<String, OwnedValue>>("Metadata")
+                        .unwrap_or_default();
+                    let title = meta_str(&meta, "xesam:title");
+                    let artist = meta_artist(&meta);
+                    let album = meta_str(&meta, "xesam:album");
+                    if !title.is_empty() || !artist.is_empty() {
+                        if let Ok(mut g) = LAST_MPRIS_BUS.lock() {
+                            *g = bus.clone();
+                        }
+                        let status = player
+                            .get_property::<String>("PlaybackStatus")
+                            .unwrap_or_default();
+                        let state = match status.as_str() {
+                            "Playing" => "playing",
+                            "Paused" => "paused",
+                            _ => "stopped",
+                        };
+                        let duration = meta_length_seconds(&meta).max(0.0);
+                        let pos_us = player.get_property::<i64>("Position").unwrap_or(0).max(0) as f64;
+                        let mut position = pos_us / 1_000_000.0;
+                        if duration > 0.0 {
+                            position = position.clamp(0.0, duration);
+                        }
+                        let art_url = meta_str(&meta, "mpris:artUrl");
+                        let source = friendly_bus_source(&conn, &bus);
+                        let cache_key = format!("mpris:{source}|{title}|{artist}|{album}|{art_url}");
+                        let artwork_url = resolve_artwork(&cache_key, &art_url);
+
+                        return Some(SystemMediaInfo {
+                            name: title,
+                            artist,
+                            album,
+                            artwork_url,
+                            state: state.to_string(),
+                            duration,
+                            position,
+                            source,
+                        });
+                    }
+                }
+            }
+        }
+
+        get_media_playerctl_fallback()
+    }
+
+    pub fn control_system_media(command: &str, seek_seconds: f64) -> bool {
+        let cmd = command.trim().to_lowercase();
+        if let Ok(conn) = Connection::session() {
+            if let Some(bus) = pick_best_bus(&conn) {
+                if let Ok(player) = Proxy::new(
+                    &conn,
+                    bus.as_str(),
+                    "/org/mpris/MediaPlayer2",
+                    "org.mpris.MediaPlayer2.Player",
+                ) {
+                    let ok = match cmd.as_str() {
+                        "playpause" | "play_pause" | "toggle" => player.call_method("PlayPause", &()).is_ok(),
+                        "play" => player.call_method("Play", &()).is_ok(),
+                        "pause" => player.call_method("Pause", &()).is_ok(),
+                        "next" => player.call_method("Next", &()).is_ok(),
+                        "previous" | "prev" => player.call_method("Previous", &()).is_ok(),
+                        "stop" => player.call_method("Stop", &()).is_ok(),
+                        "seek" => {
+                            let target_us = (seek_seconds.max(0.0) * 1_000_000.0).round() as i64;
+                            let meta = player
+                                .get_property::<HashMap<String, OwnedValue>>("Metadata")
+                                .unwrap_or_default();
+                            let track_id = meta_str(&meta, "mpris:trackid");
+                            let set_ok = ObjectPath::try_from(track_id.as_str())
+                                .ok()
+                                .filter(|p| !p.as_str().is_empty())
+                                .map(|path| player.call_method("SetPosition", &(path, target_us)).is_ok())
+                                .unwrap_or(false);
+                            if set_ok {
+                                true
+                            } else {
+                                let cur_us = player.get_property::<i64>("Position").unwrap_or(0);
+                                let delta = target_us - cur_us;
+                                player.call_method("Seek", &(delta)).is_ok()
+                            }
+                        }
+                        _ => false,
+                    };
+                    if ok {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        let arg = match cmd.as_str() {
+            "playpause" | "play_pause" | "toggle" => vec!["play-pause".to_string()],
+            "play" => vec!["play".to_string()],
+            "pause" => vec!["pause".to_string()],
+            "next" => vec!["next".to_string()],
+            "previous" | "prev" => vec!["previous".to_string()],
+            "stop" => vec!["stop".to_string()],
+            "seek" => vec!["position".to_string(), format!("{:.2}", seek_seconds.max(0.0))],
+            _ => return false,
+        };
+        std::process::Command::new("playerctl")
+            .args(&arg)
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
 }

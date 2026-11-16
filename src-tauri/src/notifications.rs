@@ -1,5 +1,7 @@
 use crate::launcher::{activate_window_by_query, launch_app_internal};
-use crate::state::{atomic_write_bytes, to_wide, SharedState};
+use crate::state::{atomic_write_bytes, SharedState};
+#[cfg(windows)]
+use crate::state::to_wide;
 use chrono::Utc;
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
@@ -27,6 +29,7 @@ use windows::{
 };
 
 const MAX_HISTORY: usize = 100;
+#[cfg(windows)]
 const EPOCH_DIFF_100NS: i64 = 116_444_736_000_000_000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,6 +156,9 @@ pub fn init_notifications(app: &AppHandle, state: &SharedState) {
             }
         }
     }
+
+    #[cfg(target_os = "linux")]
+    linux_notif::ensure_started(app.clone());
 
     let app_bg = app.clone();
     thread::spawn(move || {
@@ -475,7 +481,9 @@ fn remove_windows_toast(win_id: u32) {
 fn sync_internal(app: &AppHandle, state: &SharedState, force_emit: bool) -> NotificationSnapshot {
     #[cfg(windows)]
     let fetched = fetch_windows_toasts();
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    let fetched = linux_notif::fetch_notifications(app);
+    #[cfg(all(not(windows), not(target_os = "linux")))]
     let fetched: Option<Vec<NotificationItem>> = None;
 
     let now = Utc::now().timestamp_millis();
@@ -617,6 +625,8 @@ pub fn notifications_dismiss(
     if let Some(wid) = win_id_opt {
         remove_windows_toast(wid);
     }
+    #[cfg(target_os = "linux")]
+    linux_notif::close_notification(Some(&notification_id), win_id_opt);
 
     sync_internal(&app, &state, true)
 }
@@ -628,17 +638,19 @@ pub fn notifications_dismiss_group(
     group_id: String,
 ) -> NotificationSnapshot {
     let app_key = group_id.strip_prefix("group_").unwrap_or(&group_id).to_lowercase();
-    let win_ids: Vec<u32> = {
+    let (win_ids, _str_ids): (Vec<u32>, Vec<String>) = {
         let Ok(mut reg) = REGISTRY.lock() else {
             return build_snapshot(&mut RegistryInner::default());
         };
         let mut removed_wins = Vec::new();
+        let mut removed_strs = Vec::new();
         let mut remaining = Vec::new();
         for mut item in std::mem::take(&mut reg.active) {
             if item.app_name.eq_ignore_ascii_case(&app_key) {
                 if let Some(wid) = item.win_id {
                     removed_wins.push(wid);
                 }
+                removed_strs.push(item.id.clone());
                 item.dismissed = true;
                 reg.dismissed_ids.insert(item.id.clone());
                 reg.recent_dismissals.insert(0, item);
@@ -648,12 +660,21 @@ pub fn notifications_dismiss_group(
         }
         reg.recent_dismissals.truncate(15);
         reg.active = remaining;
-        removed_wins
+        (removed_wins, removed_strs)
     };
 
     #[cfg(windows)]
     for wid in win_ids {
         remove_windows_toast(wid);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        for id_str in &_str_ids {
+            linux_notif::close_notification(Some(id_str), None);
+        }
+        for wid in win_ids {
+            linux_notif::close_notification(None, Some(wid));
+        }
     }
 
     sync_internal(&app, &state, true)
@@ -664,26 +685,37 @@ pub fn notifications_clear_all(
     app: AppHandle,
     state: tauri::State<'_, SharedState>,
 ) -> NotificationSnapshot {
-    let win_ids: Vec<u32> = {
+    let (win_ids, _str_ids): (Vec<u32>, Vec<String>) = {
         let Ok(mut reg) = REGISTRY.lock() else {
             return build_snapshot(&mut RegistryInner::default());
         };
         let mut removed_wins = Vec::new();
+        let mut removed_strs = Vec::new();
         for mut item in std::mem::take(&mut reg.active) {
             if let Some(wid) = item.win_id {
                 removed_wins.push(wid);
             }
+            removed_strs.push(item.id.clone());
             item.dismissed = true;
             reg.dismissed_ids.insert(item.id.clone());
             reg.recent_dismissals.insert(0, item);
         }
         reg.recent_dismissals.truncate(15);
-        removed_wins
+        (removed_wins, removed_strs)
     };
 
     #[cfg(windows)]
     for wid in win_ids {
         remove_windows_toast(wid);
+    }
+    #[cfg(target_os = "linux")]
+    {
+        for id_str in &_str_ids {
+            linux_notif::close_notification(Some(id_str), None);
+        }
+        for wid in win_ids {
+            linux_notif::close_notification(None, Some(wid));
+        }
     }
 
     sync_internal(&app, &state, true)
@@ -900,13 +932,13 @@ pub fn notifications_execute_action(
                 .trim()
                 .to_string();
             if app_name.to_lowercase().contains("whatsapp") {
+                let uri = if text.is_empty() {
+                    "whatsapp://".to_string()
+                } else {
+                    format!("whatsapp://send?text={}", urlencoding::encode(&text))
+                };
                 #[cfg(windows)]
                 unsafe {
-                    let uri = if text.is_empty() {
-                        "whatsapp://".to_string()
-                    } else {
-                        format!("whatsapp://send?text={}", urlencoding::encode(&text))
-                    };
                     let op = to_wide("open");
                     let target = to_wide(&uri);
                     let _ = ShellExecuteW(
@@ -918,6 +950,10 @@ pub fn notifications_execute_action(
                         SW_SHOWNORMAL,
                     );
                 }
+                #[cfg(target_os = "linux")]
+                {
+                    let _ = std::process::Command::new("xdg-open").arg(&uri).spawn();
+                }
             } else {
                 let _ = activate_window_by_query(&app_name);
             }
@@ -928,6 +964,415 @@ pub fn notifications_execute_action(
             let snap = sync_internal(&app, &state, false);
             json!({ "success": false, "snapshot": snap })
         }
+    }
+}
+
+#[cfg(target_os = "linux")]
+mod linux_notif {
+    use super::{classify_notification, sync_internal, NotificationItem};
+    use crate::state::SharedState;
+    use chrono::Utc;
+    use once_cell::sync::Lazy;
+    use std::collections::HashMap;
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+    use std::sync::Mutex;
+    use std::time::Duration;
+    use tauri::{AppHandle, Manager};
+    use zbus::blocking::{fdo::DBusProxy, Connection, MessageIterator, Proxy};
+    use zbus::message::Type as MsgType;
+    use zbus::zvariant::{OwnedValue, Value};
+
+    static LINUX_NOTIFS: Lazy<Mutex<Vec<NotificationItem>>> = Lazy::new(|| Mutex::new(Vec::new()));
+    static MONITOR_STARTED: AtomicBool = AtomicBool::new(false);
+    static SEQ_COUNTER: AtomicU64 = AtomicU64::new(1);
+
+    pub fn ensure_started(app: AppHandle) {
+        if MONITOR_STARTED.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        seed_dunst_history();
+        std::thread::spawn(move || loop {
+            if !run_dbus_monitor(&app) {
+                run_dbus_monitor_cli_fallback(&app);
+            }
+            std::thread::sleep(Duration::from_secs(3));
+        });
+    }
+
+    pub fn fetch_notifications(app: &AppHandle) -> Option<Vec<NotificationItem>> {
+        ensure_started(app.clone());
+        LINUX_NOTIFS.lock().ok().map(|g| g.clone())
+    }
+
+    pub fn close_notification(id_str: Option<&str>, win_id: Option<u32>) {
+        if let Ok(mut list) = LINUX_NOTIFS.lock() {
+            list.retain(|n| {
+                let match_str = id_str.map(|s| n.id == s).unwrap_or(false);
+                let match_win = win_id.map(|w| n.win_id == Some(w)).unwrap_or(false);
+                !(match_str || match_win)
+            });
+        }
+        if let Some(wid) = win_id {
+            if let Ok(conn) = Connection::session() {
+                if let Ok(proxy) = Proxy::new(
+                    &conn,
+                    "org.freedesktop.Notifications",
+                    "/org/freedesktop/Notifications",
+                    "org.freedesktop.Notifications",
+                ) {
+                    let _ = proxy.call::<_, _, ()>("CloseNotification", &(wid,));
+                }
+            }
+        }
+    }
+
+    fn seed_dunst_history() {
+        let Ok(out) = Command::new("dunstctl").arg("history").output() else {
+            return;
+        };
+        if !out.status.success() {
+            return;
+        }
+        let Ok(json) = serde_json::from_slice::<serde_json::Value>(&out.stdout) else {
+            return;
+        };
+        let Some(entries) = json
+            .get("data")
+            .and_then(|d| d.get(0))
+            .and_then(|a| a.as_array())
+        else {
+            return;
+        };
+        let mut seeded = Vec::new();
+        let now = Utc::now().timestamp_millis();
+        for entry in entries.iter().take(20) {
+            let app_name = entry
+                .get("appname")
+                .and_then(|v| v.get("data"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if app_name.is_empty() || app_name.eq_ignore_ascii_case("Quick Pill") {
+                continue;
+            }
+            let summary = entry
+                .get("summary")
+                .and_then(|v| v.get("data"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            let body = entry
+                .get("body")
+                .and_then(|v| v.get("data"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            if summary.is_empty() && body.is_empty() {
+                continue;
+            }
+            let did = entry
+                .get("id")
+                .and_then(|v| v.get("data"))
+                .and_then(|v| v.as_u64())
+                .map(|v| v as u32);
+            let item = build_item(app_name, did, summary, body, None, now);
+            seeded.push(item);
+        }
+        if !seeded.is_empty() {
+            if let Ok(mut list) = LINUX_NOTIFS.lock() {
+                if list.is_empty() {
+                    *list = seeded;
+                }
+            }
+        }
+    }
+
+    fn build_item(
+        app_name_raw: String,
+        win_id: Option<u32>,
+        summary: String,
+        body: String,
+        urgency: Option<u8>,
+        timestamp: i64,
+    ) -> NotificationItem {
+        let app_name = if app_name_raw.trim().is_empty() {
+            "System".to_string()
+        } else {
+            app_name_raw.trim().to_string()
+        };
+        let clean_title = if summary.trim().is_empty() {
+            app_name.clone()
+        } else {
+            summary.trim().to_string()
+        };
+        let clean_body = body.trim().to_string();
+        let (mut priority, is_call, actions) =
+            classify_notification(&app_name, &clean_title, &clean_body);
+        if !is_call {
+            match urgency {
+                Some(2) => priority = "high".to_string(),
+                Some(0) if priority == "normal" => priority = "low".to_string(),
+                _ => {}
+            }
+        }
+        let seq = SEQ_COUNTER.fetch_add(1, Ordering::Relaxed);
+        let id = format!(
+            "linux_{}_{}_{}",
+            app_name.to_lowercase().replace(' ', "_"),
+            timestamp,
+            seq
+        );
+        NotificationItem {
+            id,
+            win_id,
+            app_id: app_name.to_lowercase(),
+            app_name,
+            sender: clean_title.clone(),
+            title: clean_title.clone(),
+            body: clean_body.clone(),
+            display_title: clean_title,
+            display_body: clean_body,
+            timestamp,
+            priority,
+            is_call,
+            reviewed: false,
+            dismissed: false,
+            snooze_until: None,
+            group_id: None,
+            actions,
+        }
+    }
+
+    fn push_notification(app: &AppHandle, replaces_id: u32, item: NotificationItem) {
+        if let Ok(mut list) = LINUX_NOTIFS.lock() {
+            if replaces_id > 0 {
+                if let Some(pos) = list.iter().position(|n| n.win_id == Some(replaces_id)) {
+                    let existing_id = list[pos].id.clone();
+                    let mut updated = item;
+                    updated.id = existing_id;
+                    updated.win_id = Some(replaces_id);
+                    list[pos] = updated;
+                } else {
+                    list.insert(0, item);
+                }
+            } else {
+                list.insert(0, item);
+            }
+            list.truncate(50);
+        }
+        let st = app.state::<SharedState>();
+        let _ = sync_internal(app, &st, false);
+    }
+
+    fn run_dbus_monitor(app: &AppHandle) -> bool {
+        let daemon_owner = Connection::session().ok().and_then(|c| {
+            DBusProxy::new(&c)
+                .ok()
+                .and_then(|dbus| {
+                    dbus.get_name_owner("org.freedesktop.Notifications".try_into().ok()?)
+                        .ok()
+                        .map(|o| o.to_string())
+                })
+        });
+
+        let Ok(conn) = Connection::session() else {
+            return false;
+        };
+        let Ok(mon_proxy) = Proxy::new(
+            &conn,
+            "org.freedesktop.DBus",
+            "/org/freedesktop/DBus",
+            "org.freedesktop.DBus.Monitoring",
+        ) else {
+            return false;
+        };
+
+        let mut rules = vec![
+            "interface='org.freedesktop.Notifications',member='Notify'".to_string(),
+            "interface='org.freedesktop.Notifications',member='NotificationClosed'".to_string(),
+        ];
+        if let Some(ref owner) = daemon_owner {
+            rules.push(format!("type='method_return',sender='{owner}'"));
+        }
+        let rule_refs: Vec<&str> = rules.iter().map(|s| s.as_str()).collect();
+        if mon_proxy
+            .call::<_, _, ()>("BecomeMonitor", &(rule_refs.as_slice(), 0u32))
+            .is_err()
+        {
+            return false;
+        }
+
+        let mut pending_serials: HashMap<u32, String> = HashMap::new();
+        for msg_res in MessageIterator::from(&conn) {
+            let Ok(msg) = msg_res else {
+                break;
+            };
+            let hdr = msg.header();
+            match hdr.message_type() {
+                MsgType::MethodCall
+                    if hdr
+                        .member()
+                        .map(|m| m.as_str() == "Notify")
+                        .unwrap_or(false) =>
+                {
+                    if let Ok((
+                        app_name,
+                        replaces_id,
+                        _app_icon,
+                        summary,
+                        body,
+                        _actions,
+                        hints,
+                        _timeout,
+                    )) = msg.body().deserialize::<(
+                        String,
+                        u32,
+                        String,
+                        String,
+                        String,
+                        Vec<String>,
+                        HashMap<String, OwnedValue>,
+                        i32,
+                    )>() {
+                        if app_name.eq_ignore_ascii_case("Quick Pill")
+                            || (summary.trim().is_empty() && body.trim().is_empty())
+                        {
+                            continue;
+                        }
+                        let urgency = hints.get("urgency").and_then(|v| match &**v {
+                            Value::U8(b) => Some(*b),
+                            Value::I32(n) => Some(*n as u8),
+                            Value::U32(n) => Some(*n as u8),
+                            _ => None,
+                        });
+                        let now = Utc::now().timestamp_millis();
+                        let win_id = if replaces_id > 0 { Some(replaces_id) } else { None };
+                        let item = build_item(app_name, win_id, summary, body, urgency, now);
+                        let serial = hdr.primary().serial_num().get();
+                        pending_serials.insert(serial, item.id.clone());
+                        if pending_serials.len() > 200 {
+                            pending_serials.clear();
+                        }
+                        push_notification(app, replaces_id, item);
+                    }
+                }
+                MsgType::MethodReturn => {
+                    if let Some(reply_to) = hdr.reply_serial().map(|s| s.get()) {
+                        if let Some(item_id) = pending_serials.remove(&reply_to) {
+                            if let Ok(assigned_id) = msg.body().deserialize::<u32>() {
+                                if let Ok(mut list) = LINUX_NOTIFS.lock() {
+                                    if let Some(item) = list.iter_mut().find(|n| n.id == item_id) {
+                                        item.win_id = Some(assigned_id);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                MsgType::Signal
+                    if hdr
+                        .member()
+                        .map(|m| m.as_str() == "NotificationClosed")
+                        .unwrap_or(false) =>
+                {
+                    if let Ok((closed_id, _reason)) = msg.body().deserialize::<(u32, u32)>() {
+                        if let Ok(mut list) = LINUX_NOTIFS.lock() {
+                            list.retain(|n| n.win_id != Some(closed_id));
+                        }
+                        let st = app.state::<SharedState>();
+                        let _ = sync_internal(app, &st, false);
+                    }
+                }
+                _ => {}
+            }
+        }
+        true
+    }
+
+    fn run_dbus_monitor_cli_fallback(app: &AppHandle) {
+        let Ok(mut child) = Command::new("dbus-monitor")
+            .args([
+                "--session",
+                "interface='org.freedesktop.Notifications',member='Notify'",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        else {
+            std::thread::sleep(Duration::from_secs(10));
+            return;
+        };
+
+        let Some(stdout) = child.stdout.take() else {
+            let _ = child.wait();
+            return;
+        };
+        let reader = BufReader::new(stdout);
+        let mut collecting = false;
+        let mut strings: Vec<String> = Vec::new();
+        for line in reader.lines().map_while(Result::ok) {
+            let trimmed = line.trim();
+            if trimmed.contains("member=Notify") {
+                collecting = true;
+                strings.clear();
+                continue;
+            }
+            if collecting && (trimmed.starts_with("method ") || trimmed.starts_with("signal ")) {
+                if strings.len() >= 4 {
+                    let app_name = strings[0].clone();
+                    let summary = strings[2].clone();
+                    let body = strings[3].clone();
+                    if !app_name.eq_ignore_ascii_case("Quick Pill")
+                        && (!summary.is_empty() || !body.is_empty())
+                    {
+                        let item = build_item(
+                            app_name,
+                            None,
+                            summary,
+                            body,
+                            None,
+                            Utc::now().timestamp_millis(),
+                        );
+                        push_notification(app, 0, item);
+                    }
+                }
+                collecting = false;
+                strings.clear();
+            } else if collecting && trimmed.starts_with("string \"") && trimmed.ends_with('"') {
+                let inner = &trimmed[8..trimmed.len() - 1];
+                strings.push(inner.replace("\\\"", "\""));
+                if strings.len() == 4 && trimmed.starts_with("string \"") {
+                    // Wait for closing line or array start so body isn't truncated
+                }
+            } else if collecting && trimmed.starts_with("array [") {
+                if strings.len() >= 4 {
+                    let app_name = strings[0].clone();
+                    let summary = strings[2].clone();
+                    let body = strings[3].clone();
+                    if !app_name.eq_ignore_ascii_case("Quick Pill")
+                        && (!summary.is_empty() || !body.is_empty())
+                    {
+                        let item = build_item(
+                            app_name,
+                            None,
+                            summary,
+                            body,
+                            None,
+                            Utc::now().timestamp_millis(),
+                        );
+                        push_notification(app, 0, item);
+                    }
+                }
+                collecting = false;
+                strings.clear();
+            }
+        }
+        let _ = child.wait();
     }
 }
 

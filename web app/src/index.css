@@ -102,9 +102,9 @@ body::after {
 }
 .navbar-links { display: flex; align-items: center; gap: 2.5rem; list-style: none; }
 .navbar-links a {
-  font-family: var(--font-mono); font-size: 0.7rem;
+  font-family: var(--font-mono); font-size: 0.78rem; font-weight: 500;
   text-transform: uppercase; letter-spacing: 0.12em;
-  color: rgba(255,255,255,0.45); text-decoration: none;
+  color: rgba(255,255,255,0.82); text-decoration: none;
   transition: color var(--ease-instant);
 }
 .navbar-links a:hover { color: var(--fg); }
@@ -135,10 +135,13 @@ body::after {
 .hero-cta .btn,
 .download-platforms .btn {
   box-sizing: border-box;
-  height: 56px;
-  min-height: 56px;
-  padding: 0 1.85rem;
-  font-size: 0.75rem;
+  height: 58px;
+  min-height: 58px;
+  padding: 0 1.65rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.055em;
+  gap: 0.72rem;
   justify-content: center;
 }
 
@@ -148,8 +151,8 @@ body::after {
   align-items: center;
   justify-content: center;
   gap: 0.85rem;
-  height: 56px;
-  min-height: 56px;
+  height: 58px;
+  min-height: 58px;
   min-width: 198px;
   padding: 0 1.5rem;
   border-radius: 6px;
@@ -212,10 +215,10 @@ body::after {
   background: #000;
   display: flex; flex-direction: column;
   align-items: center; justify-content: flex-start;
-  overflow: hidden; padding-top: 80px; padding-bottom: 4rem;
+  overflow-x: clip; overflow-y: visible; padding-top: 80px; padding-bottom: 4rem;
 }
 .hero-content {
-  position: relative; z-index: 2;
+  position: relative; z-index: 25;
   display: flex; flex-direction: column; align-items: center;
   text-align: center; gap: 0;
   max-width: 1000px; padding: 0 2rem;
@@ -244,6 +247,7 @@ body::after {
   margin-bottom: 2.5rem;
 }
 .hero-cta {
+  position: relative; z-index: 35;
   display: flex; gap: 1rem; flex-wrap: wrap; justify-content: center; align-items: center;
   margin-bottom: 1.75rem;
 }
@@ -262,6 +266,25 @@ body::after {
 .hero-github-link:hover {
   color: #ffffff;
   border-color: rgba(255,255,255,0.85);
+}
+.hero-credit {
+  margin-top: 1.1rem;
+  font-family: var(--font-mono);
+  font-size: 0.94rem;
+  letter-spacing: 0.05em;
+  color: rgba(255, 255, 255, 0.72);
+}
+.hero-credit-link {
+  color: #ffffff;
+  font-weight: 700;
+  text-decoration: none;
+  border-bottom: 1.5px solid rgba(255, 255, 255, 0.55);
+  padding-bottom: 2px;
+  transition: color var(--ease-instant), border-color var(--ease-instant);
+}
+.hero-credit-link:hover {
+  color: #ffffff;
+  border-color: #ffffff;
 }
 
 /* Animated pill */
@@ -804,7 +827,11 @@ body::after {
    ============================================ */
 .download {
   background: var(--bg); color: var(--fg);
-  padding: 10rem 0 8rem; position: relative; overflow: hidden;
+  padding: 10rem 0 8rem; position: relative; overflow-x: clip; overflow-y: visible;
+}
+.download .container {
+  position: relative;
+  z-index: 25;
 }
 .download::before {
   content: ''; position: absolute; top: -100px; left: 50%; transform: translateX(-50%);
@@ -828,7 +855,176 @@ body::after {
   color: rgba(255,255,255,0.45); max-width: 460px;
   margin-bottom: 3.5rem; line-height: 1.75;
 }
-.download-platforms { display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 2rem; }
+.download-platforms { position: relative; z-index: 35; display: flex; gap: 1rem; flex-wrap: wrap; align-items: center; margin-bottom: 1.5rem; }
+
+/* Linux CTA Dropdown Button */
+.linux-cta-wrap {
+  position: relative;
+  display: inline-flex;
+  z-index: 40;
+}
+.hero-cta .linux-cta-trigger,
+.download-platforms .linux-cta-trigger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  padding: 0 1.4rem 0 1.55rem;
+}
+.linux-cta-wrap.is-open .linux-cta-trigger {
+  background: var(--fg);
+  color: var(--bg);
+  outline: 2px solid var(--fg);
+}
+.linux-cta-chevron {
+  transition: transform 0.18s ease;
+  margin-left: 0.1rem;
+  opacity: 0.8;
+}
+.linux-cta-wrap.is-open .linux-cta-chevron {
+  transform: rotate(180deg);
+  opacity: 1;
+}
+.linux-cta-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  min-width: max(100%, 288px);
+  background: #0b0c10;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.88), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  padding: 0.45rem;
+  z-index: 60;
+  text-align: left;
+}
+.linux-cta-menu-header {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 0.45rem 0.7rem 0.4rem;
+}
+.linux-cta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.18rem;
+  padding: 0.62rem 0.7rem;
+  text-decoration: none;
+  color: #ffffff;
+  transition: background var(--ease-instant), color var(--ease-instant);
+}
+.linux-cta-item:hover,
+.linux-cta-item:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+}
+.linux-cta-item.is-selected {
+  background: rgba(255, 255, 255, 0.06);
+  border-left: 2px solid #ffffff;
+  padding-left: calc(0.7rem - 2px);
+}
+.linux-cta-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+.linux-cta-item-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+.linux-cta-item-ext {
+  font-size: 0.68rem;
+  font-weight: 500;
+  padding: 0.1rem 0.38rem;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+}
+.linux-cta-item-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+.linux-cta-item-size {
+  font-size: 0.66rem;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+}
+.linux-cta-item-sub {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.52);
+  line-height: 1.3;
+}
+.linux-cta-menu-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0.35rem 0.25rem;
+}
+.download-linux-formats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+}
+.download-linux-label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  margin-right: 0.25rem;
+}
+.linux-format-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background var(--ease-instant), border-color var(--ease-instant), color var(--ease-instant);
+}
+.linux-format-chip:hover,
+.linux-format-chip.is-active {
+  background: #ffffff;
+  border-color: #ffffff;
+  color: #000000;
+}
+.thankyou-format-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.65rem;
+  margin-top: 1.75rem;
+}
+.linux-cmd-block {
+  margin-top: 0.85rem;
+  padding: 0.9rem 1rem;
+  background: #0a0a0c;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 8px;
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.88);
+  overflow-x: auto;
+  text-align: left;
+  white-space: pre;
+}
 .download-meta { display: flex; align-items: center; gap: 2.5rem; margin-top: 2.5rem; }
 .download-meta a {
   font-family: var(--font-mono); font-size: 0.7rem;
@@ -920,6 +1116,11 @@ body::after {
   .hero-cta .ms-store-cta,
   .download-platforms .btn,
   .download-platforms .ms-store-cta { width: 100%; min-width: 0; }
+  .hero-cta .linux-cta-wrap,
+  .download-platforms .linux-cta-wrap { width: 100%; }
+  .hero-cta .linux-cta-trigger,
+  .download-platforms .linux-cta-trigger { width: 100%; }
+  .linux-cta-menu { left: 0; right: 0; min-width: 0; }
   .navbar-links { display: none; }
   .section { padding: 5rem 0; }
 }
@@ -1040,6 +1241,8 @@ body::after {
   padding: 0.35rem 0;
 }
 .sandbox-tab-pill {
+  position: relative;
+  overflow: hidden;
   display: inline-flex;
   align-items: center;
   gap: 0.45rem;
@@ -1067,6 +1270,21 @@ body::after {
   box-shadow: 0 0 18px rgba(255, 255, 255, 0.28);
   font-weight: 700;
   transform: translateY(-2px);
+}
+.tab-pill-progress {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  background: rgba(0, 0, 0, 0.35);
+  transform-origin: left center;
+  animation: sandboxTabProgress var(--sandbox-cycle-ms, 5000ms) linear forwards;
+  pointer-events: none;
+}
+@keyframes sandboxTabProgress {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
 }
 .tab-pill-icon {
   flex-shrink: 0;

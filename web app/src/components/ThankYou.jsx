@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import {
   ArrowLeft,
@@ -10,40 +10,119 @@ import {
   Keyboard,
   Settings
 } from 'lucide-react';
+import LinuxLogo from './LinuxLogo';
 import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
 const GITHUB_URL  = 'https://github.com/nabil24024004/Quick-Pill-Dynamic-Island-for-Windows';
 const DISCORD_URL = 'https://discord.gg/a2xzVkxFVg';
 
+function parseTargetFromLocation() {
+  const hash = window.location.hash || '';
+  const qIndex = hash.indexOf('?');
+  const params = new URLSearchParams(
+    qIndex !== -1 ? hash.slice(qIndex) : window.location.search
+  );
+  const rawOs = (params.get('os') || '').toLowerCase();
+  const rawFormat = (params.get('format') || '').toLowerCase();
+  if (rawOs === 'linux') {
+    const format = ['appimage', 'deb', 'rpm'].includes(rawFormat) ? rawFormat : 'appimage';
+    return { os: 'linux', format };
+  }
+  return { os: 'windows', format: 'exe' };
+}
+
 export default function ThankYou({ onBackToHome, onPrivacyClick }) {
   const downloadInitiatedRef = useRef(false);
-  const { version, windowsUrl, isLoading } = useReleaseInfo();
+  const { version, windowsUrl, linuxAppImageUrl, linuxDebUrl, linuxRpmUrl, isLoading } = useReleaseInfo();
+  const [target, setTarget] = useState(() => parseTargetFromLocation());
 
-  const startDownload = () => {
+  const activePackage = (() => {
+    if (target.os === 'linux') {
+      if (target.format === 'deb') {
+        return {
+          os: 'linux',
+          format: 'deb',
+          label: 'Ubuntu / Debian (.deb)',
+          url: linuxDebUrl,
+          fileName: `QuickPill-Linux-v${version}.deb`,
+        };
+      }
+      if (target.format === 'rpm') {
+        return {
+          os: 'linux',
+          format: 'rpm',
+          label: 'Fedora / RHEL (.rpm)',
+          url: linuxRpmUrl,
+          fileName: `QuickPill-Linux-v${version}.rpm`,
+        };
+      }
+      return {
+        os: 'linux',
+        format: 'appimage',
+        label: 'Linux Universal (.AppImage)',
+        url: linuxAppImageUrl,
+        fileName: `QuickPill-Linux-v${version}.AppImage`,
+      };
+    }
+    return {
+      os: 'windows',
+      format: 'exe',
+      label: 'Windows Setup (.exe)',
+      url: windowsUrl,
+      fileName: `QuickPill-Windows-v${version}-Setup.exe`,
+    };
+  })();
+
+  const triggerDownload = (pkg) => {
     const link = document.createElement('a');
-    link.href = windowsUrl;
-    link.setAttribute('download', `QuickPill-Windows-v${version}-Setup.exe`);
+    link.href = pkg.url;
+    link.setAttribute('download', pkg.fileName);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
-  useEffect(() => {
-    // Scroll to top on mount
-    window.scrollTo({ top: 0, behavior: 'instant' });
+  const handleManualDownload = (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    triggerDownload(activePackage);
+  };
 
+  const handleSelectPackage = (os, format) => {
+    setTarget({ os, format });
+    const nextHash = os === 'linux' ? `#/thank-you?os=linux&format=${format}` : '#/thank-you';
+    window.history.replaceState({}, '', nextHash);
+    const nextUrl =
+      os === 'linux'
+        ? format === 'deb'
+          ? linuxDebUrl
+          : format === 'rpm'
+          ? linuxRpmUrl
+          : linuxAppImageUrl
+        : windowsUrl;
+    const nextFile =
+      os === 'linux'
+        ? format === 'deb'
+          ? `QuickPill-Linux-v${version}.deb`
+          : format === 'rpm'
+          ? `QuickPill-Linux-v${version}.rpm`
+          : `QuickPill-Linux-v${version}.AppImage`
+        : `QuickPill-Windows-v${version}-Setup.exe`;
+    triggerDownload({ url: nextUrl, fileName: nextFile });
+  };
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
     if (isLoading) return;
 
-    // Trigger auto-download shortly after arrival
     const timer = setTimeout(() => {
       if (!downloadInitiatedRef.current) {
         downloadInitiatedRef.current = true;
-        startDownload();
+        triggerDownload(activePackage);
       }
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [isLoading, windowsUrl]);
+  }, [isLoading, activePackage.url]);
 
   return (
     <div className="thankyou-page">
@@ -91,16 +170,95 @@ export default function ThankYou({ onBackToHome, onPrivacyClick }) {
           </h1>
 
           <p className="thankyou-subtitle">
-            Your download will begin automatically in a few seconds.<br />
+            Your <strong>{activePackage.label}</strong> download will begin automatically in a few seconds.<br />
             If it didn&apos;t start,{' '}
-            <a href={windowsUrl} onClick={startDownload} className="thankyou-link">
+            <a href={activePackage.url} onClick={handleManualDownload} className="thankyou-link">
               click here to download manually
             </a>
             .
           </p>
+
+          <div className="thankyou-format-bar" role="group" aria-label="Switch download package">
+            <button
+              type="button"
+              className={`linux-format-chip ${target.os === 'windows' ? 'is-active' : ''}`}
+              onClick={() => handleSelectPackage('windows', 'exe')}
+            >
+              Windows (.exe)
+            </button>
+            <button
+              type="button"
+              className={`linux-format-chip ${target.os === 'linux' && target.format === 'appimage' ? 'is-active' : ''}`}
+              onClick={() => handleSelectPackage('linux', 'appimage')}
+            >
+              Linux (.AppImage)
+            </button>
+            <button
+              type="button"
+              className={`linux-format-chip ${target.os === 'linux' && target.format === 'deb' ? 'is-active' : ''}`}
+              onClick={() => handleSelectPackage('linux', 'deb')}
+            >
+              Ubuntu / Debian (.deb)
+            </button>
+            <button
+              type="button"
+              className={`linux-format-chip ${target.os === 'linux' && target.format === 'rpm' ? 'is-active' : ''}`}
+              onClick={() => handleSelectPackage('linux', 'rpm')}
+            >
+              Fedora / RPM (.rpm)
+            </button>
+          </div>
         </motion.div>
 
-        {/* Windows SmartScreen & Installation Guide */}
+        {target.os === 'linux' ? (
+          <motion.section
+            className="smartscreen-section"
+            aria-label="Linux Installation Guide"
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.15, ease: 'easeOut' }}
+          >
+            <div className="smartscreen-header">
+              <h2 className="smartscreen-title">
+                <LinuxLogo height={22} style={{ verticalAlign: 'middle', marginRight: 8 }} />
+                Linux Installation Guide (X11 &amp; Wayland)
+              </h2>
+              <p className="smartscreen-intro">
+                Quick Pill supports X11, GNOME, KDE Plasma, Hyprland, Sway, and i3 with PipeWire/PulseAudio mixer, MPRIS2 media controls, D-Bus notifications, and XDG app discovery.
+              </p>
+            </div>
+
+            <div className="smartscreen-steps-grid">
+              <article className="smartscreen-step-card">
+                <div className="step-numeral" aria-hidden="true">I</div>
+                <h3 className="step-card-title">AppImage (Universal)</h3>
+                <p className="step-card-desc">
+                  Mark the file executable and run directly — auto-updates replace your AppImage in place:
+                </p>
+                <pre className="linux-cmd-block">{`chmod +x QuickPill-Linux-v${version}.AppImage\n./QuickPill-Linux-v${version}.AppImage`}</pre>
+              </article>
+
+              <article className="smartscreen-step-card">
+                <div className="step-numeral" aria-hidden="true">II</div>
+                <h3 className="step-card-title">Native Packages (.deb / .rpm)</h3>
+                <p className="step-card-desc">
+                  Or install system-wide via your distro package manager:
+                </p>
+                <pre className="linux-cmd-block">{`# Debian / Ubuntu / Pop!_OS\nsudo apt install ./QuickPill-Linux-v${version}.deb\n\n# Fedora / RHEL / openSUSE\nsudo dnf install ./QuickPill-Linux-v${version}.rpm`}</pre>
+              </article>
+            </div>
+
+            <div className="smartscreen-trust-banner">
+              <ShieldCheck size={18} strokeWidth={1.5} className="trust-icon" />
+              <div className="trust-text">
+                <strong>Open-Source &amp; Verified:</strong> Quick Pill contains zero trackers or telemetry. Full source code and build workflows are public on{' '}
+                <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className="thankyou-link">
+                  GitHub
+                </a>.
+              </div>
+            </div>
+          </motion.section>
+        ) : (
         <motion.section
           className="smartscreen-section"
           aria-label="Windows Installation and SmartScreen Guide"
@@ -174,6 +332,7 @@ export default function ThankYou({ onBackToHome, onPrivacyClick }) {
             </div>
           </div>
         </motion.section>
+        )}
 
         {/* First Steps Guide */}
         <motion.section

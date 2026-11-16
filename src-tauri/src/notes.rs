@@ -1,4 +1,6 @@
-use crate::state::{atomic_write_bytes, from_wide_slice, read_file_description, SharedState};
+use crate::state::{atomic_write_bytes, SharedState};
+#[cfg(windows)]
+use crate::state::{from_wide_slice, read_file_description};
 use crate::system_stats::get_clipboard_text;
 use chrono::{Duration as ChronoDuration, Utc};
 use once_cell::sync::Lazy;
@@ -6,7 +8,9 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::{Path, PathBuf};
+#[cfg(windows)]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter};
 
@@ -528,9 +532,24 @@ fn capture_foreground_metadata() -> SourceMetadata {
     }
 }
 
+#[cfg(target_os = "linux")]
+fn capture_linux_foreground_metadata() -> SourceMetadata {
+    let ts = Utc::now().to_rfc3339();
+    let (app_name, window_title, process_name, pid) =
+        crate::launcher::get_active_window_metadata();
+    SourceMetadata {
+        app_name,
+        window_title,
+        url: None,
+        process_name,
+        pid,
+        timestamp: ts,
+    }
+}
+
 #[tauri::command]
-pub fn notes_get_context(_options: Option<Value>) -> Value {
-    let mut clip = get_clipboard_text();
+pub async fn notes_get_context(_options: Option<Value>) -> Value {
+    let mut clip = get_clipboard_text().await;
     let max_bytes = 5 * 1024 * 1024;
     let mut truncated = false;
     if clip.len() > max_bytes {
@@ -541,7 +560,9 @@ pub fn notes_get_context(_options: Option<Value>) -> Value {
     let is_large = clip.chars().count() > 300 || clip.len() > 1024;
     #[cfg(windows)]
     let source_metadata = capture_foreground_metadata();
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
+    let source_metadata = capture_linux_foreground_metadata();
+    #[cfg(all(not(windows), not(target_os = "linux")))]
     let source_metadata = SourceMetadata {
         timestamp: Utc::now().to_rfc3339(),
         ..Default::default()

@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
-import { Download, Github } from 'lucide-react';
+import { Github } from 'lucide-react';
 import Beams from './Beams';
 import InteractiveSandbox from './InteractiveSandbox';
+import LinuxDownloadCta from './LinuxDownloadCta';
 import MicrosoftStoreBadge from './MicrosoftStoreBadge';
+import WindowsLogo from './WindowsLogo';
 import { useReleaseInfo } from '../hooks/useReleaseInfo';
 
 export default function Hero({ onDownloadClick }) {
@@ -11,7 +13,7 @@ export default function Hero({ onDownloadClick }) {
   const subtitleRef = useRef(null);
   const ctaRef      = useRef(null);
   const eyebrowRef  = useRef(null);
-  const { version, msStoreUrl } = useReleaseInfo();
+  const { version, msStoreUrl, releaseInfo } = useReleaseInfo();
 
   /* GSAP entrance animation */
   useEffect(() => {
@@ -39,10 +41,10 @@ export default function Hero({ onDownloadClick }) {
     );
   }, []);
 
-  const handleDownload = (e) => {
+  const handleDownload = (e, opts) => {
     if (onDownloadClick) {
       e.preventDefault();
-      onDownloadClick();
+      onDownloadClick(opts);
     }
   };
 
@@ -85,12 +87,12 @@ export default function Hero({ onDownloadClick }) {
         <div className="hero-cta" ref={ctaRef}>
           <a
             href="#/thank-you"
-            onClick={handleDownload}
+            onClick={(e) => handleDownload(e, { os: 'windows' })}
             className="btn btn--primary"
             title="Download Quick Pill for Windows 10 & 11"
             aria-label="Download Quick Pill for Windows 10 & 11"
           >
-            <Download size={15} strokeWidth={2} aria-hidden="true" />
+            <WindowsLogo size={26} />
             Download for Windows
           </a>
           <MicrosoftStoreBadge
@@ -98,10 +100,18 @@ export default function Hero({ onDownloadClick }) {
             title={`Get Quick Pill v${version} from Microsoft Store`}
             ariaLabel={`Get Quick Pill v${version} from Microsoft Store`}
           />
+          <LinuxDownloadCta
+            id="hero-dl-linux"
+            version={version}
+            platforms={releaseInfo.platforms}
+            onSelectDownload={handleDownload}
+          />
         </div>
 
         <div className="hero-platforms">
           <span>Windows 10 / 11 (64-bit)</span>
+          <span aria-hidden="true">•</span>
+          <span>Linux (AppImage · .deb · .rpm)</span>
           <span aria-hidden="true">•</span>
           <span>100% Free &amp; Open Source</span>
           <span aria-hidden="true">•</span>
@@ -117,6 +127,19 @@ export default function Hero({ onDownloadClick }) {
             View on GitHub
           </a>
         </div>
+
+        <p className="hero-credit">
+          Designed &amp; built by{' '}
+          <a
+            href="https://neosparkx.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hero-credit-link"
+            title="Visit NeoSparkX"
+          >
+            NeoSparkX ↗
+          </a>
+        </p>
       </div>
 
       {/* Interactive Sandbox Hero: Full-width simulated Windows 11 desktop viewport & 16-tab dock */}
