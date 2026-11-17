@@ -35,6 +35,7 @@ src-tauri/target/
 src-tauri/gen/
 web app/dist/
 web app/node_modules/
+promo-video/
 .claude/
 .agents/
 
