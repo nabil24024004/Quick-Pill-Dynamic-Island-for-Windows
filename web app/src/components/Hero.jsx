@@ -13,7 +13,7 @@ export default function Hero({ onDownloadClick }) {
   const subtitleRef = useRef(null);
   const ctaRef      = useRef(null);
   const eyebrowRef  = useRef(null);
-  const { version, msStoreUrl, releaseInfo } = useReleaseInfo();
+  const { version, releaseInfo } = useReleaseInfo();
 
   /* GSAP entrance animation */
   useEffect(() => {
@@ -95,11 +95,7 @@ export default function Hero({ onDownloadClick }) {
             <WindowsLogo size={26} />
             Download for Windows
           </a>
-          <MicrosoftStoreBadge
-            href={msStoreUrl}
-            title={`Get Quick Pill v${version} from Microsoft Store`}
-            ariaLabel={`Get Quick Pill v${version} from Microsoft Store`}
-          />
+          <MicrosoftStoreBadge />
           <LinuxDownloadCta
             id="hero-dl-linux"
             version={version}

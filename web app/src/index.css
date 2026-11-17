@@ -145,66 +145,24 @@ body::after {
   justify-content: center;
 }
 
-.ms-store-cta {
+.ms-store-badge-wrap {
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.85rem;
+  flex-shrink: 0;
+}
+.ms-store-badge-wrap ms-store-badge {
+  display: inline-block;
+  line-height: 0;
+  vertical-align: middle;
+}
+.ms-store-badge-wrap ms-store-badge::part(img) {
   height: 58px;
-  min-height: 58px;
-  min-width: 198px;
-  padding: 0 1.5rem;
+  width: auto;
+  max-width: 100%;
   border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.36);
-  background: #0d0d10;
-  color: #ffffff;
-  text-decoration: none;
-  font-family: 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
-  flex-shrink: 0;
-  white-space: nowrap;
-  transition: transform var(--ease-instant), border-color var(--ease-instant), background var(--ease-instant), box-shadow var(--ease-instant);
-}
-.ms-store-cta:hover {
-  background: #17171c;
-  border-color: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 6px 24px rgba(56, 189, 248, 0.16);
-  transform: translateY(-1px);
-}
-.ms-store-cta__icon {
-  width: 34px;
-  height: 34px;
-  display: block;
-  flex-shrink: 0;
-  overflow: visible;
-}
-.ms-store-cta__copy {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  text-align: left;
-  gap: 2px;
-}
-.ms-store-cta__eyebrow {
-  display: block;
-  width: 100%;
-  text-align: left;
-  font-size: 0.72rem;
-  font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: 0.015em;
-  color: rgba(255, 255, 255, 0.76);
-}
-.ms-store-cta__brand {
-  display: block;
-  width: 100%;
-  text-align: left;
-  font-size: 1.18rem;
-  font-weight: 600;
-  line-height: 1.08;
-  letter-spacing: -0.02em;
-  color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.16);
 }
 
 /* ============================================
@@ -1113,9 +1071,9 @@ body::after {
     max-width: 360px;
   }
   .hero-cta .btn,
-  .hero-cta .ms-store-cta,
-  .download-platforms .btn,
-  .download-platforms .ms-store-cta { width: 100%; min-width: 0; }
+  .download-platforms .btn { width: 100%; min-width: 0; }
+  .hero-cta .ms-store-badge-wrap,
+  .download-platforms .ms-store-badge-wrap { width: 100%; }
   .hero-cta .linux-cta-wrap,
   .download-platforms .linux-cta-wrap { width: 100%; }
   .hero-cta .linux-cta-trigger,

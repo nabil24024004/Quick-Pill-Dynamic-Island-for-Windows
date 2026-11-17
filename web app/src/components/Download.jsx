@@ -15,7 +15,7 @@ const HEADLINE = 'Download.';
 export default function Download({ onDownloadClick }) {
   const sectionRef  = useRef(null);
   const headlineRef = useRef(null);
-  const { version, msStoreUrl, releaseInfo } = useReleaseInfo();
+  const { version, releaseInfo } = useReleaseInfo();
 
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -92,12 +92,7 @@ export default function Download({ onDownloadClick }) {
             <WindowsLogo size={26} />
             Download for Windows (.exe)
           </a>
-          <MicrosoftStoreBadge
-            id="dl-microsoft-store"
-            href={msStoreUrl}
-            title={`Get Quick Pill v${version} from Microsoft Store`}
-            ariaLabel={`Get Quick Pill v${version} from Microsoft Store`}
-          />
+          <MicrosoftStoreBadge id="dl-microsoft-store" />
           <LinuxDownloadCta
             id="dl-linux-appimage"
             version={version}

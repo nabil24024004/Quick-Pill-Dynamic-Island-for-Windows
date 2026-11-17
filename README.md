@@ -12,10 +12,10 @@
 
   <!-- Primary Download & Microsoft Store CTAs -->
   <p align="center">
-    <a href="https://apps.microsoft.com/detail/9N371MQB4BS7?mode=direct">
+    <a href="https://apps.microsoft.com/detail/9n371mqb4bs7?mode=direct&hl=en-us">
       <picture>
-        <source media="(prefers-color-scheme: dark)" srcset="assets/ms-store-dark.svg" />
-        <img src="assets/ms-store-light.svg" alt="Get it from Microsoft" height="54" />
+        <source media="(prefers-color-scheme: dark)" srcset="assets/ms-store-light.svg" />
+        <img src="assets/ms-store-dark.svg" alt="Get Quick Pill from Microsoft Store" height="64" />
       </picture>
     </a>
     &nbsp;&nbsp;
